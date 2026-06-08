@@ -3,28 +3,38 @@ import { useState, useEffect, useCallback } from "react";
 // ============================================================
 // ⚙️  CONFIG — ใส่ Apps Script URL ที่นี่หลัง Deploy
 // ============================================================
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzYmWiF8GR5oM2_qu8-UDdzU9Zx-stkk8WMLtHNnDbsTVpjxGOkuOWzN787HFUEI9IIOg/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxq9fZSwfWpTKiQRkV_yxQnwH5dSlZK5nPkK9agqBIwbXS24KGB7syrUDuat8WFplcGDA/exec";
 // ตัวอย่าง: "https://script.google.com/macros/s/AKfycb.../exec"
 
 // ============================================================
 // API Layer — ทุก call ไป Apps Script ผ่านที่นี่
 // ============================================================
 async function apiCall(action, params = {}) {
-  const body = JSON.stringify({ action, ...params });
-  try {
-    const res = await fetch(SCRIPT_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain" }, // text/plain avoids CORS preflight
-      body,
-      redirect: "follow",
+  return new Promise((resolve, reject) => {
+    const callbackName = "gc_" + Math.random().toString(36).slice(2);
+    const url = new URL(SCRIPT_URL);
+    url.searchParams.set("action", action);
+    url.searchParams.set("callback", callbackName);
+    Object.entries(params).forEach(([k, v]) => {
+      url.searchParams.set(k, typeof v === "object" ? JSON.stringify(v) : String(v ?? ""));
     });
-    const json = await res.json();
-    if (!json.success) throw new Error(json.error || "API error");
-    return json.data;
-  } catch (err) {
-    console.error(`[API] ${action}:`, err);
-    throw err;
-  }
+
+    window[callbackName] = (json) => {
+      delete window[callbackName];
+      document.head.removeChild(script);
+      if (!json.success) reject(new Error(json.error || "API error"));
+      else resolve(json.data);
+    };
+
+    const script = document.createElement("script");
+    script.src = url.toString();
+    script.onerror = () => {
+      delete window[callbackName];
+      document.head.removeChild(script);
+      reject(new Error("Failed to load script"));
+    };
+    document.head.appendChild(script);
+  });
 }
 
 // Convenience API functions
@@ -321,17 +331,14 @@ function InvoiceDetail({ invoice, onBack, products, sizes }) {
   );
 }
 
-function InvoicePage({ products, sizes }) {
+function InvoicePage({ products, sizes, cache, updateCache }) {
   const [view, setView]             = useState("list");
   const [selected, setSelected]     = useState(null);
   const [successMsg, setSuccessMsg] = useState("");
-
-  // ── Real data state ──
-  const [invoices, setInvoices]   = useState([]);
-  const [loading, setLoading]     = useState(false);
-  const [error, setError]         = useState("");
-  const [search, setSearch]       = useState("");
-  const [startDate, setStartDate] = useState(() => {
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState("");
+  const [search, setSearch]         = useState("");
+  const [startDate, setStartDate]   = useState(() => {
     const d = new Date(); d.setDate(1);
     return d.toISOString().slice(0, 10);
   });
@@ -341,12 +348,15 @@ function InvoicePage({ products, sizes }) {
   });
   const [hovered, setHovered] = useState(null);
 
+  const cacheKey = "invoices_" + startDate + "_" + endDate;
+  const invoices = cache[cacheKey] || [];
+
   const loadInvoices = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
       const data = await api.getInvoices(startDate, endDate, search);
-      setInvoices(Array.isArray(data) ? data : []);
+      updateCache(cacheKey, Array.isArray(data) ? data : []);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -354,8 +364,7 @@ function InvoicePage({ products, sizes }) {
     }
   }, [startDate, endDate, search]);
 
-  // Load on mount
-  useEffect(() => { loadInvoices(); }, []);
+  useEffect(() => { if (!cache[cacheKey]) loadInvoices(); }, [cacheKey]);
 
   const handleSelect    = (inv) => { setSelected(inv); setView("detail"); };
   const handleCreateNew = () => { setSelected(null); setView("create"); };
@@ -1373,10 +1382,9 @@ function TaxInvoiceDetail({ invoice, onBack, products, sizes }) {
 }
 
 // ── Tax Invoice Page ───────────────────────────────────────
-function TaxInvoicePage({ products, sizes }) {
+function TaxInvoicePage({ products, sizes, cache, updateCache }) {
   const [view,     setView]     = useState("list");
   const [selected, setSelected] = useState(null);
-  const [invoices, setInvoices] = useState([]);
   const [loading,  setLoading]  = useState(false);
   const [saving,   setSaving]   = useState(false);
   const [err,      setErr]      = useState("");
@@ -1393,12 +1401,15 @@ function TaxInvoicePage({ products, sizes }) {
     String(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()).padStart(2, "0")
   );
 
+  const cacheKey = "taxinvoices_" + startDate + "_" + endDate;
+  const invoices = cache[cacheKey] || [];
+
   const load = useCallback(async () => {
     setLoading(true);
     setErr("");
     try {
       const d = await api.getTaxInvoices(startDate, endDate, search);
-      setInvoices(Array.isArray(d) ? d : []);
+      updateCache(cacheKey, Array.isArray(d) ? d : []);
     } catch (e) {
       setErr("โหลดไม่สำเร็จ: " + e.message);
     } finally {
@@ -1406,14 +1417,15 @@ function TaxInvoicePage({ products, sizes }) {
     }
   }, [startDate, endDate, search]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { if (!cache[cacheKey]) load(); }, [cacheKey]);
 
   const handleSaveNew = async (data) => {
     setSaving(true);
     setErr("");
     try {
       const r = await api.createTaxInvoice(data);
-      setOk("✅ สร้าง " + r.invoiceNo + " สำเร็จ! PDF พร้อมใน Google Drive");
+      setOk("✅ สร้าง " + r.invoiceNo + " สำเร็จ!");
+      updateCache(cacheKey, null); // invalidate so it reloads
       await load();
       setTimeout(() => { setOk(""); setView("list"); }, 2500);
     } catch (e) {
@@ -1547,12 +1559,16 @@ function TaxInvoicePage({ products, sizes }) {
 
 // ── Main App ───────────────────────────────────────────────
 
-export default function App() {
+export default function App({ userEmail, userName, onLogout }) {
   const [active, setActive]       = useState("invoice");
   const [collapsed, setCollapsed] = useState(false);
   const [products, setProducts]   = useState([]);
   const [sizes, setSizes]         = useState([]);
   const [configLoaded, setConfigLoaded] = useState(false);
+
+  // ── Global data cache — persists across tab switches ──
+  const [cache, setCache] = useState({});
+  const updateCache = (key, data) => setCache(prev => ({ ...prev, [key]: data }));
 
   // Load config once on startup for products/sizes
   useEffect(() => {
@@ -1581,9 +1597,9 @@ export default function App() {
   const renderPage = () => {
     if (!configLoaded) return <Spinner text="กำลังเริ่มต้นระบบ..." />;
     switch (active) {
-      case "invoice":    return <InvoicePage products={products} sizes={sizes} />;
-      case "billing":    return <BillingNotePage />;
-      case "taxinvoice": return <TaxInvoicePage products={products} sizes={sizes} />;
+      case "invoice":    return <InvoicePage products={products} sizes={sizes} cache={cache} updateCache={updateCache} />;
+      case "billing":    return <BillingNotePage cache={cache} updateCache={updateCache} />;
+      case "taxinvoice": return <TaxInvoicePage products={products} sizes={sizes} cache={cache} updateCache={updateCache} />;
       case "settings":   return <SettingsPage products={products} setProducts={setProducts} sizes={sizes} setSizes={setSizes} />;
       default:           return <PlaceholderPage title={NAV.find(n => n.key === active)?.label} icon={NAV.find(n => n.key === active)?.icon} />;
     }
@@ -1627,6 +1643,9 @@ export default function App() {
             </div>
           ))}
         </div>
+        <div style={{ padding: collapsed ? "10px 0" : "10px 16px", textAlign: collapsed ? "center" : "left", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)" }}>{collapsed ? "v1" : "v1.0.3"}</span>
+        </div>
       </div>
 
       {/* Main */}
@@ -1638,11 +1657,19 @@ export default function App() {
             {NAV.find(n => n.key === active)?.section && <><span>›</span><span>{NAV.find(n => n.key === active)?.section}</span></>}
             <span>›</span><span style={{ color: C.text }}>{NAV.find(n => n.key === active)?.label}</span>
           </div>
-          {isDevMode && (
-            <div style={{ background: C.warningBg, color: C.warning, padding: "3px 10px", borderRadius: 12, fontSize: 11, fontWeight: 500 }}>
-              ⚠️ Dev Mode — ยังไม่ได้ตั้งค่า SCRIPT_URL
-            </div>
-          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {isDevMode && (
+              <div style={{ background: C.warningBg, color: C.warning, padding: "3px 10px", borderRadius: 12, fontSize: 11, fontWeight: 500 }}>
+                ⚠️ Dev Mode — ยังไม่ได้ตั้งค่า SCRIPT_URL
+              </div>
+            )}
+            {userName && <span style={{ fontSize: 12, color: C.muted }}>{userName}</span>}
+            {onLogout && (
+              <button onClick={onLogout} style={{ background: "none", border: `0.5px solid ${C.border}`, borderRadius: 4, padding: "4px 10px", fontSize: 11, cursor: "pointer", color: C.muted }}>
+                ออกจากระบบ
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Content */}
