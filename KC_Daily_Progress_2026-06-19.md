@@ -1,15 +1,15 @@
 # KC Factory System — Daily Log 2026-06-19
-**Code.gs:** v1.4.190 → v1.4.200 | **KCFactory.jsx:** v1.4.58 → v1.4.76
+**Code.gs:** v1.4.190 → v1.4.203 | **KCFactory.jsx:** v1.4.58 → v1.4.85
 
 ---
 
 ## ⚡ Start Here
 
-- **Current versions:** Code.gs v1.4.200 · KCFactory.jsx v1.4.76
-- **Deploy needed:** BOTH — Code.gs v1.4.200 (paste into GAS editor) + KCFactory.jsx v1.4.76 (`npm run deploy`). Also create new GAS file **Staging.gs** (relocated test/staging functions, #44); commit **CHANGELOG.md**.
-- **Test after deploy:** #122 new DateRangePicker touches DN list, TI list, BN Create, BN History — click through each.
-- **Next up (open):** #102 (toggle wording) · #115 (edit customer at BN create) · #111–#114 (JSX refactors)
-- **DETAIL_MAX=34 calibration test print** still outstanding — confirm real Thai detail text fits
+- **Current versions:** Code.gs v1.4.203 · KCFactory.jsx v1.4.85
+- **Deploy needed:** BOTH — Code.gs v1.4.203 (paste into GAS) + KCFactory.jsx v1.4.85 (`npm run deploy`).
+- **Test after deploy:** #115 address/phone in BN Create · #123 แบบพิมพ์ btn · #124 address/phone in BN Edit · #125 PDF btn on BN Detail · detail field: yellow warn at 25 chars, red at 34, no longer fires early from product name width
+- **Next up (open):** #34 DETAIL_MAX calibration (print test) · #111–#114 (JSX refactors, defer)
+- **DETAIL_MAX calibration** — tested, 34–36 chars still too long; cap TBD, discuss separately
 - **Deploy workflow:** edit locally → `npm run deploy` (goes live) → GitHub Desktop commit + push
 - **Cross-machine sync:** `git pull` before starting, `git push` after finishing
 - **File continuity:** Start a new dated file for each new day. Do not append to this one after the session ends.
@@ -149,9 +149,11 @@
 | 120 | BN breadcrumb doc suffix | ✅ Done | KCFactory v1.4.74 |
 | 121 | DN list default range + Load-all | ✅ Done | KCFactory v1.4.75 |
 | 122 | Shared DateRangePicker (DN/TI/BN) | ✅ Done | KCFactory v1.4.76 |
-| --- OPEN --- | | | |
-| 102 | BN Create — PDF format toggle wording | ⏳ Pending | P4 |
-| 115 | BN Create — edit customer info at creation | ⏳ Pending | P3, scope TBD |
+| 102 | BN Create — PDF format toggle wording | ✅ Done | KCFactory v1.4.77 |
+| 115 | BN Create — edit customer info at creation | ✅ Done | KCFactory v1.4.78 |
+| 123 | BN Detail — แบบพิมพ์ (landscape) button | ✅ Done | Code.gs v1.4.201, KCFactory v1.4.79 |
+| 124 | BN Edit — editable address/phone | ✅ Done | Code.gs v1.4.202, KCFactory v1.4.80 |
+| 125 | BN Detail — PDF button on-demand | ✅ Done | Code.gs v1.4.202, KCFactory v1.4.81 |
 | 111 | Refactor DN/TI forms — shared editor + hook | ⏳ Pending | P3xL (absorbs #78) |
 | 112 | Refactor DN/TI detail views | ⏳ Pending | P4xM |
 | 113 | Refactor DN/TI list pages | ⏳ Pending | P4xM |
@@ -293,6 +295,114 @@ No changes this session.
 | 96 | BN Create split-pane | Search/list/scroll/confirm/popup all work | ✅ Passed — follow-ups #99–#103 logged |
 | 104 | Created BN persists on revisit | Create BN → leave → return → search same month → shows สร้างแล้ว + BN no + done state | ✅ Passed |
 | 107 | Combined PDF | พิมพ์เลย → one file in chosen format; each BN own page | ✅ Passed (page-break + date OK after v1.4.194) |
-| 110 | Combined folder config | Settings field set → file lands there; blank → auto "Combined" subfolder | ⏳ Verify after deploy |
-| 34 | DETAIL_MAX calibration | Test print TI/DN with real Thai detail text — confirm text fits; loosen to 34–36 if real data hits the cap | ⏳ Not tested |
-| 55 | PDF desc overflow fix | Test print with 24–25 wide ASCII chars in detail field — confirm text clips at column boundary | ⏳ Not tested |
+| 110 | Combined folder config | Settings field set → file lands there; blank → auto "Combined" subfolder | ✅ Passed |
+| 34 | DETAIL_MAX calibration | Test print TI/DN with real Thai detail text — confirm text fits; loosen to 34–36 if real data hits the cap | ⏳ Tested — 34–36 chars still too long; cap value TBD, discuss later |
+| 55 | PDF desc overflow fix | Test print with 24–25 wide ASCII chars in detail field — confirm text clips at column boundary | ⏳ Tested with #34 — still overflowing; discuss later |
+| 115 | BN Create — address/phone editable | Verify pre-filled from customer; edit → confirm BN → check PDF shows overridden values | ✅ Passed |
+| 123 | BN Detail — แบบพิมพ์ button | First click generates landscape PDF; repeat click opens cached URL; edit clears cache | ⏳ Pending deploy |
+| 124 | BN Edit — address/phone editable | Verify pre-filled from BN record; edit → save → detail shows updated values; PDF regenerates | ⏳ Pending deploy |
+| 125 | BN Detail — PDF button on-demand | Click PDF btn with no col H URL → generates + caches; repeat = instant; edit clears both URL caches | ⏳ Pending deploy |
+
+---
+
+## Work Done — Session 5 (evening, 19 June)
+
+*BN UX polish — format toggle cleanup, per-BN address/phone override, landscape PDF on detail page.*
+
+### KCFactory.jsx (v1.4.76 → v1.4.79)
+
+| Version | # | Change |
+|---|---|---|
+| v1.4.77 | #102 | BN format toggle wording: แนวตั้ง/แนวนอน → PDF/แบบพิมพ์; label "รูปแบบ PDF" → "รูปแบบ" (3 places: BNEditForm, BNCustomerPanel, print queue) |
+| v1.4.78 | #115 | BNCustomerPanel: editable ที่อยู่ + โทรศัพท์ (per-BN override); pre-filled from cust, reset on customer switch, passed to confirmBN |
+| v1.4.79 | #123 | Remove format toggle from BNCustomerPanel (always portrait at creation); add แบบพิมพ์ btn to BNDetailView (generates landscape via generateBillingNoteLandscapePDF, cached in landscapeUrl, cleared on edit); api.generateBillingNoteLandscapePDF |
+
+### Code.gs (v1.4.200 → v1.4.201)
+
+| Version | # | Change |
+|---|---|---|
+| v1.4.201 | #123 | confirmBillingNote always portrait (remove format param + router); new generateBillingNoteLandscapePDF() caches landscape URL in BN History col L; editBillingNote clears col L; getBillingNotes + getBillingNoteDetail return landscapeUrl |
+
+### Newly logged (open)
+- **#123** BN landscape PDF (done this session)
+- **#124** BN Edit — editable address/phone (same pattern as #115, logged, not yet implemented)
+
+---
+
+## Work Done — Session 6 (evening, 19 June)
+
+*BN address/phone persistence (#124), PDF on-demand button (#125).*
+
+### KCFactory.jsx (v1.4.79 → v1.4.81)
+
+| Version | # | Change |
+|---|---|---|
+| v1.4.80 | #124 | BNEditForm: add address+phone state (pre-filled from detail.address/phone), fields UI (2-col grid below date/customer), pass to api.editBillingNote; api.generateBillingNotePortraitPDF added |
+| v1.4.81 | #125 | BNDetailView: add ptLoading state + generatePortrait() handler (cache-first, on-demand generate); replace conditional `<a>` PDF link with `<Btn>` (always visible); handleSaveEdit clears both pdfUrl + landscapeUrl |
+
+### Code.gs (v1.4.201 → v1.4.202)
+
+| Version | # | Change |
+|---|---|---|
+| v1.4.202 | #124 | confirmBillingNote: persist address/phone to BN History cols M/N (if address or phone set); editBillingNote: accept + write params.address/phone to cols M/N; getBillingNoteDetail: read cols M/N as addressOverride/phoneOverride, apply after Invoice History scan (BN History takes priority) |
+| v1.4.202 | #125 | New generateBillingNotePortraitPDF(bnNo): checks col H cache, generates portrait PDF if empty, stores in col H, returns URL; router case added |
+
+### Newly logged
+- **#125** BN Detail PDF button on-demand (done this session)
+
+---
+
+## Work Done — Session 7 (evening, 19 June)
+
+*Architectural fix: detail field width guard. #127 new customer modal 3-way. atLimit/atWarn display fix.*
+
+### KCFactory.jsx (v1.4.82 → v1.4.85)
+
+| Version | # | Change |
+|---|---|---|
+| v1.4.83 | arch fix | `updateDetailItem` (DN) + `updateDetailTI` (TI): remove incorrect `descWidth(getDescText(testIt)) <= DESC_MAX` guard — detail is a separate right block in the PDF description column, not appended inline. Now only `descWidth(val) <= DETAIL_MAX` applies. |
+| v1.4.84 | #127 | newCustWarning modal: 3-way (ใช่ เพิ่มลูกค้าใหม่ / ไม่ ไม่ต้องเพิ่ม / ยกเลิก). "ไม่" saves doc but sets `skipCustomerLogRef` → `skipAutoLog:true` in payload → Code.gs skips `autoLogCustomer_`. ConfirmModal gets `onSecondary`+`secondaryLabel` props (neutral grey middle button). |
+| v1.4.85 | display fix | `dw` in row render now uses `desc+desc2` only (was `getDescText` which included detail). With long product names, combined width hit DESC_MAX at ~4th detail char, causing `atLimit=true` immediately and skipping yellow `atWarn` entirely. Now: yellow fires at detailW≥25, red at detailW≥34 or dw≥48, correctly independent. |
+
+### Code.gs (v1.4.202 → v1.4.203)
+
+| Version | # | Change |
+|---|---|---|
+| v1.4.203 | #127 | `createDeliveryNoteFromWeb` + `createTaxInvoiceFromWeb`: wrap `autoLogCustomer_` in `if (!data.skipAutoLog)` guard |
+
+---
+
+## Planning — Session 8 (refactor scoping, no code)
+
+*Discussed refactor cluster. Shelved #114, re-scoped #111. No code changes this session.*
+
+### #114 — shelved
+- Decision: do NOT touch the invoice templates (DN/TI/BN have intentionally different per-template styling → not true duplication; merging would couple them).
+- Scan finding: under that constraint #114 collapses to ~11 caption-label sites (all 34 toLocaleString money calls + the shared-primitive style consts live INSIDE the invoice templates). Not worth a session → shelved.
+
+### #111 — re-scoped (logic-first)
+- Full scan of DeliveryNoteForm (485–751) vs TaxInvoiceForm (2895–3199).
+- Key finding: original `<InvoiceItemsEditor>` table-merge is BACKWARDS. The item tables are exactly what DIFFERS (DN: size col + single amount cell; TI: qty inline + satang col + colgroup); customer cards differ (TI taxId/invoiceRef); summaries differ (DN total row vs TI VAT block). These stay per-template.
+- What IS byte-identical = the LOGIC (13 state hooks+refs, items init, checkProductName, checkNameSimilarity, updateItem, updateDetail, addRow, addContinuationRow [data-attr differs], removeRow, cellInput, handleSave cust-check preamble, 4 modals).
+- New plan: P1 `useInvoiceForm(initial,isEdit,{products,keyPrefix})` (~120 lines, zero visual change) · P2 `<ProductWarningModal>` (absorbs #78) · P3 (opt) `<CustomerCheckModals>`. Net ~180 lines, no shared markup between DN/TI.
+- #78 folded into #111 (P1 state + P2 modal). Backlog updated.
+- Coding deferred to a later session (user: "re-scope backlog first, code later").
+
+---
+
+## Work Done — Session 8 (refactor #111 Phase 1)
+
+*Extracted shared form-logic hook from DN + TI forms. Logic-only; templates untouched.*
+
+### KCFactory.jsx (v1.4.85 → v1.4.86)
+
+| Version | # | Change |
+|---|---|---|
+| v1.4.86 | #111 P1 | New `initInvoiceItems(initial,isEdit)` + `useInvoiceForm({initial,isEdit,products,detailAttr})` hook (placed after getDescText). Hook owns: items + 10 state hooks + 3 refs; handlers checkProductName, checkNameSimilarity, updateItem, updateDetail, addRow, addContinuationRow (uses detailAttr → focuses new cont row via getAttribute), removeRow, cellInput; and `guardedSave(name, doSave)` (runs new-invoice cust-similarity/unknown-customer guards, then sets saving + calls form's doSave({filled,cleanItems,skipLog})). DeliveryNoteForm + TaxInvoiceForm now call the hook and keep ONLY their own fields (DN: date/name/address/phone; TI: +taxId/invoiceRef), derived totals (DN total; TI sub/vat/gt), payload shape, api call, and all JSX (customer card, items table, summary, 4 modals). detailAttr: DN "data-detail-idx", TI "data-ti-detail-idx" (DOM namespaces kept separate). |
+
+### Notes
+- **No behavior change intended.** `updateItem` converted to functional `setItems(prev=>…)` (was `setItems(items.map…)`) — identical result, safer. Everything else byte-for-byte equivalent.
+- Renamed at call sites: TI checkProductNameTI→checkProductName, updateDetailTI→updateDetail, addContinuationRowTI→addContinuationRow; DN updateDetailItem→updateDetail.
+- **Verification:** esbuild bundle OK (231.9kb, was 234.0kb baseline). Stale-ref grep clean (old handler names only remain in the v1.4.83 changelog comment). Template-specific JSX confirmed intact (TI satang col + VAT block, DN size column). File 3836→3779 lines net (−57) while ADDING ~150-line hook ⇒ ~190 lines of duplication removed.
+- ⚠️ **NEEDS MANUAL TEST after deploy** (core data-entry forms): create DN, create TI, edit existing DN, edit existing TI, similar-name warning, new-customer 3-way modal, product-not-found modal, add continuation row (Enter), delete row, 10-row limit. Don't start #111 P2 (ProductWarningModal) until this passes.
+- #78 state portion folded into P1; modal JSX still duplicated → P2.

@@ -2,6 +2,16 @@
 // KC Factory System — Web App
 // ============================================================
 // Version History (last 15 — full log in KC_Daily_Progress_2026-06-18.md)
+// v1.4.86 (2026-06-19) — #111 P1: extract useInvoiceForm hook + initInvoiceItems — shared DN+TI form LOGIC only (items/state/refs, updateItem/updateDetail, addRow/addContinuationRow [detailAttr], removeRow, cellInput, checkProductName, checkNameSimilarity, guardedSave). Each form keeps own fields/JSX/payload/api (tables/cards/summary unchanged). No behavior change; updateItem now functional setState. ~190 lines dedup. #78 state portion folded in.
+// v1.4.85 (2026-06-19) — fix atLimit display: dw now uses desc+desc2 only (was getDescText which included detail, causing red limit msg to fire too early in detail field)
+// v1.4.84 (2026-06-19) — #127 refine: newCustWarning modal gets 3-way choice (ใช่ เพิ่ม / ไม่ ไม่ต้องเพิ่ม / ยกเลิก); "ไม่" still saves, sets skipCustomerLogRef → skipAutoLog=true in payload → Code.gs skips autoLogCustomer_; ConfirmModal: onSecondary+secondaryLabel props (neutral middle btn)
+// v1.4.83 (2026-06-19) — fix updateDetailItem + updateDetailTI: remove incorrect DESC_MAX combined-width guard (detail is separate right block → only DETAIL_MAX applies)
+// v1.4.82 (2026-06-19) — #127 DN+TI forms: new customer prompt on save (if name unknown to allCustomers + no similar match → ConfirmModal before save proceeds)
+// v1.4.81 (2026-06-19) — #125 BNDetailView: PDF button on-demand (generateBillingNotePortraitPDF, cache col H, clears on edit); remove conditional <a> tag
+// v1.4.80 (2026-06-19) — #124 BNEditForm: editable address+phone (pre-filled from detail, passed to editBillingNote → BN History cols M/N); api.generateBillingNotePortraitPDF
+// v1.4.79 (2026-06-19) — #123 BN landscape PDF: remove format toggle from BNCustomerPanel (always portrait at creation); add แบบพิมพ์ btn to BNDetailView (cached in landscapeUrl, cleared on edit); api.generateBillingNoteLandscapePDF
+// v1.4.78 (2026-06-19) — #115 BNCustomerPanel: editable address + phone (per-BN override); pre-filled from cust, reset on customer switch, passed to confirmBN
+// v1.4.77 (2026-06-19) — #102 BN format toggle: แนวตั้ง/แนวนอน → PDF/แบบพิมพ์; label รูปแบบ PDF → รูปแบบ (3 places: BNEditForm, BNCustomerPanel, print queue)
 // v1.4.76 (2026-06-19) — #122 shared DateRangePicker (เดือน/ทั้งปี + year nav + month grid + custom range, collapsed dropdown); replaces date inputs in DN+TI lists; BN Create month-grid nav (monthOnly); BN History date filter
 // v1.4.75 (2026-06-19) — #121 DN list default = last 3 months (was current month) + "ทั้งหมด" button (clears date range → loads all); wider default seeds _dnStore so more BN DN-opens are instant
 // v1.4.74 (2026-06-19) — #120 BN breadcrumb: BillingNotePage setView pushes suffix (BN no / สร้างใบวางบิล) via onViewChange → top path shows Home › เอกสาร › ใบวางบิล › <BN> like DN/TI
@@ -91,8 +101,10 @@ const api = {
   createDeliveryNote:    (data)                        => apiCall("createDeliveryNote", { data }),
   updateDeliveryNote:    (id, data)                    => apiCall("updateDeliveryNote", { id, data }),
   searchDeliveryNotes:   (startDate, endDate)          => apiCall("searchDeliveryNotes", { startDate, endDate }),
-  confirmBN:        (customer, reservedBnNo, invoices, bnDate, address, phone, format) =>
-                      apiCall("confirmBillingNote", { customer, reservedBnNo, invoices, bnDate, address, phone, format }),
+  confirmBN:        (customer, reservedBnNo, invoices, bnDate, address, phone) =>
+                      apiCall("confirmBillingNote", { customer, reservedBnNo, invoices, bnDate, address, phone }),
+  generateBillingNoteLandscapePDF: (bnNo) => apiCall("generateBillingNoteLandscapePDF", { bnNo }),
+  generateBillingNotePortraitPDF:  (bnNo) => apiCall("generateBillingNotePortraitPDF",  { bnNo }),
   getBillingNotes:            ()              => apiCall("getBillingNotes"),
   getBillingNoteDetail:       (bnNo)         => apiCall("getBillingNoteDetail", { bnNo }),
   getDNDetail:                (dnNo)         => apiCall("getDNDetail", { dnNo }),
@@ -243,7 +255,137 @@ function getDescText(it) {
   return (it.desc || "") + (it.desc2 ? " " + it.desc2 : "") + (it.detail ? " (" + it.detail + ")" : "");
 }
 
-function ConfirmModal({ message, onConfirm, onCancel, confirmLabel = "ลบ", loading = false, enterConfirm = false }) {
+// Build initial item rows from an existing invoice (edit mode): split " | " continuation
+// parts into _cont rows, mark originals _orig. Shared by DN + TI forms via useInvoiceForm.
+function initInvoiceItems(initial, isEdit) {
+  if (!isEdit || !initial?.items) return [emptyItem()];
+  const rows = [];
+  initial.items.filter(it => it.desc || it.desc2 || it.detail || it.qty || it.amount).forEach(it => {
+    const parts = (it.detail || "").split(" | ");
+    rows.push({ ...it, _orig: true, detail: parts[0] || "" });
+    for (let j = 1; j < parts.length; j++) rows.push({ ...emptyItem(), _cont: true, detail: parts[j] });
+  });
+  return rows;
+}
+
+// #111 Phase 1 — shared form logic for DeliveryNoteForm + TaxInvoiceForm.
+// Owns item rows, all warning/edit state + refs, and every handler that was byte-identical
+// between the two forms. Each form keeps its OWN customer-info card, items table, summary,
+// payload shape, and api call (those differ per document type — intentionally not shared).
+// detailAttr: the data-* attribute used to refocus a new continuation row ("data-detail-idx"
+// for DN, "data-ti-detail-idx" for TI) — keeps the two forms' DOM namespaces separate.
+function useInvoiceForm({ initial, isEdit, products, detailAttr }) {
+  const [items,            setItems]            = useState(() => initInvoiceItems(initial, isEdit));
+  const [removedOrigItems, setRemovedOrigItems] = useState([]);
+  const [saving,           setSaving]           = useState(false);
+  const [error,            setError]            = useState("");
+  const [pendingDelete,    setPendingDelete]    = useState(null);
+  const [rowEditMode,      setRowEditMode]      = useState(false);
+  const [allCustomers,     setAllCustomers]     = useState([]);
+  const [custWarning,      setCustWarning]      = useState(null);
+  const [newCustWarning,   setNewCustWarning]   = useState(null); // #127 — name string if customer not in system
+  const [productWarning,   setProductWarning]   = useState(null); // { rowIndex, name, similar }
+  const [addingProduct,    setAddingProduct]    = useState(false);
+  const custConfirmedRef        = useRef(false);
+  const skipCustomerLogRef      = useRef(false); // #127 — set true when user picks "ไม่ ไม่ต้องเพิ่ม"
+  const nameSelectedFromListRef = useRef(false);
+
+  const checkProductName = (i, val) => {
+    const trimmed = val.trim();
+    if (!trimmed || products.includes(trimmed)) return;
+    const similar = findSimilarCustomers(trimmed, products.map(p => ({ name: p })));
+    setProductWarning({ rowIndex: i, name: trimmed, similar });
+  };
+
+  const checkNameSimilarity = (nameVal) => {
+    if (isEdit || !nameVal.trim() || custConfirmedRef.current) return;
+    const similar = findSimilarCustomers(nameVal, allCustomers);
+    if (similar.length > 0) setCustWarning(similar);
+  };
+
+  const updateItem = (i, field, val) => {
+    setItems(prev => prev.map((it, idx) => {
+      if (idx !== i || (it._cont && field !== "detail")) return it;
+      const updated = { ...it, [field]: val };
+      if (field === "qty" || field === "unitPrice") {
+        const q = parseFloat(field === "qty" ? val : it.qty) || 0;
+        const p = parseFloat(field === "unitPrice" ? val : it.unitPrice) || 0;
+        updated.amount = q * p || "";
+      }
+      return updated;
+    }));
+  };
+  const updateDetail = (i, val) => {
+    if (descWidth(val) <= DETAIL_MAX) updateItem(i, "detail", val);
+  };
+
+  const addRow = () => { if (items.length < ITEMS_COUNT) setItems([...items, emptyItem()]); };
+  const addContinuationRow = (afterIndex) => {
+    if (items.length >= ITEMS_COUNT) return;
+    const next = [...items];
+    next.splice(afterIndex + 1, 0, { ...emptyItem(), _cont: true });
+    setItems(next);
+    setTimeout(() => {
+      const inputs = document.querySelectorAll(`[${detailAttr}]`);
+      const target = [...inputs].find(el => el.getAttribute(detailAttr) === String(afterIndex + 1));
+      if (target) target.focus();
+    }, 30);
+  };
+  const removeRow = (i) => {
+    if (items[i]?._orig) {
+      const it = items[i];
+      const note = [it.desc, it.desc2, it.qty].filter(Boolean).join(" ");
+      if (note) setRemovedOrigItems(prev => [...prev, note]);
+    }
+    setItems(items.filter((_, idx) => idx !== i));
+  };
+
+  const cellInput = (i, field, align, extra = {}) => (
+    <input value={items[i][field]} onChange={e => updateItem(i, field, e.target.value)}
+      style={{ width: "100%", border: "none", background: "transparent", fontSize: 12, padding: "3px 4px", outline: "none", textAlign: align || "left" }}
+      onFocus={e => e.target.style.outline = `1px solid ${C.accent}`}
+      onBlur={e => e.target.style.outline = "none"}
+      {...extra}
+    />
+  );
+
+  // Runs the new-invoice customer-similarity / unknown-customer guards, then (if cleared)
+  // sets saving state and calls the form-supplied doSave({ filled, cleanItems, skipLog }).
+  const guardedSave = async (name, doSave) => {
+    if (!isEdit && !custConfirmedRef.current) {
+      const similar = findSimilarCustomers(name, allCustomers);
+      if (similar.length > 0) { setCustWarning(similar); return; }
+      const isKnown = allCustomers.some(c => (c.name||"").trim().toLowerCase() === name.trim().toLowerCase());
+      if (!isKnown && name.trim()) { setNewCustWarning(name.trim()); return; }
+    }
+    custConfirmedRef.current = false;
+    setCustWarning(null);
+    setSaving(true);
+    setError("");
+    try {
+      const { filled, cleanItems } = collapseItems(items);
+      const skipLog = skipCustomerLogRef.current;
+      skipCustomerLogRef.current = false;
+      await doSave({ filled, cleanItems, skipLog });
+    } catch (err) {
+      setError(err.message);
+      setSaving(false);
+    }
+  };
+
+  return {
+    items, setItems, removedOrigItems, setRemovedOrigItems,
+    saving, error, setError, pendingDelete, setPendingDelete,
+    rowEditMode, setRowEditMode, allCustomers, setAllCustomers,
+    custWarning, setCustWarning, newCustWarning, setNewCustWarning,
+    productWarning, setProductWarning, addingProduct, setAddingProduct,
+    custConfirmedRef, skipCustomerLogRef, nameSelectedFromListRef,
+    checkProductName, checkNameSimilarity, updateItem, updateDetail,
+    addRow, addContinuationRow, removeRow, cellInput, guardedSave,
+  };
+}
+
+function ConfirmModal({ message, onConfirm, onCancel, confirmLabel = "ลบ", loading = false, enterConfirm = false, onSecondary, secondaryLabel }) {
   useEffect(() => {
     if (!enterConfirm) return;
     const handler = e => {
@@ -259,6 +401,9 @@ function ConfirmModal({ message, onConfirm, onCancel, confirmLabel = "ลบ", l
         <div style={{ fontSize: 14, color: C.text, marginBottom: 20 }}>{message}</div>
         <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
           <button onClick={onCancel} disabled={loading} style={{ padding: "7px 20px", borderRadius: 6, border: `0.5px solid ${C.border}`, background: "white", cursor: loading ? "not-allowed" : "pointer", fontSize: 13, color: C.text, opacity: loading ? 0.5 : 1 }}>ยกเลิก</button>
+          {onSecondary && secondaryLabel && (
+            <button onClick={onSecondary} disabled={loading} style={{ padding: "7px 20px", borderRadius: 6, border: `1px solid ${C.border}`, background: "#f5f5f5", cursor: loading ? "not-allowed" : "pointer", fontSize: 13, color: C.text, opacity: loading ? 0.5 : 1 }}>{secondaryLabel}</button>
+          )}
           <button onClick={onConfirm} disabled={loading} style={{ padding: "7px 20px", borderRadius: 6, border: "none", background: "#e5534b", cursor: loading ? "not-allowed" : "pointer", fontSize: 13, color: "white", fontWeight: 500, opacity: loading ? 0.7 : 1, display: "inline-flex", alignItems: "center", gap: 6 }}>
             {loading && <Loader size={13}/>}{confirmLabel}
           </button>
@@ -473,119 +618,28 @@ function DeliveryNoteForm({ initial, onSave, onCancel, isEdit, products, setProd
   const [name, setName]       = useState(initial?.name || "");
   const [address, setAddress] = useState(initial?.address || "");
   const [phone, setPhone]     = useState(initial?.phone || "");
-  const [items,         setItems]         = useState(() => {
-    if (!isEdit || !initial?.items) return [emptyItem()];
-    const rows = [];
-    initial.items.filter(it => it.desc || it.desc2 || it.detail || it.qty || it.amount).forEach(it => {
-      const parts = (it.detail || "").split(" | ");
-      rows.push({ ...it, _orig: true, detail: parts[0] || "" });
-      for (let j = 1; j < parts.length; j++) {
-        rows.push({ ...emptyItem(), _cont: true, detail: parts[j] });
-      }
-    });
-    return rows;
-  });
-  const [removedOrigItems, setRemovedOrigItems] = useState([]);
-  const [saving,        setSaving]        = useState(false);
-  const [error,         setError]         = useState("");
-  const [pendingDelete, setPendingDelete] = useState(null);
-  const [rowEditMode,   setRowEditMode]   = useState(false);
-  const [allCustomers,  setAllCustomers]  = useState([]);
-  const [custWarning,   setCustWarning]   = useState(null);
-  const [productWarning, setProductWarning] = useState(null); // { rowIndex, name, similar }
-  const [addingProduct,  setAddingProduct]  = useState(false);
-  const custConfirmedRef        = useRef(false);
-  const nameSelectedFromListRef = useRef(false);
-
-  const checkProductName = (i, val) => {
-    const trimmed = val.trim();
-    if (!trimmed || products.includes(trimmed)) return;
-    const similar = findSimilarCustomers(trimmed, products.map(p => ({ name: p })));
-    setProductWarning({ rowIndex: i, name: trimmed, similar });
-  };
-
-  const checkNameSimilarity = (nameVal) => {
-    if (isEdit || !nameVal.trim() || custConfirmedRef.current) return;
-    const similar = findSimilarCustomers(nameVal, allCustomers);
-    if (similar.length > 0) setCustWarning(similar);
-  };
-
-  const updateItem = (i, field, val) => {
-    const next = items.map((it, idx) => {
-      if (idx !== i || (it._cont && field !== "detail")) return it;
-      const updated = { ...it, [field]: val };
-      if (field === "qty" || field === "unitPrice") {
-        const q = parseFloat(field === "qty" ? val : it.qty) || 0;
-        const p = parseFloat(field === "unitPrice" ? val : it.unitPrice) || 0;
-        updated.amount = q * p || "";
-      }
-      return updated;
-    });
-    setItems(next);
-  };
-  const updateDetailItem = (i, val) => {
-    const it = items[i];
-    const testIt = { ...it, detail: val };
-    if (descWidth(getDescText(testIt)) <= DESC_MAX && descWidth(val) <= DETAIL_MAX) updateItem(i, "detail", val);
-  };
-
-  const addRow = () => { if (items.length < ITEMS_COUNT) setItems([...items, emptyItem()]); };
-  const addContinuationRow = (afterIndex) => {
-    if (items.length >= ITEMS_COUNT) return;
-    const next = [...items];
-    next.splice(afterIndex + 1, 0, { ...emptyItem(), _cont: true });
-    setItems(next);
-    setTimeout(() => {
-      const inputs = document.querySelectorAll("[data-detail-idx]");
-      const target = [...inputs].find(el => el.dataset.detailIdx === String(afterIndex + 1));
-      if (target) target.focus();
-    }, 30);
-  };
-  const removeRow = (i) => {
-    if (items[i]?._orig) {
-      const it = items[i];
-      const note = [it.desc, it.desc2, it.qty].filter(Boolean).join(" ");
-      if (note) setRemovedOrigItems(prev => [...prev, note]);
-    }
-    setItems(items.filter((_, idx) => idx !== i));
-  };
+  const {
+    items, removedOrigItems, saving, error, pendingDelete, setPendingDelete,
+    rowEditMode, setRowEditMode, setAllCustomers,
+    custWarning, setCustWarning, newCustWarning, setNewCustWarning,
+    productWarning, setProductWarning, addingProduct, setAddingProduct,
+    custConfirmedRef, skipCustomerLogRef, nameSelectedFromListRef,
+    checkProductName, checkNameSimilarity, updateItem, updateDetail,
+    addRow, addContinuationRow, removeRow, cellInput, guardedSave,
+  } = useInvoiceForm({ initial, isEdit, products, detailAttr: "data-detail-idx" });
 
   const total = items.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0);
 
-  const handleSave = async () => {
-    // Similar name check (new invoices only; skip if user already confirmed)
-    if (!isEdit && !custConfirmedRef.current) {
-      const similar = findSimilarCustomers(name, allCustomers);
-      if (similar.length > 0) { setCustWarning(similar); return; }
-    }
-    custConfirmedRef.current = false;
-    setCustWarning(null);
-    setSaving(true);
-    setError("");
-    try {
-      const { filled, cleanItems } = collapseItems(items);
-      const payload = {
-        date, name, address, phone, items: cleanItems, total,
-        ...(isEdit ? { _logAdded: filled.filter(it => !it._orig).length, _logDeleted: removedOrigItems } : {})
-      };
-      const result = isEdit
-        ? await api.updateDeliveryNote(initial.id, payload)
-        : await api.createDeliveryNote(payload);
-      onSave({ ...payload, id: result.invoiceNo || initial?.id, pdfUrl: result.pdfUrl || initial?.pdfUrl });
-    } catch (err) {
-      setError(err.message);
-      setSaving(false);
-    }
-  };
-
-  const cellInput = (i, field, align, extra = {}) => (
-    <input value={items[i][field]} onChange={e => updateItem(i, field, e.target.value)}
-      style={{ width: "100%", border: "none", background: "transparent", fontSize: 12, padding: "3px 4px", outline: "none", textAlign: align || "left" }}
-      onFocus={e => e.target.style.outline = `1px solid ${C.accent}`}
-      onBlur={e => e.target.style.outline = "none"}
-      {...extra}
-    />
-  );
+  const handleSave = () => guardedSave(name, async ({ filled, cleanItems, skipLog }) => {
+    const payload = {
+      date, name, address, phone, items: cleanItems, total,
+      ...(isEdit ? { _logAdded: filled.filter(it => !it._orig).length, _logDeleted: removedOrigItems } : { skipAutoLog: skipLog })
+    };
+    const result = isEdit
+      ? await api.updateDeliveryNote(initial.id, payload)
+      : await api.createDeliveryNote(payload);
+    onSave({ ...payload, id: result.invoiceNo || initial?.id, pdfUrl: result.pdfUrl || initial?.pdfUrl });
+  });
 
   return (
     <>
@@ -595,6 +649,14 @@ function DeliveryNoteForm({ initial, onSave, onCancel, isEdit, products, setProd
       onConfirm={() => { custConfirmedRef.current = true; setCustWarning(null); }}
       onCancel={() => setCustWarning(null)}
       confirmLabel="ใช่ บันทึก"
+    />}
+    {newCustWarning && <ConfirmModal
+      message={`ลูกค้า "${newCustWarning}" ยังไม่มีในระบบ — บันทึกเป็นลูกค้าใหม่ด้วยหรือไม่?`}
+      onConfirm={() => { custConfirmedRef.current = true; setNewCustWarning(null); handleSave(); }}
+      secondaryLabel="ไม่ ไม่ต้องเพิ่ม"
+      onSecondary={() => { custConfirmedRef.current = true; skipCustomerLogRef.current = true; setNewCustWarning(null); handleSave(); }}
+      onCancel={() => setNewCustWarning(null)}
+      confirmLabel="ใช่ เพิ่มลูกค้าใหม่"
     />}
     {productWarning && (
       <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
@@ -662,7 +724,7 @@ function DeliveryNoteForm({ initial, onSave, onCancel, isEdit, products, setProd
             </thead>
             <tbody>
               {items.map((it, i) => {
-                const dw = descWidth(getDescText(it));
+                const dw = descWidth((it.desc || "") + (it.desc2 ? " " + it.desc2 : ""));
                 const detailW = descWidth(it.detail || "");
                 const atWarn  = detailW >= DETAIL_WARN;
                 const atLimit = dw >= DESC_MAX || detailW >= DETAIL_MAX;
@@ -686,7 +748,7 @@ function DeliveryNoteForm({ initial, onSave, onCancel, isEdit, products, setProd
                   <td style={{ padding: "3px 6px" }}>
                     {cellInput(i, "detail", "left", {
                       "data-detail-idx": i,
-                      onChange: e => updateDetailItem(i, e.target.value),
+                      onChange: e => updateDetail(i, e.target.value),
                       onKeyDown: e => { if (e.key === "Enter") { e.preventDefault(); addContinuationRow(i); } }
                     })}
                     {atLimit && <div style={{ fontSize: 11, color: C.danger, marginTop: 1 }}>ถึงขีดจำกัด — กด Enter เพื่อขึ้นบรรทัดใหม่</div>}
@@ -1742,11 +1804,11 @@ function BNPreviewModal({ customer, onClose, onConfirm, nextBnNo }) {
             </div>
           </div>
           <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 11, color: C.muted }}>รูปแบบ PDF:</span>
+            <span style={{ fontSize: 11, color: C.muted }}>รูปแบบ:</span>
             {["portrait", "landscape"].map(f => (
               <button key={f} onClick={() => setFormat(f)}
                 style={{ fontSize: 11, padding: "3px 10px", borderRadius: 4, cursor: "pointer", border: `1px solid ${format === f ? C.accent : C.border}`, background: format === f ? C.accent : "white", color: format === f ? "white" : C.text, fontWeight: format === f ? 500 : 400 }}>
-                {f === "portrait" ? "📄 แนวตั้ง" : "🖼 แนวนอน"}
+                {f === "portrait" ? "📄 PDF" : "🖨 แบบพิมพ์"}
               </button>
             ))}
           </div>
@@ -1944,6 +2006,8 @@ function BNEditForm({ detail, onSave, onCancel }) {
   }
   const [dateInput, setDateInput]   = useState(toInputDate(detail.date));
   const [customer, setCustomer]     = useState(detail.customer || "");
+  const [address, setAddress]       = useState(detail.address || "");
+  const [phone, setPhone]           = useState(detail.phone   || "");
   const [invoices, setInvoices]     = useState(detail.invoices || []);
   const [unbilled, setUnbilled]     = useState([]);
   const [unbilledLoading, setUBL]   = useState(false);
@@ -1971,9 +2035,9 @@ function BNEditForm({ detail, onSave, onCancel }) {
       const newNos      = new Set(invoices.map(inv => inv.no));
       const addDnNos    = [...newNos].filter(n => !origNos.has(n));
       const removeDnNos = [...origNos].filter(n => !newNos.has(n));
-      await api.editBillingNote(detail.bnNo, { date: dateInput, customer, addDnNos, removeDnNos });
+      await api.editBillingNote(detail.bnNo, { date: dateInput, customer, address, phone, addDnNos, removeDnNos });
       const displayDate = dateInput ? (() => { const p = dateInput.split("-"); return `${p[2]}/${p[1]}/${p[0]}`; })() : detail.date;
-      onSave({ date: displayDate, customer, invoices, count: invoices.length, total: invoices.reduce((s, inv) => s + (parseFloat(inv.total)||0), 0) });
+      onSave({ date: displayDate, customer, address, phone, invoices, count: invoices.length, total: invoices.reduce((s, inv) => s + (parseFloat(inv.total)||0), 0) });
     } catch (e) {
       alert("เกิดข้อผิดพลาด: " + e.message);
     } finally {
@@ -1994,7 +2058,18 @@ function BNEditForm({ detail, onSave, onCancel }) {
             <input value={customer} onChange={e => setCustomer(e.target.value)} style={{ ...inputStyle, width: "100%" }} />
           </div>
         </div>
-        <div style={{ fontSize: 11, color: C.muted }}>* เปลี่ยนชื่อลูกค้าจะไม่กระทบบันทึกอื่น ใช้เฉพาะใบนี้</div>
+        {/* address + phone override (#124) */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 10 }}>
+          <div>
+            <label style={{ fontSize: 11, color: C.muted, display: "block", marginBottom: 4 }}>ที่อยู่</label>
+            <input value={address} onChange={e => setAddress(e.target.value)} placeholder="—" style={{ ...inputStyle, width: "100%" }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 11, color: C.muted, display: "block", marginBottom: 4 }}>โทรศัพท์</label>
+            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="—" style={{ ...inputStyle, width: "100%" }} />
+          </div>
+        </div>
+        <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>* เปลี่ยนชื่อลูกค้าจะไม่กระทบบันทึกอื่น ใช้เฉพาะใบนี้</div>
       </div>
 
       <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
@@ -2074,6 +2149,8 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
   const [editing, setEditing]             = useState(false);
   const [showCancelConfirm, setShowCC]    = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
+  const [lsLoading, setLsLoading]         = useState(false);
+  const [ptLoading, setPtLoading]         = useState(false);
   const [dnPopup, setDnPopup]             = useState(null);
   const [dnCache, setDnCache]             = useState({});
   const [hovered, setHovered]             = useState(null);
@@ -2096,9 +2173,31 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
   };
 
   const handleSaveEdit = (updated) => {
-    setDetail(prev => ({ ...prev, ...updated }));
+    setDetail(prev => ({ ...prev, ...updated, landscapeUrl: "", pdfUrl: "" })); // edit clears both PDF caches (#123, #125)
     setEditing(false);
     onSaved?.();
+  };
+
+  const generateLandscape = async () => {
+    if (detail.landscapeUrl) {
+      window.open(detail.landscapeUrl, "_blank", "noopener,noreferrer"); return;
+    }
+    setLsLoading(true);
+    try {
+      const res = await api.generateBillingNoteLandscapePDF(bnNo);
+      if (res?.url) { setDetail(d => ({ ...d, landscapeUrl: res.url })); window.open(res.url, "_blank", "noopener,noreferrer"); }
+    } catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); }
+    finally { setLsLoading(false); }
+  };
+
+  const generatePortrait = async () => {
+    if (detail.pdfUrl) { window.open(detail.pdfUrl, "_blank", "noopener,noreferrer"); return; }
+    setPtLoading(true);
+    try {
+      const res = await api.generateBillingNotePortraitPDF(bnNo);
+      if (res?.url) { setDetail(d => ({ ...d, pdfUrl: res.url })); window.open(res.url, "_blank", "noopener,noreferrer"); }
+    } catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); }
+    finally { setPtLoading(false); }
   };
 
   if (editing) return (
@@ -2127,12 +2226,8 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
         </div>
         {detail && !detail.cancelled && (
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {detail.pdfUrl && (
-              <a href={detail.pdfUrl} target="_blank" rel="noopener noreferrer"
-                style={{ fontSize: 12, color: C.accent, border: `0.5px solid ${C.accent}`, borderRadius: 4, padding: "5px 12px", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}>
-                📄 PDF
-              </a>
-            )}
+            <Btn onClick={generateLandscape} disabled={lsLoading}>{lsLoading ? <Loader size={13}/> : <Printer size={14}/>} แบบพิมพ์</Btn>
+            <Btn onClick={generatePortrait} disabled={ptLoading}>{ptLoading ? <Loader size={13}/> : <FileText size={14}/>} PDF</Btn>
             <Btn primary onClick={() => setEditing(true)}><Pencil size={14}/> แก้ไข</Btn>
             <Btn danger onClick={() => setShowCC(true)} disabled={cancelLoading}>ยกเลิกใบนี้</Btn>
           </div>
@@ -2294,7 +2389,6 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick }) {
 function BNCustomerPanel({ cust, nextBnNo, onConfirm }) {
   const today = new Date().toISOString().slice(0, 10);
   const [bnDate, setBnDate]   = useState(today);
-  const [format, setFormat]   = useState("portrait");
   const [confirming, setConf] = useState(false);
   const [error, setError]     = useState("");
   const [rows, setRows]       = useState(
@@ -2302,11 +2396,14 @@ function BNCustomerPanel({ cust, nextBnNo, onConfirm }) {
   );
   const [dnPopup, setDnPopup] = useState(null);
   const [dnCache, setDnCache] = useState({});
+  const [address, setAddress] = useState(cust.address || "");
+  const [phone, setPhone]     = useState(cust.phone || "");
 
   // reset on customer switch (key prop handles unmount, but keep for safety)
   useEffect(() => {
-    setBnDate(today); setFormat("portrait"); setError("");
+    setBnDate(today); setError("");
     setRows((cust.invoices || []).map((inv, i) => ({ ...inv, idx: i, checked: true })));
+    setAddress(cust.address || ""); setPhone(cust.phone || "");
   }, [cust.customer]);
 
   const toggleRow = (idx) => setRows(prev => prev.map(r => r.idx === idx ? { ...r, checked: !r.checked } : r));
@@ -2323,7 +2420,7 @@ function BNCustomerPanel({ cust, nextBnNo, onConfirm }) {
     setConf(true); setError("");
     try {
       const invoices = selectedRows.map(r => ({ dnNo: r.no, dnDate: r.date, amount: r.total }));
-      const result = await api.confirmBN(cust.customer, nextBnNo, invoices, bnDate, cust.address || "", cust.phone || "", format);
+      const result = await api.confirmBN(cust.customer, nextBnNo, invoices, bnDate, address, phone);
       onConfirm({ bnNo: result.bnNo, pdfUrl: result.pdfUrl, customer: cust.customer, count: selectedRows.length, total: grandTotal, date: bnDate, dnNos: selectedRows.map(r => r.no) });
     } catch (e) {
       setError(e.message); setConf(false);
@@ -2337,23 +2434,17 @@ function BNCustomerPanel({ cust, nextBnNo, onConfirm }) {
         <span style={{ fontSize: 13, fontWeight: 500 }}>{cust.customer}</span>
         <span style={{ fontSize: 11, color: C.accent, background: "#e3f0ff", padding: "1px 8px", borderRadius: 10, fontWeight: 500 }}>{nextBnNo}</span>
       </div>
-      {/* date + format — fixed 2-col grid so position never shifts */}
-      <div style={{ padding: "10px 14px", borderBottom: `0.5px solid ${C.borderLight}`, display: "grid", gridTemplateColumns: "190px 1fr", gap: 16, alignItems: "end" }}>
-        <div>
-          <div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>วันที่ออกใบวางบิล</div>
-          <input type="date" value={bnDate} onChange={e => setBnDate(e.target.value)} style={{ ...inputStyle, width: "100%" }} />
-        </div>
-        <div>
-          <div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>รูปแบบ PDF</div>
-          <div style={{ display: "flex", gap: 6 }}>
-            {["portrait", "landscape"].map(f => (
-              <button key={f} onClick={() => setFormat(f)}
-                style={{ fontSize: 11, padding: "5px 10px", borderRadius: 4, cursor: "pointer", border: `1px solid ${format===f ? C.accent : C.border}`, background: format===f ? C.accent : "white", color: format===f ? "white" : C.text, whiteSpace: "nowrap" }}>
-                {f === "portrait" ? "📄 แนวตั้ง" : "🖼 แนวนอน"}
-              </button>
-            ))}
-          </div>
-        </div>
+      {/* customer info — per-BN override for address/phone (#115) */}
+      <div style={{ padding: "8px 14px", borderBottom: `0.5px solid ${C.borderLight}`, display: "grid", gridTemplateColumns: "60px 1fr", gap: "6px 10px", alignItems: "center" }}>
+        <span style={{ fontSize: 11, color: C.muted }}>ที่อยู่</span>
+        <input value={address} onChange={e => setAddress(e.target.value)} placeholder="—" style={{ ...inputStyle, width: "100%", fontSize: 11 }} />
+        <span style={{ fontSize: 11, color: C.muted }}>โทรศัพท์</span>
+        <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="—" style={{ ...inputStyle, width: "100%", fontSize: 11 }} />
+      </div>
+      {/* date — single col now that format toggle removed (#123) */}
+      <div style={{ padding: "10px 14px", borderBottom: `0.5px solid ${C.borderLight}` }}>
+        <div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>วันที่ออกใบวางบิล</div>
+        <input type="date" value={bnDate} onChange={e => setBnDate(e.target.value)} style={{ ...inputStyle, width: 190 }} />
       </div>
       {/* DN table */}
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
@@ -2691,7 +2782,7 @@ function BNCreateView({ onBack }) {
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                       <span style={{ fontSize: 11, color: C.muted }}>รูปแบบ</span>
-                      {[["portrait","แนวตั้ง"],["landscape","แนวนอน"]].map(([v,l]) => (
+                      {[["portrait","📄 PDF"],["landscape","🖨 แบบพิมพ์"]].map(([v,l]) => (
                         <button key={v} onClick={() => setPrintFormat(v)} disabled={printing}
                           style={{ fontSize: 11, padding: "3px 9px", borderRadius: 4, cursor: printing ? "default" : "pointer",
                             border: `0.5px solid ${printFormat===v ? C.accent : C.border}`,
@@ -2843,117 +2934,30 @@ function TaxInvoiceForm({ initial, onSave, onCancel, isEdit, products, setProduc
   const [taxId,      setTaxId]      = useState(initial?.taxId      || "");
   const [phone,      setPhone]      = useState(initial?.phone      || "");
   const [invoiceRef, setInvoiceRef] = useState(initial?.invoiceRef || "");
-  const [items,      setItems]      = useState(() => {
-    if (!isEdit || !initial?.items) return [{ desc: "", desc2: "", detail: "", qty: "", unitPrice: "", amount: "" }];
-    const rows = [];
-    initial.items.filter(it => it.desc || it.desc2 || it.detail || it.qty || it.amount).forEach(it => {
-      const parts = (it.detail || "").split(" | ");
-      rows.push({ ...it, _orig: true, detail: parts[0] || "" });
-      for (let j = 1; j < parts.length; j++) {
-        rows.push({ desc: "", desc2: "", detail: parts[j], qty: "", unitPrice: "", amount: "", _cont: true });
-      }
-    });
-    return rows;
-  });
-  const [removedOrigItems, setRemovedOrigItems] = useState([]);
-  const [saving,        setSaving]        = useState(false);
-  const [error,         setError]         = useState("");
-  const [pendingDelete, setPendingDelete] = useState(null);
-  const [rowEditMode,   setRowEditMode]   = useState(false);
-  const [allCustomers,  setAllCustomers]  = useState([]);
-  const [custWarning,   setCustWarning]   = useState(null);
-  const [productWarning, setProductWarning] = useState(null); // { rowIndex, name, similar }
-  const [addingProduct,  setAddingProduct]  = useState(false);
-  const custConfirmedRef        = useRef(false);
-  const nameSelectedFromListRef = useRef(false);
-
-  const checkProductNameTI = (i, val) => {
-    const trimmed = val.trim();
-    if (!trimmed || products.includes(trimmed)) return;
-    const similar = findSimilarCustomers(trimmed, products.map(p => ({ name: p })));
-    setProductWarning({ rowIndex: i, name: trimmed, similar });
-  };
-
-  const checkNameSimilarity = (nameVal) => {
-    if (isEdit || !nameVal.trim() || custConfirmedRef.current) return;
-    const similar = findSimilarCustomers(nameVal, allCustomers);
-    if (similar.length > 0) setCustWarning(similar);
-  };
-
-  const updateItem = (i, f, v) => setItems(items.map((it, idx) => {
-    if (idx !== i || (it._cont && f !== "detail")) return it;
-    const u = { ...it, [f]: v };
-    if (f === "qty" || f === "unitPrice") {
-      const q = parseFloat(f === "qty" ? v : it.qty) || 0;
-      const p = parseFloat(f === "unitPrice" ? v : it.unitPrice) || 0;
-      u.amount = q * p || "";
-    }
-    return u;
-  }));
-
-  const updateDetailTI = (i, val) => {
-    const it = items[i];
-    const testIt = { ...it, detail: val };
-    if (descWidth(getDescText(testIt)) <= DESC_MAX && descWidth(val) <= DETAIL_MAX) updateItem(i, "detail", val);
-  };
-  const addRow    = () => { if (items.length < ITEMS_COUNT) setItems([...items, emptyItem()]); };
-  const addContinuationRowTI = (afterIndex) => {
-    if (items.length >= ITEMS_COUNT) return;
-    const next = [...items];
-    next.splice(afterIndex + 1, 0, { ...emptyItem(), _cont: true });
-    setItems(next);
-    setTimeout(() => {
-      const inputs = document.querySelectorAll("[data-ti-detail-idx]");
-      const target = [...inputs].find(el => el.dataset.tiDetailIdx === String(afterIndex + 1));
-      if (target) target.focus();
-    }, 30);
-  };
-  const removeRow = (i) => {
-    if (items[i]?._orig) {
-      const it = items[i];
-      const note = [it.desc, it.desc2, it.qty].filter(Boolean).join(" ");
-      if (note) setRemovedOrigItems(prev => [...prev, note]);
-    }
-    setItems(items.filter((_, idx) => idx !== i));
-  };
+  const {
+    items, removedOrigItems, saving, error, pendingDelete, setPendingDelete,
+    rowEditMode, setRowEditMode, setAllCustomers,
+    custWarning, setCustWarning, newCustWarning, setNewCustWarning,
+    productWarning, setProductWarning, addingProduct, setAddingProduct,
+    custConfirmedRef, skipCustomerLogRef, nameSelectedFromListRef,
+    checkProductName, checkNameSimilarity, updateItem, updateDetail,
+    addRow, addContinuationRow, removeRow, cellInput, guardedSave,
+  } = useInvoiceForm({ initial, isEdit, products, detailAttr: "data-ti-detail-idx" });
 
   const sub = items.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0);
   const vat = parseFloat((sub * vatRate).toFixed(2));
   const gt  = parseFloat((sub + vat).toFixed(2));
 
-  const cellInput = (i, f, a, extra = {}) => (
-    <input value={items[i][f]} onChange={e => updateItem(i, f, e.target.value)}
-      style={{ width: "100%", border: "none", background: "transparent", fontSize: 12, padding: "3px 4px", outline: "none", textAlign: a || "left" }}
-      onFocus={e => e.target.style.outline = `1px solid ${C.accent}`}
-      onBlur={e => e.target.style.outline = "none"}
-      {...extra} />
-  );
-
-  const handleSave = async () => {
-    // Similar name check (new invoices only; skip if user already confirmed)
-    if (!isEdit && !custConfirmedRef.current) {
-      const similar = findSimilarCustomers(name, allCustomers);
-      if (similar.length > 0) { setCustWarning(similar); return; }
-    }
-    custConfirmedRef.current = false;
-    setCustWarning(null);
-    setSaving(true);
-    setError("");
-    try {
-      const { filled, cleanItems } = collapseItems(items);
-      const payload = {
-        date, name, address, taxId, phone, invoiceRef, items: cleanItems, subtotal: sub, vatAmt: vat, grandTotal: gt,
-        ...(isEdit ? { _logAdded: filled.filter(it => !it._orig).length, _logDeleted: removedOrigItems } : {})
-      };
-      const result = isEdit
-        ? await api.updateTaxInvoice(initial.id, payload)
-        : await api.createTaxInvoice(payload);
-      onSave({ ...payload, id: result.invoiceNo || initial?.id, pdfUrl: result.pdfUrl || initial?.pdfUrl });
-    } catch (err) {
-      setError(err.message);
-      setSaving(false);
-    }
-  };
+  const handleSave = () => guardedSave(name, async ({ filled, cleanItems, skipLog }) => {
+    const payload = {
+      date, name, address, taxId, phone, invoiceRef, items: cleanItems, subtotal: sub, vatAmt: vat, grandTotal: gt,
+      ...(isEdit ? { _logAdded: filled.filter(it => !it._orig).length, _logDeleted: removedOrigItems } : { skipAutoLog: skipLog })
+    };
+    const result = isEdit
+      ? await api.updateTaxInvoice(initial.id, payload)
+      : await api.createTaxInvoice(payload);
+    onSave({ ...payload, id: result.invoiceNo || initial?.id, pdfUrl: result.pdfUrl || initial?.pdfUrl });
+  });
 
   return (
     <>
@@ -2963,6 +2967,14 @@ function TaxInvoiceForm({ initial, onSave, onCancel, isEdit, products, setProduc
       onConfirm={() => { custConfirmedRef.current = true; setCustWarning(null); }}
       onCancel={() => setCustWarning(null)}
       confirmLabel="ใช่ บันทึก"
+    />}
+    {newCustWarning && <ConfirmModal
+      message={`ลูกค้า "${newCustWarning}" ยังไม่มีในระบบ — บันทึกเป็นลูกค้าใหม่ด้วยหรือไม่?`}
+      onConfirm={() => { custConfirmedRef.current = true; setNewCustWarning(null); handleSave(); }}
+      secondaryLabel="ไม่ ไม่ต้องเพิ่ม"
+      onSecondary={() => { custConfirmedRef.current = true; skipCustomerLogRef.current = true; setNewCustWarning(null); handleSave(); }}
+      onCancel={() => setNewCustWarning(null)}
+      confirmLabel="ใช่ เพิ่มลูกค้าใหม่"
     />}
     {productWarning && (
       <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
@@ -3052,7 +3064,7 @@ function TaxInvoiceForm({ initial, onSave, onCancel, isEdit, products, setProduc
               {items.map((it, i) => {
                 const b = it.amount ? Math.floor(Number(it.amount)) : null;
                 const s = it.amount ? Math.round((Number(it.amount) - Math.floor(Number(it.amount))) * 100) : null;
-                const dw = descWidth(getDescText(it));
+                const dw = descWidth((it.desc || "") + (it.desc2 ? " " + it.desc2 : ""));
                 const detailW = descWidth(it.detail || "");
                 const atWarn  = detailW >= DETAIL_WARN;
                 const atLimit = dw >= DESC_MAX || detailW >= DETAIL_MAX;
@@ -3063,7 +3075,7 @@ function TaxInvoiceForm({ initial, onSave, onCancel, isEdit, products, setProduc
                     </td>
                     <td style={{ padding: "3px 6px", textAlign: "center" }}>{!it._cont && cellInput(i, "qty", "center")}</td>
                     <td style={{ padding: "3px 6px" }}>
-                      {!it._cont && <ProductAutocomplete value={it.desc} onChange={v => updateItem(i, "desc", v)} onBlur={() => checkProductNameTI(i, it.desc)} products={products} />}
+                      {!it._cont && <ProductAutocomplete value={it.desc} onChange={v => updateItem(i, "desc", v)} onBlur={() => checkProductName(i, it.desc)} products={products} />}
                       {it._cont && <span style={{ color: C.accent, fontSize: 13, paddingLeft: 4 }}>↳</span>}
                     </td>
                     <td style={{ padding: "3px 6px" }}>
@@ -3075,8 +3087,8 @@ function TaxInvoiceForm({ initial, onSave, onCancel, isEdit, products, setProduc
                     <td style={{ padding: "3px 6px" }}>
                       {cellInput(i, "detail", "left", {
                         "data-ti-detail-idx": i,
-                        onChange: e => updateDetailTI(i, e.target.value),
-                        onKeyDown: e => { if (e.key === "Enter") { e.preventDefault(); addContinuationRowTI(i); } }
+                        onChange: e => updateDetail(i, e.target.value),
+                        onKeyDown: e => { if (e.key === "Enter") { e.preventDefault(); addContinuationRow(i); } }
                       })}
                       {atLimit && <div style={{ fontSize: 11, color: C.danger, marginTop: 1 }}>ถึงขีดจำกัด — กด Enter เพื่อขึ้นบรรทัดใหม่</div>}
                       {!atLimit && atWarn && <div style={{ fontSize: 11, color: C.warning, marginTop: 1 }}>ใกล้จะเต็ม — พิจารณากด Enter ขึ้นบรรทัดใหม่</div>}
@@ -3719,7 +3731,7 @@ export default function App({ userEmail, userName, onLogout }) {
           ))}
         </div>
         <div style={{ padding: "10px 16px", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)" }}>app v1.4.76{gsVersion ? <span>  ·  gs v{gsVersion}</span> : null}</span>
+          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)" }}>app v1.4.86{gsVersion ? <span>  ·  gs v{gsVersion}</span> : null}</span>
         </div>
       </div>
 

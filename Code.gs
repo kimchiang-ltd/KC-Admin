@@ -1,5 +1,8 @@
 // ============================================================
 // KC Factory System — Code.gs
+// Version: 1.4.203 — #127 createDeliveryNoteFromWeb + createTaxInvoiceFromWeb: skip autoLogCustomer_ when data.skipAutoLog=true (user chose "ไม่ ไม่ต้องเพิ่ม" on new customer prompt)
+// Version: 1.4.202 — #124 confirmBillingNote/editBillingNote: persist address+phone in BN History cols M/N; getBillingNoteDetail: prefer cols M/N override over Invoice History; #125 generateBillingNotePortraitPDF: on-demand portrait PDF + cache in col H
+// Version: 1.4.201 — #123 BN landscape PDF: confirmBillingNote always portrait (remove format param); generateBillingNoteLandscapePDF(bnNo) caches URL in BN History col L; editBillingNote clears col L; getBillingNotes+getBillingNoteDetail return landscapeUrl
 // Version: 1.4.200 — #117 getLastNonEmptyRow perf: bound read to getLastRow() + one column (was full-grid getRange("col:col")); benefits all 23 call sites; col-A scan preserved so col O formula can't inflate result
 // Version: 1.4.199 — #116 getDNDetail perf fix: drop getLastNonEmptyRow("A") (full-column getValues = the real 3–4s cost); TextFinder on A:A needs no row count
 // Version: 1.4.198 — #116 getDNDetail perf: use createTextFinder on col A to read only the DN's rows (was full-sheet scan per click)
@@ -97,7 +100,7 @@ function handleRequest(e) {
         result = searchDeliveryNotesForBilling(params.startDate, params.endDate);
         break;
       case "confirmBillingNote":
-        result = confirmBillingNote(params.customer, params.reservedBnNo, params.invoices, params.bnDate, params.address, params.phone, params.format);
+        result = confirmBillingNote(params.customer, params.reservedBnNo, params.invoices, params.bnDate, params.address, params.phone);
         break;
       case "getTaxInvoices":
         result = getTaxInvoices(params.startDate, params.endDate, params.search);
@@ -134,6 +137,12 @@ function handleRequest(e) {
         break;
       case "markBillingNotesPrinted":
         result = markBillingNotesPrinted(params.bnNos);
+        break;
+      case "generateBillingNoteLandscapePDF":
+        result = generateBillingNoteLandscapePDF(params.bnNo);
+        break;
+      case "generateBillingNotePortraitPDF":
+        result = generateBillingNotePortraitPDF(params.bnNo);
         break;
       case "printCombinedBillingNotes":
         result = printCombinedBillingNotes(params.bnNos, params.format);
@@ -320,7 +329,7 @@ function getDeliveryNotes(startDate, endDate, search) {
 // BILLING NOTE
 // ============================================================
 
-function confirmBillingNote(customer, reservedBnNo, invoices, bnDate, address, phone, format) {
+function confirmBillingNote(customer, reservedBnNo, invoices, bnDate, address, phone) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var bnHistory = ss.getSheetByName(CONFIG.bnHistory) || ss.insertSheet(CONFIG.bnHistory);
   if (bnHistory.getLastRow() === 0) bnHistory.appendRow(["เลขที่ BN","วันที่ออก","ชื่อลูกค้า","จำนวนบิล","รวมเงิน","วันที่บิลเริ่มต้น","วันที่บิลสิ้นสุด","ไฟล์ PDF","เลขที่ DN"]);
@@ -334,9 +343,10 @@ function confirmBillingNote(customer, reservedBnNo, invoices, bnDate, address, p
   var invStart = invDates.length ? invDates[0] : "";
   var invEnd   = invDates.length ? invDates[invDates.length - 1] : "";
   var data = { date: bnDate || new Date().toISOString().slice(0,10), name: customer, address: address || "", phone: phone || "", invoices: invoiceList, total: total };
-  var pdfUrl = (format === "landscape") ? buildBillingNoteLandscapePDF(bnNo, customer, data) : buildBillingNotePortraitPDF(bnNo, customer, data);
+  var pdfUrl = buildBillingNotePortraitPDF(bnNo, customer, data); // always portrait at creation; landscape via generateBillingNoteLandscapePDF (#123)
   var lastRow = getLastNonEmptyRow(bnHistory, "A");
   bnHistory.getRange(lastRow + 1, 1, 1, 9).setValues([[bnNo, dateStr, customer, invoiceList.length, total, invStart, invEnd, pdfUrl, dnNosStr]]);
+  if (address || phone) bnHistory.getRange(lastRow + 1, 13, 1, 2).setValues([[address || "", phone || ""]]); // cols M/N (#124)
   // Mark billed DNs in Invoice History col Q (index 17, 1-based) for Link DN→BN
   var dnNosToMark = invoiceList.map(function(inv) { return String(inv.dnNo || inv.no || "").trim(); }).filter(Boolean);
   if (dnNosToMark.length > 0) {
@@ -411,7 +421,7 @@ function createDeliveryNoteFromWeb(data) {
     // Update pdfUrl — we know the exact row, no re-read needed
     dataSheet.getRange(firstWriteRow, 13).setValue(pdfUrl);
 
-    autoLogCustomer_(name, address, phone, "");
+    if (!data.skipAutoLog) autoLogCustomer_(name, address, phone, "");
     return { invoiceNo: invoiceNo, pdfUrl: pdfUrl };
   } finally {
     lock.releaseLock();
@@ -534,7 +544,7 @@ function getBillingNotes() {
     var grp = byBn[bnNo] || { invoices: {}, address: "", phone: "" };
     var invoices = Object.keys(grp.invoices).map(function(k) { return grp.invoices[k]; });
     invoices.sort(function(a, b) { return a.no.localeCompare(b.no); });
-    result.push({ bnNo: bnNo, date: d ? Utilities.formatDate(d, tz, "dd/MM/yyyy") : String(row[1]).trim(), customer: String(row[2]).trim(), count: row[3], total: row[4], pdfUrl: String(row[7]).trim(), cancelled: String(row[9] || "").trim() === "CANCELLED", printed: String(row[10] || "").trim() === "PRINTED", address: grp.address, phone: grp.phone, invoices: invoices });
+    result.push({ bnNo: bnNo, date: d ? Utilities.formatDate(d, tz, "dd/MM/yyyy") : String(row[1]).trim(), customer: String(row[2]).trim(), count: row[3], total: row[4], pdfUrl: String(row[7]).trim(), landscapeUrl: String(row[11] || "").trim(), cancelled: String(row[9] || "").trim() === "CANCELLED", printed: String(row[10] || "").trim() === "PRINTED", address: grp.address, phone: grp.phone, invoices: invoices });
   }
   return result.reverse();
 }
@@ -626,7 +636,7 @@ function getBillingNoteDetail(bnNo) {
     for (var b = 1; b < bnData.length; b++) {
       if (String(bnData[b][0]).trim() === bnNo) {
         var bd = bnData[b][1] ? new Date(bnData[b][1]) : null;
-        header = { bnNo: bnNo, date: bd ? Utilities.formatDate(bd, Session.getScriptTimeZone(), "dd/MM/yyyy") : String(bnData[b][1]).trim(), customer: String(bnData[b][2]).trim(), count: bnData[b][3], total: bnData[b][4], pdfUrl: String(bnData[b][7]).trim(), cancelled: String(bnData[b][9] || "").trim() === "CANCELLED" };
+        header = { bnNo: bnNo, date: bd ? Utilities.formatDate(bd, Session.getScriptTimeZone(), "dd/MM/yyyy") : String(bnData[b][1]).trim(), customer: String(bnData[b][2]).trim(), count: bnData[b][3], total: bnData[b][4], pdfUrl: String(bnData[b][7]).trim(), landscapeUrl: String(bnData[b][11] || "").trim(), cancelled: String(bnData[b][9] || "").trim() === "CANCELLED", addressOverride: String(bnData[b][12] || "").trim(), phoneOverride: String(bnData[b][13] || "").trim() }; // cols M/N override (#124)
         break;
       }
     }
@@ -651,6 +661,8 @@ function getBillingNoteDetail(bnNo) {
       }
     }
   }
+  if (header.addressOverride) header.address = header.addressOverride; // BN History col M takes priority (#124)
+  if (header.phoneOverride)   header.phone   = header.phoneOverride;   // BN History col N takes priority (#124)
   header.invoices = Object.keys(invoicesMap).map(function(k) { return invoicesMap[k]; });
   return header;
 }
@@ -731,9 +743,12 @@ function editBillingNote(bnNo, params) {
   var bnRow = -1;
   for (var b = 1; b < bnData.length; b++) { if (String(bnData[b][0]).trim() === bnNo) { bnRow = b + 1; break; } }
   if (bnRow < 0) throw new Error("ไม่พบใบวางบิล " + bnNo);
-  if (params.date)     bnSheet.getRange(bnRow, 2).setValue(params.date);
-  if (params.customer) bnSheet.getRange(bnRow, 3).setValue(params.customer);
-  bnSheet.getRange(bnRow, 8).clearContent();
+  if (params.date)               bnSheet.getRange(bnRow, 2).setValue(params.date);
+  if (params.customer)           bnSheet.getRange(bnRow, 3).setValue(params.customer);
+  if (params.address !== undefined) bnSheet.getRange(bnRow, 13).setValue(params.address); // col M (#124)
+  if (params.phone   !== undefined) bnSheet.getRange(bnRow, 14).setValue(params.phone);   // col N (#124)
+  bnSheet.getRange(bnRow, 8).clearContent();  // portrait URL
+  bnSheet.getRange(bnRow, 12).clearContent(); // landscape URL (#123)
   var invSheet = ss.getSheetByName(CONFIG.invoiceHistory);
   if (invSheet && invSheet.getLastRow() > 1) {
     var lastRow = getLastNonEmptyRow(invSheet, "A");
@@ -760,12 +775,52 @@ function editBillingNote(bnNo, params) {
   return { success: true };
 }
 
+// #123 — generate (or serve cached) landscape PDF for a BN; stores URL in col L
+function generateBillingNoteLandscapePDF(bnNo) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var bnSheet = ss.getSheetByName(CONFIG.bnHistory);
+  if (!bnSheet) throw new Error("ไม่พบ BN History");
+  var bnData = bnSheet.getDataRange().getValues();
+  var bnRow = -1;
+  for (var b = 1; b < bnData.length; b++) {
+    if (String(bnData[b][0]).trim() === bnNo) { bnRow = b + 1; break; }
+  }
+  if (bnRow < 0) throw new Error("ไม่พบใบวางบิล " + bnNo);
+  var cached = String(bnData[bnRow - 1][11] || "").trim();
+  if (cached) return { url: cached };
+  var detail = getBillingNoteDetail(bnNo);
+  var data = { date: detail.date, name: detail.customer, address: detail.address || "", phone: detail.phone || "", invoices: detail.invoices || [], total: detail.total };
+  var url = buildBillingNoteLandscapePDF(bnNo, detail.customer, data);
+  bnSheet.getRange(bnRow, 12).setValue(url);
+  return { url: url };
+}
+
+// #125 — generate (or serve cached) portrait PDF for a BN; stores URL in col H
+function generateBillingNotePortraitPDF(bnNo) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var bnSheet = ss.getSheetByName(CONFIG.bnHistory);
+  if (!bnSheet) throw new Error("ไม่พบ BN History");
+  var bnData = bnSheet.getDataRange().getValues();
+  var bnRow = -1;
+  for (var b = 1; b < bnData.length; b++) {
+    if (String(bnData[b][0]).trim() === bnNo) { bnRow = b + 1; break; }
+  }
+  if (bnRow < 0) throw new Error("ไม่พบใบวางบิล " + bnNo);
+  var cached = String(bnData[bnRow - 1][7] || "").trim(); // col H
+  if (cached) return { url: cached };
+  var detail = getBillingNoteDetail(bnNo);
+  var data = { date: detail.date, name: detail.customer, address: detail.address || "", phone: detail.phone || "", invoices: detail.invoices || [], total: detail.total };
+  var url = buildBillingNotePortraitPDF(bnNo, detail.customer, data);
+  bnSheet.getRange(bnRow, 8).setValue(url); // col H
+  return { url: url };
+}
+
 // ============================================================
 // CONFIG
 // ============================================================
 
 function getAppVersion() {
-  var v = "1.4.200"; // bump this alongside the version header comment
+  var v = "1.4.203"; // bump this alongside the version header comment
   Logger.log(v);
   return v;
 }
@@ -1135,7 +1190,7 @@ function createTaxInvoiceFromWeb(data) {
   // Generate PDF outside lock — use firstWriteRow directly, no re-read
   var pdfUrl = buildTaxInvoiceLandscapePDF(invoiceNo, name, data);
   sheet.getRange(firstWriteRow, 14).setValue(pdfUrl);
-  autoLogCustomer_(name, address, phone, taxId);
+  if (!data.skipAutoLog) autoLogCustomer_(name, address, phone, taxId);
   return { invoiceNo: invoiceNo, pdfUrl: pdfUrl };
 }
 
