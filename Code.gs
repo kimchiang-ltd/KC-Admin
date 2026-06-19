@@ -1,161 +1,49 @@
 // ============================================================
 // KC Factory System — Code.gs
-// Version: 1.4.128 — promote staging to live: showDesc2Parens default→false (all 4 builders), altHeaders default→true (TI portrait); no parens on size, portrait headers nowrap
-// Version: 1.4.127 — rename all staging test functions: test[Format]Test() → stagingTest[Format](); update comment block pattern description
-// Version: 1.4.126 — TI portrait: add altHeaders opt — "หน่วยละ" + white-space:nowrap on TH + colgroup col3:20→16mm, col4:18→20mm, col5:7→11mm; stagingTestTaxInvoicePortrait uses altHeaders:true
-// Version: 1.4.125 — add workflow comment block above test functions explaining *Test() staging pattern
-// Version: 1.4.124 — rename testTaxInvoiceLandscapeMarginTest → testTaxInvoiceLandscapeTest; drop margin opts, use showDesc2Parens:false to match pattern of other *Test() functions
-// Version: 1.4.123 — DN portrait + TI portrait: add opts param (showDesc2Parens); add testDeliveryNotePortraitTest() and testTaxInvoicePortraitTest() with showDesc2Parens:false
-// Version: 1.4.122 — all test functions: remove "PDF URL: " prefix from Logger.log so URL is directly copyable
-// Version: 1.4.121 — TI landscape + TI portrait: add showDesc2Parens to opts (default true); TI portrait: add opts param
-// Version: 1.4.120 — DN landscape: add opts param (showDesc2Parens) to buildDeliveryNoteLandscapePDF; add testDeliveryNoteLandscapeTest() with showDesc2Parens:false for layout comparison
-// Version: 1.4.119 — TI landscape: add opts param (pageMargin, pageWidth) to buildTaxInvoiceLandscapePDF; add testTaxInvoiceLandscapeMarginTest() with 9mm symmetric margin for side-by-side comparison
-// Version: 1.4.118 — TI landscape: field-value + field-sub font 3.5→3mm
-// Version: 1.4.117 — TI landscape: font 3→2.5mm, colgroup ราคาหน่วยละ col 20→16mm, header "ราคาหน่วยละ"→"หน่วยละ"; TI landscape + TI portrait: fix border suppression — CSS class requires border-bottom:none inline override (reversed bdr/contBdr logic vs DN builders)
-// Version: 1.4.116 — portrait left block width scaled by font size: DN portrait 38→44mm (font 3.5mm vs 3mm), TI portrait 38→49mm (font 3.9mm vs 3mm); prevents desc+desc2 clipping into detail text
-// Version: 1.4.115 — all 4 PDF builders: remove horizontal border within the same product group; border only on last row of each group (main row if no cont, last cont row); border-right preserved on DN builders
-// Version: 1.4.114 — all 4 PDF builders: alternating row color now keyed by product index (i) not rowCount; continuation rows share their parent product's background color
-// Version: 1.4.113 — all 4 PDF builders: fixed-width split layout in desc cell — 38mm left block for desc+desc2, flex:1 right block for detail text; cont rows use same 38mm empty left block so detail always aligns; removes variable-indent problem
-// Version: 1.4.112 — add table-layout:fixed to all 4 PDF builders so white-space:nowrap clips at column boundary instead of stretching the table; fixes horizontal template expansion from long continuation text
-// Version: 1.4.111 — PDF continuation row style: remove ↳ arrow, remove () around cont text, add padding-left:5mm indent, white-space:nowrap;overflow:hidden on desc TDs (all 4 builders); () now wraps desc2 (size) not detail; fix filledItems filter for TI portrait; apply cont row split to TI portrait
-// Updated: 2026-06-12
-// Changelog:
-//   1.4.109 - filledItems filter: add desc2||detail condition (was desc||qty||amount only) — continuation rows with only detail text were silently dropped on save
-//   1.4.108 - All grid lines unified to #e0e0e0 (was #eee TI / #e0e0e0 DN / #ccc vertical); TI landscape th font 3.4→3mm, td font 3.5→3mm (uniform, remove td:first-child override); colgroup 16+19+16+7→16+20+18+7mm; mock customer name → บจ.นูเบบ (ประเทศไทย)
-//   1.4.107 - Revert to border-right on td/th + :last-child{border-right:none} for all 4 formats; removes rightmost border; TI landscape colgroup narrowed to 16+19+16+7mm (description gains ~11mm); td:first-child font-size:3mm kept
-//   1.4.104 - Vertical lines via background-image gradient (not border) — zero layout impact; removes table-layout:fixed from TI landscape + DN portrait
-//   1.4.103 - TI landscape table font: body 3.2→3mm, header 3→2.8mm to reduce wrapping
-//   1.4.102 - Switch to border-left on non-description columns (description column has no border, cannot affect its width)
-//   1.4.101 - Add table-layout:fixed to TI landscape + DN portrait tables to stabilize column widths
-//   1.4.100 - Column lines 0.15→0.1mm; add :last-child rules to remove rightmost border on TI portrait
-//   1.4.99  - Fix footnote overflow: switch td border from all-sides to border-right only (no height added); 0.2→0.15mm; add TI portrait vertical lines
-//   1.4.98  - Add vertical column lines to DN landscape/portrait + TI landscape tables; all 5 PDF URLs /preview→/view for in-browser printing
-//   1.4.97  - DN portrait font: เลขที่ 3mm, invoice no 3.5mm, customer info 3.5mm, ยอดรวม 3.5mm, baht 4mm, sig labels 3.5mm, sender 4mm, footer 3.5mm
-//   1.4.95  - PDF caching: landscape generate functions write URL back to sheet (col 13 DN / col 14 TI); edit clears both landscape + portrait URLs
-//   1.4.94  - DN portrait font: scale up to match landscape (table 3.5mm, company 4.5mm, info 3.2mm, total 4mm); portrait URL persistence
-//   1.4.93  - Portrait URL persistence: generate functions save to col 15 (DN) / col 17 (TI); load functions return portraitUrl; edit clears it
-//   1.4.92  - Edit log: use _logAdded/_logDeleted from frontend in both update functions — shows actual add/delete counts instead of net
-//   1.4.91 - Auto-extend sheet rows before batch write in createDeliveryNoteFromWeb + createTaxInvoiceFromWeb (safe to delete empty rows now)
-//   1.4.90 - Fix row 100696 bug: createDeliveryNoteFromWeb uses getLastNonEmptyRow (getLastRow() was inflated by formulas/formatting); fix getDeliveryNotes, getTaxInvoices, getNextTaxInvoiceNumber, createTaxInvoiceFromWeb (batch writes + firstWriteRow), all PDF-from-web functions — all use getLastNonEmptyRow instead of getDataRange()
-//   1.4.89 - Fix sheet reads: use getLastRow() instead of getDataRange() — sheet had 100k formatted rows causing writes at wrong row
-//   1.4.88 - Fix createDeliveryNoteFromWeb: lastDataRow scans col A instead of using histRows.length (trailing empty rows caused writes to wrong row)
-//   1.4.87 - Performance: createDeliveryNoteFromWeb single read + lock + batch write; updateDeliveryNoteFromWeb + updateTaxInvoiceFromWeb batch delete/update/insert, remove second sheet read
-//   1.4.86 - Edit log: detect header changes (แก้ไขข้อมูล) and row value changes (แก้ไขรายการ) in both update functions
-//   1.4.85 - Edit log: descriptive changes (เพิ่ม N แถว / ลบ: ... / แก้ไข) in both update functions
-//   1.4.84 - Fix router: createDeliveryNote→createDeliveryNoteFromWeb, updateDeliveryNote→updateDeliveryNoteFromWeb (were still calling old names)
-//   1.4.83 - Edit log for deleted rows in updateTaxInvoiceFromWeb (col P)
-//   1.4.82 - #25+#28: rename router cases getInvoices→getDeliveryNotes, createInvoice→createDeliveryNote, updateInvoice→updateDeliveryNote, searchInvoices→searchDeliveryNotes
-//   1.4.81 - #28: rename router case strings to match frontend (generateTaxInvoicePortraitPDF, generateDeliveryNoteLandscapePDF, generateDeliveryNotePortraitPDF)
-//   1.4.80 - Fix tax invoice PDF filenames: landscape KC_TaxInvoice_→KC_TaxInvoice_L_, portrait KC_Invoice_→KC_TaxInvoice_P_
-//   1.4.79 - Fix PDF router: revert 3 case strings corrupted by sed rename (buildTaxInvoicePortraitPDF→generatePortraitPDF, buildDeliveryNoteLandscapePDF→generateInvoiceLandscapePDF, buildDeliveryNotePortraitPDF→generateInvoicePortraitPDF); fixes PDF Portrait "nothing happens" bug
-//   1.4.78 - Fix #21: rewrite updateTaxInvoiceFromWeb — now handles delete/update/insert of item rows (mirroring updateDeliveryNoteFromWeb); cols A–M written per row, N (pdfUrl) and O (formula) left untouched
-//   1.4.77 - Code cleanup: rename all Invoice→DeliveryNote / generateXxx→buildXxx functions for clarity; delete dead legacy code (saveAndNewInvoice, generateInvoicePDF, testCreateTaxInvoice); test functions now all use hardcoded mock data (no sheet reads)
-//   1.4.76 - Delivery note landscape: reduce gap above/below baht text row (4mm→2mm) to fix footnote overflow to page 2
-//   1.4.75 - Delivery note landscape: +1pt (+0.35mm) on all body components (badge 3.9, customer 2.9, th 3.0, td 3.2, ยอดรวม label 3.0, total 3.4, baht label 2.9, baht value 3.2, sig labels 2.9, sig company 3.0, note 2.8)
-//   1.4.74 - Delivery note landscape: font size pass — เลขที่ 2.3mm, customer box 2.5mm, table header 2.6mm, table body 2.8mm, ยอดรวม label 2.6mm, baht label 2.5mm, baht value 2.8mm, sig labels 2.5mm, sig company 2.6mm; fix (สำเนา) badge vertical-align; fix duplicate font-size on note
-//   1.4.73 - Delivery note landscape: KC box 12→11mm (font 6.6→6mm), L_ prefix on landscape filename, P_ prefix on portrait filename
-//   1.4.72 - Delivery note landscape: KC box 14→12mm (font 7.7→6.6mm), TH name 3.1→4mm, EN name 2.2→3mm, fix EN name blank fallback (#8)
-//   1.4.71 - Landscape: baht-text font 2.8→3.5mm (match customer name)
-//   1.4.70 - Landscape: baht text vertically centered inside stretched box
-//   1.4.69 - Landscape: baht text box stretches to match summary height (align-items:stretch + flex:1 on baht-text)
-//   1.4.68 - Landscape: header min-height 30→32mm
-//   1.4.67 - Landscape: header min-height 27→30mm (right half still taller)
-//   1.4.66 - Landscape: slash moved to end of line (Option B); header min-height:27mm so both halves per page align at same row positions
-//   1.4.65 - Landscape: logo 9→9.5mm to match TH+EN company name block height
-//   1.4.64 - Landscape: right header col max-width 44→58mm (titles were wrapping past explicit <br> breaks causing 3-4 lines)
-//   1.4.63 - Landscape: title <br> at each / for controlled 2-line split; right header col max-width:44mm flex-shrink:0; left col flex:1 min-width:0; remove flex:1 from items-table (fixes sig off-page)
-//   1.4.62 - Landscape: header restructured to match portrait (address at logo level, เลขที่ right+auto, flex header); docTitle/docNote/sigLabel updated to match paper set; white-space:nowrap removed from doc-title
-//   1.4.61 - testTaxInvoicePortraitPDF: hardcoded 15-item mock data, calls buildTaxInvoicePortraitPDF directly (no sheet needed)
-//   1.4.60 - Portrait: summary gap 4→8mm between label and amount
-//   1.4.59 - Portrait: sig-row margin-top 5→15mm; testCreateTaxInvoice expanded to 15 items (full table)
-//   1.4.58 - Portrait: header min-height:26mm so all pages have consistent header height; เลขที่ always at bottom via margin-top:auto
-//   1.4.57 - Portrait: header align-items:stretch; summary min-width:65mm; sig 3mm; sig-row margin-top 5mm; note margin-top 1.5mm
-//   1.4.56 - Portrait: doc-title line-height:1.2 to reduce top gap and align with company name
-//   1.4.55 - Portrait: logo 9→10mm to match TH+EN name height; summary subtotals 3→3.9mm, total 3.5→4.5mm
-//   1.4.54 - Portrait: right header div flex-column so เลขที่ always aligns to bottom across all page types
-//   1.4.53 - Portrait: doc-no font 2.8→3mm (match company name EN)
-//   1.4.52 - Portrait: blue copy title split to 2 lines; (ไม่ใช่ใบกำกับภาษี) font 2.8→4mm across all pages
-//   1.4.51 - Portrait: doc titles/notes/sigLabels updated to match original paper set (green/yellow/white/blue); docSub removed
-//   1.4.50 - Portrait: header restructure (address at logo level, เลขที่ on right), baht text below summary, font bumps (เลขที่ 2.8, subtotals 3, sig 2.8, note 2.8, baht-label 3)
-//   1.4.49 - Both: remove border from baht-text box
-//   1.4.48 - Both: margin-bottom between baht+summary and sig row 2mm → 4mm
-//   1.4.47 - Both: Tel/Fax merged onto addrLine2 row; Portrait: full sync with landscape (header, sigLabels, bottom layout, note font, summary labels)
-//   1.4.46 - Landscape: sig row moved to full-width row below summary+baht-text; summary inline divs (no table)
-//   1.4.45 - Landscape: invoice no. → tax ID row; grid layout for bottom (3 rows align: label↔subtotal, box↔VAT, sig↔total); summary 2.5mm compact; sig-row margin fix
-//   1.4.44 - Landscape: merge bottom section into single flex row (baht+sig left, one summary table right) so widths align; total row border-top in CSS
-//   1.4.43 - Landscape: address split at จังหวัด (not อำเภอ), tax ID label → เลขประจำตัวผู้เสียภาษีอากร on own line below Tel/Fax
-//   1.4.42 - Landscape: summary table-layout:auto + white-space:nowrap, remove fixed width so labels never wrap
-//   1.4.41 - Landscape: sig labels ผู้รับเงิน/ผู้รับของ (remove company name), summary label จำนวนภาษีมูลค่าเพิ่ม, summary font 2.8mm, summary 44→50mm, note font 2.4mm
-//   1.4.40 - Landscape: address 2-line split, เลขที่ on Tel row, sig row equal width, summary 52→44mm, remove table borders, tighten padding
-//   1.4.39 - Landscape: customer box field group margin-bottom 2mm → 1.5mm
-//   1.4.38 - Landscape: table padding 1.4→1mm, baht text 3.7→2.8mm, sender font 3.2→2.4mm (landscape+portrait)
-//   1.4.37 - buildTaxInvoiceLandscapePDF: table body font 3.9mm → 3.5mm
-//   1.4.36 - Clean up test functions: remove testFontTimeout, rename all, add testTaxInvoiceLandscapePDF
-//   1.4.35 - buildTaxInvoiceLandscapePDF: fix extra </div> in half() breaking 2-up landscape layout
-//   1.4.34 - buildTaxInvoiceLandscapePDF: remove width:0 from .half (fixes one-copy-only landscape render)
-//   1.4.33 - Move PROMPT_FONT_CSS to Font.gs (separate file)
-//   1.4.32 - Extract PROMPT_FONT_CSS to global variable (4 copies → 1); file size 737KB → 246KB
-//   1.4.31 - Tax invoice portrait+landscape: sig-row aligned with total row, KC name 3.2mm, note below
-//   1.4.30 - testPortraitPDF: auto-pick latest tax invoice from sheet (was hardcoded)
-//   1.4.29 - Tax invoice portrait+landscape: note size↑, address match name style, baht text size↑, doc-no size match, sender align fix
-//   1.4.28 - Landscape: logo align with TH+EN only, address postal code same line as อำเภอ
-//   1.4.27 - Landscape: doc-title/doc-no nowrap, doc-no Prompt font, customer-box wider left column
-//   1.4.26 - Add generateTaxInvoiceLandscapePDFFromWeb for re-generate landscape from detail page
-//   1.4.25 - Tax invoice landscape+portrait: add ที่อยู่ label, fix signature to หจก.โรงงานกิมเชียง, fix summary font to Prompt
-//   1.4.24 - buildTaxInvoiceLandscapePDF + buildTaxInvoicePortraitPDF: switch from Sarabun to Prompt font
-//   1.4.23 - buildDeliveryNotePortraitPDF: rewrite to match landscape v2 design + Prompt font
-//   1.4.22 - updateInvoiceFromWeb: write edit log (timestamp+email) to col N
-//   1.4.21 - createInvoiceFromWeb: remove old PDF gen, add uniqueness check, fix col A; landscape PDF after save
-//   1.4.20 - createInvoiceFromWeb: invoice no. from History sheet (not K2); updateInvoiceFromWeb: update items
-//   1.4.19 - all PDF functions: getUrl() → /preview URL to open in Drive viewer
-//   1.4.18 - buildDeliveryNoteLandscapePDF: สำเนา badge 2.2→3.5mm + วงเล็บ
-//   1.4.17 - buildDeliveryNoteLandscapePDF: baht tag 1.9→2.3mm, baht text 2.3→2.6mm, remove flex:1 spacer
-//   1.4.16 - buildDeliveryNoteLandscapePDF: full mockup v2 sync — address layout, sig cleanup, borders removed
-//   1.4.15 - buildDeliveryNoteLandscapePDF: font size & spacing adjustments per design review
-//   1.4.14 - buildDeliveryNoteLandscapePDF: embed Prompt font as base64 (thai+latin, 400/500/600/700)
-//   1.4.13 - buildDeliveryNoteLandscapePDF: remove explicit font → use system font throughout
-//   1.4.12 - buildDeliveryNoteLandscapePDF: switch font Prompt → Sarabun
-//   1.4.11 - add testFontTimeout() to diagnose font load timing issue
-//   1.4.10 - buildDeliveryNoteLandscapePDF: fix font loading @import → <link> for Prompt font
-//   1.4.9 - buildDeliveryNoteLandscapePDF: modern layout — KC badge, grid customer info, 2-col signature
-//   1.4.8 - buildDeliveryNoteLandscapePDF: remove min-height:192mm, table headers single-line (match mockup)
-//   1.4.7 - buildDeliveryNoteLandscapePDF: Prompt font, TH/EN headers same line/size
-//   1.4.6 - buildDeliveryNoteLandscapePDF: reduce font sizes (3mm→2.5mm) and padding for smaller table
-//   1.4.5 - testInvoicePDF: search upward for non-empty invoiceId
-//   1.4.4 - testInvoicePDF: auto-pick latest invoice from Invoice History
-//   1.4.3 - buildDeliveryNoteLandscapePDF: flex:1 spacer → min-height:10mm to fix large gap
-//   1.4.2 - buildDeliveryNoteLandscapePDF: rows 15→10 to fit landscape page
-//   1.4.1 - buildDeliveryNoteLandscapePDF: redesign per mockup v12 (15 rows, new layout, sig padding-bottom 4mm)
-//   1.4.0 - ใบส่งของ: buildDeliveryNoteLandscapePDF + buildDeliveryNotePortraitPDF (HTML-based)
-//   1.3.9 - Landscape: combined 2-sheet PDF (tax+receipt), nameEN, เล่มที่/เลขที่
-//   1.3.8 - buildTaxInvoicePortraitPDF: 4-page PDF (tax+receipt x2), nameEN in header, เล่มที่/เลขที่; add nameEN to getConfig/saveConfig
-//   1.3.7 - PDF: company info from getConfig() (name/address/tel/taxId); add taxId to getConfig/saveConfig
-//   1.3.6 - Portrait: fix satang "00" auto-fill (was missing b > 0 check)
-//   1.2.0 - Add buildTaxInvoicePortraitPDF (portrait A4, 2 pages ต้นฉบับ+สำเนา)
-//   1.1.9 - PDF: restore font sizes
-//   1.1.8 - PDF: min-height 170mm→182mm
-//   1.1.7 - PDF: padding/margin -10% further
-//   1.1.6 - PDF: padding -10%, testCreateInvoice 10 mock rows
-//   1.1.5 - PDF: padding -10%, page padding-top 8mm→4mm
-//   1.1.4 - PDF: revert sig-row font to 2.4mm
-//   1.1.3 - PDF: all font sizes +0.5mm
-//   1.1.2 - PDF: restore colgroup + table-layout:auto
-//   1.1.1 - PDF: remove colgroup (reverted)
-//   1.1.0 - PDF: page padding-top, items font, sig-row, footer spacing
-//   1.0.0 - Initial release
+// Version: 1.4.200 — #117 getLastNonEmptyRow perf: bound read to getLastRow() + one column (was full-grid getRange("col:col")); benefits all 23 call sites; col-A scan preserved so col O formula can't inflate result
+// Version: 1.4.199 — #116 getDNDetail perf fix: drop getLastNonEmptyRow("A") (full-column getValues = the real 3–4s cost); TextFinder on A:A needs no row count
+// Version: 1.4.198 — #116 getDNDetail perf: use createTextFinder on col A to read only the DN's rows (was full-sheet scan per click)
+// Version: 1.4.197 — #105 BN History perf (Option B): getBillingNotes does one grouped Invoice History scan → returns per-BN invoices[] + address/phone so detail opens instantly (no per-click scan)
+// Version: 1.4.196 — #110 Combined BN folder configurable: folderBNCombined in Config (getConfig folders.bnCombined + saveConfig); printCombinedBillingNotes uses it if set, else auto subfolder
+// Version: 1.4.195 — #109 Combined BN PDF: save to "Combined" subfolder (getOrCreateChildFolder_) + cleanupCombinedFolder_ keeps newest 5
+// Version: 1.4.194 — #108 fix thaiMonth(): parse dd/MM/yyyy (combined BN PDF date showed "NaN undefined NaN"); return raw string if unparseable
+// Version: 1.4.193 — #45/#44 cleanup: trim version log to 15 (full history → CHANGELOG.md); move test*/stagingTest* functions to Staging.gs (Code.gs 3020→2404 lines)
+// Version: 1.4.192 — #107 Combined BN print: extract bnPortrait/LandscapePageHTML + bnPortrait/LandscapeCSS from builders (output identical); add printCombinedBillingNotes(bnNos, format) → one PDF w/ page-breaks + router case
+// Version: 1.4.191 — #106 BN print queue persistence: getBillingNotes returns printed flag (col K); add markBillingNotesPrinted(bnNos) + router case
+// Version: 1.4.190 — #97 Add router cases: getDNDetail, cancelBillingNote, getUnbilledDNsForCustomer, editBillingNote
+// Version: 1.4.189 — #97 Add getDNDetail(), cancelBillingNote(), getUnbilledDNsForCustomer(), editBillingNote() functions
+// Version: 1.4.188 — #97 Fix getBillingNoteDetail: proper date format + address/phone pickup from Invoice History + cancelled field from col J
+// Version: 1.4.187 — #97 Fix getBillingNotes: proper Utilities.formatDate for date col + cancelled field from BN History col J
+// Version: 1.4.186 — #93 Add getBillingNoteDetail(bnNo): reads BN History for header + Invoice History col Q for DN list; router case "getBillingNoteDetail"
+// Older versions (1.4.185 and earlier) archived in CHANGELOG.md + KC_Daily_Progress docs
 // ============================================================
 
+var VAT_RATE = 0.07; // default; overridden by Config sheet vatRate row (#64)
+
 var CONFIG = {
-  invoiceFolderId : "1pctvxLOmpmvpI7DjLUCl4fsXW6iUaAvz",
-  bnFolderId      : "1zV4Gqqff3ytAUYFeS4Xt3nnRnuwKgTGv",
   invoiceSheet    : "Tax Invoice",
   invoiceHistory  : "Invoice History",
   bnTemplate      : "BN Template",
   bnHistory       : "BN History",
   configSheet     : "Config",
+  tiSheet         : "Tax Invoice History",
+  customerSheet   : "Customers",
 };
 
-var TAX_INVOICE_SHEET = "Tax Invoice History";
+/**
+ * Extracts a Drive folder ID from a raw ID or full Drive URL.
+ * Returns empty string if input is empty or unparseable.
+ * @param {string} urlOrId
+ * @return {string}
+ */
+function extractFolderId_(urlOrId) {
+  if (!urlOrId) return "";
+  var s = String(urlOrId).trim();
+  var m = s.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  if (m) return m[1];
+  if (/^[a-zA-Z0-9_-]{10,}$/.test(s)) return s; // already a bare ID
+  return "";
+}
 
 
 // ============================================================
@@ -208,11 +96,8 @@ function handleRequest(e) {
       case "searchDeliveryNotes":
         result = searchDeliveryNotesForBilling(params.startDate, params.endDate);
         break;
-      case "previewBillingNote":
-        result = previewBillingNote(params.customer, params.invoices);
-        break;
       case "confirmBillingNote":
-        result = confirmBillingNote(params.customer, params.reservedBnNo, params.invStartDate, params.invEndDate);
+        result = confirmBillingNote(params.customer, params.reservedBnNo, params.invoices, params.bnDate, params.address, params.phone, params.format);
         break;
       case "getTaxInvoices":
         result = getTaxInvoices(params.startDate, params.endDate, params.search);
@@ -235,8 +120,74 @@ function handleRequest(e) {
       case "generateDeliveryNotePortraitPDF":
         result = generateDeliveryNotePortraitPDFFromWeb(params.id);
         break;
-      case "getBNHistory":
-        result = getBNHistory();
+      case "getBillingNotes":
+        result = getBillingNotes();
+        break;
+      case "getBillingNoteDetail":
+        result = getBillingNoteDetail(params.bnNo);
+        break;
+      case "getDNDetail":
+        result = getDNDetail(params.dnNo);
+        break;
+      case "cancelBillingNote":
+        result = cancelBillingNote(params.bnNo);
+        break;
+      case "markBillingNotesPrinted":
+        result = markBillingNotesPrinted(params.bnNos);
+        break;
+      case "printCombinedBillingNotes":
+        result = printCombinedBillingNotes(params.bnNos, params.format);
+        break;
+      case "getUnbilledDNsForCustomer":
+        result = getUnbilledDNsForCustomer(params.customer);
+        break;
+      case "editBillingNote":
+        result = editBillingNote(params.bnNo, params);
+        break;
+      case "getVersion":
+        result = getAppVersion();
+        break;
+      case "cancelDeliveryNote":
+        result = cancelDeliveryNote(params.id);
+        break;
+      case "restoreDeliveryNote":
+        result = restoreDeliveryNote(params.id);
+        break;
+      case "getCancelledDeliveryNotes":
+        result = getCancelledDeliveryNotes(params.search);
+        break;
+      case "cancelTaxInvoice":
+        result = cancelTaxInvoice(params.id);
+        break;
+      case "restoreTaxInvoice":
+        result = restoreTaxInvoice(params.id);
+        break;
+      case "getCancelledTaxInvoices":
+        result = getCancelledTaxInvoices(params.search);
+        break;
+      case "getCustomers":
+        result = getCustomers(params.search);
+        break;
+      case "createCustomer":
+        result = createCustomer(params.data);
+        break;
+      case "updateCustomer":
+        result = updateCustomer(params.originalName, params.data);
+        break;
+      case "deleteCustomer":
+        result = deleteCustomer(params.name);
+        break;
+      case "addProduct":
+        result = addProduct(params.name, params.type);
+        break;
+      case "getProducts":
+        result = getProducts();
+        break;
+      case "updateProduct":
+        result = updateProduct(params.row, params.value);
+        break;
+      case "deleteProduct":
+        result = deleteProduct(params.row);
         break;
       case "getConfig":
         result = getConfig();
@@ -264,35 +215,24 @@ function handleRequest(e) {
 // BILLING NOTE SIDEBAR
 // ============================================================
 
-function onOpen() {
-  SpreadsheetApp.getUi().createMenu('Billing Note').addItem('เปิด Billing Note', 'openBillingNoteSidebar').addToUi();
-}
-
-function openBillingNoteSidebar() {
-  var html = HtmlService.createHtmlOutputFromFile('Sidebar').setTitle('Billing Note').setWidth(400);
-  SpreadsheetApp.getUi().showSidebar(html);
-}
-
 // ============================================================
 // SHARED HELPERS
 // ============================================================
 
-function parseBNDate(raw) {
-  if (raw instanceof Date) return raw;
-  var str = String(raw).trim(), parts = str.split("/");
-  if (parts.length === 3) return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-  return new Date(raw);
-}
-
 function getLastNonEmptyRow(sheet, col) {
-  var colVals = sheet.getRange(col + ":" + col).getValues(), lastRow = 1;
+  // #117 — bound the read to getLastRow() and ONE column (was getRange("col:col") = full grid column).
+  // Still scans `col` for the last non-empty cell, so trailing formula rows in OTHER columns
+  // (e.g. Tax Invoice History col O year-month formula) do NOT inflate the result.
+  var last = sheet.getLastRow();
+  if (last < 1) return 1;
+  var colVals = sheet.getRange(col + "1:" + col + last).getValues(), lastRow = 1;
   for (var r = colVals.length - 1; r >= 1; r--) {
     if (colVals[r][0] !== "") { lastRow = r + 1; break; }
   }
   return lastRow;
 }
 
-function getNextBNNumber() {
+function getNextBillingNoteNumber() {
   var ss        = SpreadsheetApp.getActiveSpreadsheet();
   var bnHistory = ss.getSheetByName(CONFIG.bnHistory);
   var yearYY    = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yy");
@@ -318,29 +258,25 @@ function searchDeliveryNotesForBilling(startDate, endDate) {
   start.setHours(0, 0, 0, 0); end.setHours(23, 59, 59);
   var grouped = {};
   for (var i = 1; i < data.length; i++) {
-    var row = data[i], invoiceNo = String(row[0]).trim(), rowDate = new Date(row[1]), name = String(row[2]).trim(), total = row[11];
+    var row = data[i];
+    var invoiceNo = String(row[0]).trim(), rowDate = new Date(row[1]), name = String(row[2]).trim(), total = row[11];
+    var billedBnNo = row.length > 16 ? String(row[16] || "").trim() : "";
     if (!invoiceNo || !name) continue;
     if (rowDate < start || rowDate > end) continue;
     if (!grouped[name]) grouped[name] = {};
-    if (!grouped[name][invoiceNo]) grouped[name][invoiceNo] = { invoiceNo: invoiceNo, date: Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "dd/MM/yyyy"), total: 0 };
+    if (!grouped[name][invoiceNo]) grouped[name][invoiceNo] = { no: invoiceNo, date: Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "dd/MM/yyyy"), total: 0, bnNo: "" };
     if (!grouped[name][invoiceNo].total && total) grouped[name][invoiceNo].total = total;
-  }
-  var bnHistory = ss.getSheetByName(CONFIG.bnHistory), generated = {};
-  if (bnHistory && bnHistory.getLastRow() > 1) {
-    var bnData = bnHistory.getDataRange().getValues();
-    for (var b = 1; b < bnData.length; b++) {
-      var bnCustomer = String(bnData[b][2]).trim(), bnStart = bnData[b][5] ? parseBNDate(bnData[b][5]) : null, bnEnd = bnData[b][6] ? parseBNDate(bnData[b][6]) : null;
-      if (!bnStart || !bnEnd) continue;
-      bnStart.setHours(0,0,0,0); bnEnd.setHours(0,0,0,0);
-      if (bnStart <= end && bnEnd >= start) generated[bnCustomer] = true;
-    }
+    if (billedBnNo && !grouped[name][invoiceNo].bnNo) grouped[name][invoiceNo].bnNo = billedBnNo;
   }
   var result = [];
   for (var customer in grouped) {
-    var invoices = [];
-    for (var inv in grouped[customer]) invoices.push(grouped[customer][inv]);
-    invoices.sort(function(a, b) { return a.invoiceNo.localeCompare(b.invoiceNo); });
-    result.push({ customer: customer, invoices: invoices, generated: generated[customer] || false });
+    var invoices = [], allBilled = true;
+    for (var inv in grouped[customer]) {
+      invoices.push(grouped[customer][inv]);
+      if (!grouped[customer][inv].bnNo) allBilled = false;
+    }
+    invoices.sort(function(a, b) { return a.no.localeCompare(b.no); });
+    result.push({ customer: customer, invoices: invoices, generated: invoices.length > 0 && allBilled });
   }
   result.sort(function(a, b) { return a.customer.localeCompare(b.customer); });
   return result;
@@ -352,7 +288,7 @@ function getDeliveryNotes(startDate, endDate, search) {
   if (!sheet || sheet.getLastRow() <= 1) return [];
   var lastDataRow = getLastNonEmptyRow(sheet, "A");
   if (lastDataRow <= 1) return [];
-  var data  = sheet.getRange(1, 1, lastDataRow, 15).getValues();
+  var data  = sheet.getRange(1, 1, lastDataRow, 16).getValues();
   var start = startDate ? new Date(startDate) : null, end = endDate ? new Date(endDate) : null;
   if (start) start.setHours(0, 0, 0, 0);
   if (end)   end.setHours(23, 59, 59);
@@ -360,6 +296,7 @@ function getDeliveryNotes(startDate, endDate, search) {
   for (var i = 1; i < data.length; i++) {
     var row = data[i], invoiceNo = String(row[0]).trim(), rowDate = new Date(row[1]), name = String(row[2]).trim();
     if (!invoiceNo || !name) continue;
+    if (String(row[15]).trim() === "CANCELLED") continue;
     if (start && rowDate < start) continue;
     if (end   && rowDate > end)   continue;
     if (search) { var q = search.toLowerCase(); if (!invoiceNo.toLowerCase().includes(q) && !name.toLowerCase().includes(q)) continue; }
@@ -383,38 +320,36 @@ function getDeliveryNotes(startDate, endDate, search) {
 // BILLING NOTE
 // ============================================================
 
-function previewBillingNote(customer, invoices) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet(), bnSheet = ss.getSheetByName(CONFIG.bnTemplate);
-  if (!bnSheet) throw new Error("ไม่พบ sheet 'BN Template'");
-  var todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy"), previewBnNo = getNextBNNumber();
-  bnSheet.getRange("G3").setValue(previewBnNo); bnSheet.getRange("C17").setValue(todayStr); bnSheet.getRange("C18").setValue(customer); bnSheet.getRange("C19").clearContent(); bnSheet.getRange("B28:G39").clearContent();
-  var grandTotal = 0;
-  for (var i = 0; i < invoices.length && i < 12; i++) {
-    var inv = invoices[i], baht = Math.floor(inv.total), satang = Math.round((inv.total - baht) * 100), row = 28 + i;
-    bnSheet.getRange("B" + row).setValue(i + 1); bnSheet.getRange("C" + row).setValue(inv.invoiceNo); bnSheet.getRange("D" + row).setValue(inv.date); bnSheet.getRange("E" + row).setValue(""); bnSheet.getRange("F" + row).setValue(baht); bnSheet.getRange("G" + row).setValue(satang > 0 ? satang : "");
-    grandTotal += inv.total;
-  }
-  var totalBaht = Math.floor(grandTotal), totalSatang = Math.round((grandTotal - totalBaht) * 100);
-  bnSheet.getRange("C40").setValue(invoices.length); bnSheet.getRange("F40").setValue(totalBaht); bnSheet.getRange("G40").setValue(totalSatang > 0 ? totalSatang : "");
-  SpreadsheetApp.flush(); ss.setActiveSheet(bnSheet);
-  return previewBnNo;
-}
-
-function confirmBillingNote(customer, reservedBnNo, invStartDate, invEndDate) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet(), bnSheet = ss.getSheetByName(CONFIG.bnTemplate), bnHistory = ss.getSheetByName(CONFIG.bnHistory) || ss.insertSheet(CONFIG.bnHistory);
-  if (!bnSheet) throw new Error("ไม่พบ sheet 'BN Template'");
-  if (bnHistory.getLastRow() === 0) bnHistory.appendRow(["เลขที่ BN","วันที่ออก","ชื่อลูกค้า","จำนวนบิล","รวมเงิน","วันที่บิลเริ่มต้น","วันที่บิลสิ้นสุด","ไฟล์ PDF"]);
-  var bnNo = reservedBnNo || getNextBNNumber(), todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy");
-  bnSheet.getRange("G3").setValue(bnNo); SpreadsheetApp.flush();
-  var itemCount = bnSheet.getRange("C40").getValue(), totalBaht = bnSheet.getRange("F40").getValue(), totalSatang = bnSheet.getRange("G40").getValue(), grandTotal = totalBaht + (totalSatang > 0 ? totalSatang / 100 : 0);
-  var folder = DriveApp.getFolderById(CONFIG.bnFolderId), pdfName = "BN_" + bnNo + "_" + customer, sheetId = bnSheet.getSheetId(), exportRange = bnSheet.getRange("A1:V48");
-  var url = 'https://docs.google.com/spreadsheets/d/' + ss.getId() + '/export?format=pdf&size=A4&portrait=false&fitw=true&fith=true&top_margin=0.4&bottom_margin=0.4&left_margin=0.4&right_margin=0.4&sheetnames=false&printtitle=false&pagenumbers=false&gridlines=false&fzr=false&gid=' + sheetId + '&range=' + exportRange.getA1Notation();
-  var response = UrlFetchApp.fetch(url, { headers: { 'Authorization': 'Bearer ' + ScriptApp.getOAuthToken() } });
-  var file = folder.createFile(response.getBlob()).setName(pdfName + ".pdf"), pdfUrl = "https://drive.google.com/file/d/" + file.getId() + "/view";
-  var invStart = "", invEnd = "";
-  try { var dp1 = invStartDate.split("-"); invStart = new Date(parseInt(dp1[0]), parseInt(dp1[1]) - 1, parseInt(dp1[2])); var dp2 = invEndDate.split("-"); invEnd = new Date(parseInt(dp2[0]), parseInt(dp2[1]) - 1, parseInt(dp2[2])); } catch(e) {}
+function confirmBillingNote(customer, reservedBnNo, invoices, bnDate, address, phone, format) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var bnHistory = ss.getSheetByName(CONFIG.bnHistory) || ss.insertSheet(CONFIG.bnHistory);
+  if (bnHistory.getLastRow() === 0) bnHistory.appendRow(["เลขที่ BN","วันที่ออก","ชื่อลูกค้า","จำนวนบิล","รวมเงิน","วันที่บิลเริ่มต้น","วันที่บิลสิ้นสุด","ไฟล์ PDF","เลขที่ DN"]);
+  var bnNo = reservedBnNo || getNextBillingNoteNumber();
+  var dateStr = bnDate || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy");
+  var invoiceList = invoices || [];
+  var total = 0;
+  for (var i = 0; i < invoiceList.length; i++) total += parseFloat(invoiceList[i].amount || invoiceList[i].total) || 0;
+  var dnNosStr = invoiceList.map(function(inv) { return inv.dnNo || inv.no || ""; }).filter(Boolean).join(", ");
+  var invDates = invoiceList.map(function(inv) { return inv.dnDate || inv.date || ""; }).filter(Boolean);
+  var invStart = invDates.length ? invDates[0] : "";
+  var invEnd   = invDates.length ? invDates[invDates.length - 1] : "";
+  var data = { date: bnDate || new Date().toISOString().slice(0,10), name: customer, address: address || "", phone: phone || "", invoices: invoiceList, total: total };
+  var pdfUrl = (format === "landscape") ? buildBillingNoteLandscapePDF(bnNo, customer, data) : buildBillingNotePortraitPDF(bnNo, customer, data);
   var lastRow = getLastNonEmptyRow(bnHistory, "A");
-  bnHistory.getRange(lastRow + 1, 1, 1, 8).setValues([[bnNo, todayStr, customer, itemCount, grandTotal, invStart, invEnd, pdfUrl]]);
+  bnHistory.getRange(lastRow + 1, 1, 1, 9).setValues([[bnNo, dateStr, customer, invoiceList.length, total, invStart, invEnd, pdfUrl, dnNosStr]]);
+  // Mark billed DNs in Invoice History col Q (index 17, 1-based) for Link DN→BN
+  var dnNosToMark = invoiceList.map(function(inv) { return String(inv.dnNo || inv.no || "").trim(); }).filter(Boolean);
+  if (dnNosToMark.length > 0) {
+    var invSheet = ss.getSheetByName(CONFIG.invoiceHistory);
+    if (invSheet) {
+      var invData = invSheet.getDataRange().getValues();
+      for (var r = 1; r < invData.length; r++) {
+        if (dnNosToMark.indexOf(String(invData[r][0]).trim()) !== -1) {
+          invSheet.getRange(r + 1, 17).setValue(bnNo);
+        }
+      }
+    }
+  }
   return { bnNo: bnNo, pdfUrl: pdfUrl };
 }
 
@@ -476,6 +411,7 @@ function createDeliveryNoteFromWeb(data) {
     // Update pdfUrl — we know the exact row, no re-read needed
     dataSheet.getRange(firstWriteRow, 13).setValue(pdfUrl);
 
+    autoLogCustomer_(name, address, phone, "");
     return { invoiceNo: invoiceNo, pdfUrl: pdfUrl };
   } finally {
     lock.releaseLock();
@@ -558,6 +494,7 @@ function updateDeliveryNoteFromWeb(invoiceId, data) {
   dataSheet.getRange(matchRows[0], 13).setValue("");
   dataSheet.getRange(matchRows[0], 15).setValue("");
 
+  autoLogCustomer_(name, address, phone, "");
   return { success: true, invoiceNo: invoiceId };
 }
 
@@ -565,48 +502,354 @@ function updateDeliveryNoteFromWeb(invoiceId, data) {
 // BN HISTORY
 // ============================================================
 
-function getBNHistory() {
+function getBillingNotes() {
   var ss = SpreadsheetApp.getActiveSpreadsheet(), bnHistory = ss.getSheetByName(CONFIG.bnHistory);
   if (!bnHistory || bnHistory.getLastRow() <= 1) return [];
   var data = bnHistory.getDataRange().getValues(), result = [];
-  for (var i = 1; i < data.length; i++) { var row = data[i]; if (!row[0]) continue; result.push({ bnNo: String(row[0]).trim(), date: String(row[1]).trim(), customer: String(row[2]).trim(), count: row[3], total: row[4], pdfUrl: String(row[7]).trim() }); }
+  // #105 Option B — one grouped scan of Invoice History → per-BN DN breakdown + address/phone,
+  // so the list payload carries each BN's detail and the detail view opens instantly (no per-click scan).
+  var tz = Session.getScriptTimeZone(), byBn = {};
+  var invSheet = ss.getSheetByName(CONFIG.invoiceHistory);
+  if (invSheet && invSheet.getLastRow() > 1) {
+    var inv = invSheet.getDataRange().getValues();
+    for (var r = 1; r < inv.length; r++) {
+      var bnRef = inv[r].length > 16 ? String(inv[r][16] || "").trim() : "";
+      if (!bnRef) continue;
+      var dnNo = String(inv[r][0]).trim();
+      if (!dnNo) continue;
+      if (!byBn[bnRef]) byBn[bnRef] = { invoices: {}, address: "", phone: "" };
+      var g = byBn[bnRef];
+      if (!g.invoices[dnNo]) {
+        var rd = new Date(inv[r][1]);
+        g.invoices[dnNo] = { no: dnNo, date: !isNaN(rd.getTime()) ? Utilities.formatDate(rd, tz, "dd/MM/yyyy") : "", total: inv[r][11] };
+      }
+      if (!g.address && inv[r][3]) g.address = String(inv[r][3]).trim();
+      if (!g.phone  && inv[r][4]) g.phone   = String(inv[r][4]).trim();
+    }
+  }
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i]; if (!row[0]) continue;
+    var bnNo = String(row[0]).trim();
+    var d = row[1] ? new Date(row[1]) : null;
+    var grp = byBn[bnNo] || { invoices: {}, address: "", phone: "" };
+    var invoices = Object.keys(grp.invoices).map(function(k) { return grp.invoices[k]; });
+    invoices.sort(function(a, b) { return a.no.localeCompare(b.no); });
+    result.push({ bnNo: bnNo, date: d ? Utilities.formatDate(d, tz, "dd/MM/yyyy") : String(row[1]).trim(), customer: String(row[2]).trim(), count: row[3], total: row[4], pdfUrl: String(row[7]).trim(), cancelled: String(row[9] || "").trim() === "CANCELLED", printed: String(row[10] || "").trim() === "PRINTED", address: grp.address, phone: grp.phone, invoices: invoices });
+  }
   return result.reverse();
+}
+
+// #106 — mark BNs as printed (col K) so the print queue checkbox state persists across visits
+function markBillingNotesPrinted(bnNos) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var bnSheet = ss.getSheetByName(CONFIG.bnHistory);
+  if (!bnSheet || bnSheet.getLastRow() <= 1) return { success: true, marked: 0 };
+  var list = (bnNos || []).map(function(s) { return String(s).trim(); }).filter(Boolean);
+  if (!list.length) return { success: true, marked: 0 };
+  var bnData = bnSheet.getDataRange().getValues(), marked = 0;
+  for (var b = 1; b < bnData.length; b++) {
+    if (list.indexOf(String(bnData[b][0]).trim()) >= 0) { bnSheet.getRange(b + 1, 11).setValue("PRINTED"); marked++; }
+  }
+  return { success: true, marked: marked };
+}
+
+// #107 — portrait CSS (no opts). Shared by single + combined builders.
+function bnPortraitCSS() {
+  return "<style>" + PROMPT_FONT_CSS +
+    "html,body{background:white!important;font-family:Prompt,sans-serif;color:#111}" +
+    "*{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}" +
+    "@page{size:A4 portrait;margin:0}" +
+    "</style>";
+}
+
+// #107 — concatenate page HTML with a page break after every page except the last
+function joinBillingNotePages(pages) {
+  return pages.map(function(p, i) {
+    return i < pages.length - 1 ? "<div style=\"page-break-after:always\">" + p + "</div>" : "<div>" + p + "</div>";
+  }).join("");
+}
+
+// #107 — render all selected BNs into ONE combined PDF in the chosen format
+function printCombinedBillingNotes(bnNos, format) {
+  var list = (bnNos || []).map(function(s) { return String(s).trim(); }).filter(Boolean);
+  if (!list.length) return { url: "", count: 0 };
+  var cfg    = getConfig();
+  // #110 — use configured combined folder if set, else auto "Combined" subfolder under BN folder
+  var folder = cfg.folders.bnCombined
+    ? DriveApp.getFolderById(cfg.folders.bnCombined)
+    : getOrCreateChildFolder_(DriveApp.getFolderById(cfg.folders.bn), "Combined");
+  var isLandscape = (format === "landscape");
+  var pages = [];
+  for (var i = 0; i < list.length; i++) {
+    var detail = getBillingNoteDetail(list[i]);
+    if (!detail || !detail.bnNo) continue;
+    var data = { date: detail.date, name: detail.customer, address: detail.address || "", phone: detail.phone || "", invoices: detail.invoices || [], total: detail.total };
+    pages.push(isLandscape
+      ? bnLandscapePageHTML(detail.bnNo, detail.customer, data, cfg, {})
+      : bnPortraitPageHTML(detail.bnNo, detail.customer, data, cfg));
+  }
+  if (!pages.length) return { url: "", count: 0 };
+  var body = joinBillingNotePages(pages);
+  var html = isLandscape
+    ? "<!DOCTYPE html><html lang=\"th\"><head><meta charset=\"UTF-8\">" + bnLandscapeCSS({}) + "</head><body style=\"background:white\">" + body + "</body></html>"
+    : "<!DOCTYPE html><html lang=\"th\"><head><meta charset=\"UTF-8\">" + bnPortraitCSS() + "</head><body style=\"background:white;padding:0 12mm\">" + body + "</body></html>";
+  var blob    = Utilities.newBlob(html, "text/html; charset=utf-8", "bn_combined.html");
+  var pdfBlob = blob.getAs("application/pdf");
+  var stamp   = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyyMMdd_HHmmss");
+  pdfBlob.setName("KC_BN_Combined_" + (isLandscape ? "L" : "P") + "_" + stamp + ".pdf");
+  var file = folder.createFile(pdfBlob);
+  cleanupCombinedFolder_(folder, 5); // #109 keep newest 5, trash older combined files
+  return { url: "https://drive.google.com/file/d/" + file.getId() + "/view", count: pages.length };
+}
+
+// #109 — get a child folder by name, creating it if missing
+function getOrCreateChildFolder_(parent, name) {
+  var it = parent.getFoldersByName(name);
+  return it.hasNext() ? it.next() : parent.createFolder(name);
+}
+
+// #109 — keep only the newest `keep` files in a folder; trash the rest
+function cleanupCombinedFolder_(folder, keep) {
+  var files = [], it = folder.getFiles();
+  while (it.hasNext()) files.push(it.next());
+  files.sort(function(a, b) { return b.getDateCreated() - a.getDateCreated(); }); // newest first
+  for (var i = keep; i < files.length; i++) files[i].setTrashed(true);
+}
+
+function getBillingNoteDetail(bnNo) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  // Get BN header from BN History
+  var bnSheet = ss.getSheetByName(CONFIG.bnHistory);
+  var header = { bnNo: bnNo, date: "", customer: "", count: 0, total: 0, pdfUrl: "" };
+  if (bnSheet && bnSheet.getLastRow() > 1) {
+    var bnData = bnSheet.getDataRange().getValues();
+    for (var b = 1; b < bnData.length; b++) {
+      if (String(bnData[b][0]).trim() === bnNo) {
+        var bd = bnData[b][1] ? new Date(bnData[b][1]) : null;
+        header = { bnNo: bnNo, date: bd ? Utilities.formatDate(bd, Session.getScriptTimeZone(), "dd/MM/yyyy") : String(bnData[b][1]).trim(), customer: String(bnData[b][2]).trim(), count: bnData[b][3], total: bnData[b][4], pdfUrl: String(bnData[b][7]).trim(), cancelled: String(bnData[b][9] || "").trim() === "CANCELLED" };
+        break;
+      }
+    }
+  }
+  // Get DNs from Invoice History where col Q (index 16) = bnNo
+  var invSheet = ss.getSheetByName(CONFIG.invoiceHistory);
+  var invoicesMap = {};
+  header.address = ""; header.phone = "";
+  if (invSheet && invSheet.getLastRow() > 1) {
+    var lastRow = getLastNonEmptyRow(invSheet, "A");
+    var invData = invSheet.getRange(1, 1, lastRow, 17).getValues();
+    for (var i = 1; i < invData.length; i++) {
+      var row = invData[i];
+      if (String(row[16]).trim() !== bnNo) continue;
+      var dnNo = String(row[0]).trim();
+      if (!dnNo) continue;
+      if (!header.address && row[3]) header.address = String(row[3]).trim();
+      if (!header.phone  && row[4]) header.phone   = String(row[4]).trim();
+      if (!invoicesMap[dnNo]) {
+        var d = row[1] ? new Date(row[1]) : null;
+        invoicesMap[dnNo] = { no: dnNo, date: d ? Utilities.formatDate(d, Session.getScriptTimeZone(), "dd/MM/yyyy") : "", total: row[11] };
+      }
+    }
+  }
+  header.invoices = Object.keys(invoicesMap).map(function(k) { return invoicesMap[k]; });
+  return header;
+}
+
+function getDNDetail(dnNo) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(CONFIG.invoiceHistory);
+  if (!sheet) throw new Error("ไม่พบ Invoice History");
+  // #116 — TextFinder on col A locates the DN's rows server-side; no full-column getValues
+  // (the old getLastNonEmptyRow("A") read the whole column into the script — that was the 3–4s cost)
+  var matches = sheet.getRange("A:A").createTextFinder(dnNo).matchEntireCell(true).findAll();
+  if (!matches.length) throw new Error("ไม่พบใบส่งของ " + dnNo);
+  var rowNums = matches.map(function(r) { return r.getRow(); });
+  var first = Math.min.apply(null, rowNums), last = Math.max.apply(null, rowNums);
+  var data = sheet.getRange(first, 1, last - first + 1, 14).getValues();
+  var result = null, items = [];
+  for (var i = 0; i < data.length; i++) {
+    var row = data[i];
+    if (String(row[0]).trim() !== dnNo) continue;
+    if (!result) {
+      var d = row[1] ? new Date(row[1]) : null;
+      result = { dnNo: dnNo, date: d ? Utilities.formatDate(d, Session.getScriptTimeZone(), "dd/MM/yyyy") : "", customer: String(row[2]).trim(), address: String(row[3] || "").trim(), phone: String(row[4] || "").trim(), total: row[11], pdfUrl: String(row[12] || "").trim() };
+    }
+    if (row[5] || row[8] || row[10]) items.push({ desc: String(row[5] || "").trim(), desc2: String(row[6] || "").trim(), detail: String(row[7] || "").trim(), qty: row[8] || "", unitPrice: row[9] || "", amount: row[10] || "" });
+  }
+  if (!result) throw new Error("ไม่พบใบส่งของ " + dnNo);
+  result.items = items;
+  return result;
+}
+
+function cancelBillingNote(bnNo) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var bnSheet = ss.getSheetByName(CONFIG.bnHistory);
+  if (!bnSheet) throw new Error("ไม่พบ BN History");
+  var bnData = bnSheet.getDataRange().getValues();
+  var found = false;
+  for (var b = 1; b < bnData.length; b++) {
+    if (String(bnData[b][0]).trim() === bnNo) { bnSheet.getRange(b + 1, 10).setValue("CANCELLED"); found = true; break; }
+  }
+  if (!found) throw new Error("ไม่พบใบวางบิล " + bnNo);
+  var invSheet = ss.getSheetByName(CONFIG.invoiceHistory);
+  if (invSheet && invSheet.getLastRow() > 1) {
+    var lastRow = getLastNonEmptyRow(invSheet, "A");
+    var invData = invSheet.getRange(1, 1, lastRow, 17).getValues();
+    for (var i = 1; i < invData.length; i++) {
+      if (String(invData[i][16]).trim() === bnNo) invSheet.getRange(i + 1, 17).clearContent();
+    }
+  }
+  return { success: true };
+}
+
+function getUnbilledDNsForCustomer(customer) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(CONFIG.invoiceHistory);
+  if (!sheet || sheet.getLastRow() <= 1) return [];
+  var lastRow = getLastNonEmptyRow(sheet, "A");
+  var data = sheet.getRange(1, 1, lastRow, 17).getValues();
+  var map = {};
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    var dnNo = String(row[0]).trim(), name = String(row[2]).trim();
+    if (!dnNo || name !== customer) continue;
+    if (String(row[15] || "").trim() === "CANCELLED") continue;
+    if (String(row[16] || "").trim()) continue;
+    if (!map[dnNo]) {
+      var d = row[1] ? new Date(row[1]) : null;
+      map[dnNo] = { no: dnNo, date: d ? Utilities.formatDate(d, Session.getScriptTimeZone(), "dd/MM/yyyy") : "", total: row[11] };
+    }
+  }
+  return Object.keys(map).map(function(k) { return map[k]; }).sort(function(a, b) { return a.no.localeCompare(b.no); });
+}
+
+function editBillingNote(bnNo, params) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var bnSheet = ss.getSheetByName(CONFIG.bnHistory);
+  if (!bnSheet) throw new Error("ไม่พบ BN History");
+  var bnData = bnSheet.getDataRange().getValues();
+  var bnRow = -1;
+  for (var b = 1; b < bnData.length; b++) { if (String(bnData[b][0]).trim() === bnNo) { bnRow = b + 1; break; } }
+  if (bnRow < 0) throw new Error("ไม่พบใบวางบิล " + bnNo);
+  if (params.date)     bnSheet.getRange(bnRow, 2).setValue(params.date);
+  if (params.customer) bnSheet.getRange(bnRow, 3).setValue(params.customer);
+  bnSheet.getRange(bnRow, 8).clearContent();
+  var invSheet = ss.getSheetByName(CONFIG.invoiceHistory);
+  if (invSheet && invSheet.getLastRow() > 1) {
+    var lastRow = getLastNonEmptyRow(invSheet, "A");
+    var invData = invSheet.getRange(1, 1, lastRow, 17).getValues();
+    var addSet = {}, removeSet = {};
+    if (params.addDnNos) params.addDnNos.forEach(function(n) { addSet[n] = true; });
+    if (params.removeDnNos) params.removeDnNos.forEach(function(n) { removeSet[n] = true; });
+    for (var i = 1; i < invData.length; i++) {
+      var dnNo2 = String(invData[i][0]).trim();
+      if (addSet[dnNo2])    invSheet.getRange(i + 1, 17).setValue(bnNo);
+      if (removeSet[dnNo2] && String(invData[i][16]).trim() === bnNo) invSheet.getRange(i + 1, 17).clearContent();
+    }
+    var countData = invSheet.getRange(1, 1, lastRow, 17).getValues();
+    var dnSet = {}, newTotal = 0;
+    for (var j = 1; j < countData.length; j++) {
+      if (String(countData[j][16]).trim() !== bnNo) continue;
+      var k = String(countData[j][0]).trim(); if (!k) continue;
+      if (!dnSet[k]) { dnSet[k] = true; newTotal += (countData[j][11] || 0); }
+    }
+    var newCount = Object.keys(dnSet).length;
+    bnSheet.getRange(bnRow, 4).setValue(newCount);
+    bnSheet.getRange(bnRow, 5).setValue(newTotal);
+  }
+  return { success: true };
 }
 
 // ============================================================
 // CONFIG
 // ============================================================
 
+function getAppVersion() {
+  var v = "1.4.200"; // bump this alongside the version header comment
+  Logger.log(v);
+  return v;
+}
+
 function getConfig() {
   var ss = SpreadsheetApp.getActiveSpreadsheet(), sheet = ss.getSheetByName(CONFIG.configSheet);
   if (!sheet) {
     sheet = ss.insertSheet(CONFIG.configSheet); sheet.appendRow(["type", "value"]);
-    var defaults = [["product","Product A"],["product","Product B"],["product","Product C"],["product","Product D"],["size","S"],["size","M"],["size","L"],["size","XL"],["size","XXL"],["size","XXXL"],["company","หจก. โรงงานกิมเชียง"],["nameEN","KIMCHIANG LIMITED PARTNERSHIP"],["address","25/9 หมู่ 10 ต.ลอมแม่นาง อ.บางใหญ่ จ.นนทบุรี 11140"],["tel","02-191-8698-9"],["invoiceFolder",CONFIG.invoiceFolderId],["bnFolder",CONFIG.bnFolderId]];
+    var defaults = [["company","หจก. โรงงานกิมเชียง"],["nameEN","KIMCHIANG LIMITED PARTNERSHIP"],["address","25/9 หมู่ 10 ต.ลอมแม่นาง อ.บางใหญ่ จ.นนทบุรี 11140"],["tel","02-191-8698-9"],["folderDN",""],["folderTI",""],["folderBN",""],["folderBNCombined",""],["vatRate","0.07"]];
     defaults.forEach(function(r) { sheet.appendRow(r); });
   }
-  var data = sheet.getDataRange().getValues(), products = [], sizes = [], company = {}, folders = {};
+  var data = sheet.getDataRange().getValues(), company = {}, folders = {}, vatRate_ = VAT_RATE;
   for (var i = 1; i < data.length; i++) {
     var type = String(data[i][0]).trim(), val = String(data[i][1]).trim();
-    if      (type === "product")       products.push(val);
-    else if (type === "size")          sizes.push(val);
-    else if (type === "company")       company.name    = val;
-    else if (type === "nameEN")        company.nameEN  = val;
-    else if (type === "address")       company.address = val;
-    else if (type === "tel")           company.tel     = val;
-    else if (type === "taxId")         company.taxId   = val;
-    else if (type === "invoiceFolder") folders.invoice = val;
-    else if (type === "bnFolder")      folders.bn      = val;
+    if      (type === "company")  company.name    = val;
+    else if (type === "nameEN")   company.nameEN  = val;
+    else if (type === "address")  company.address = val;
+    else if (type === "tel")      company.tel     = val;
+    else if (type === "taxId")    company.taxId   = val;
+    else if (type === "folderDN") folders.dn = extractFolderId_(val);
+    else if (type === "folderTI") folders.ti = extractFolderId_(val);
+    else if (type === "folderBN") folders.bn = extractFolderId_(val);
+    else if (type === "folderBNCombined") folders.bnCombined = extractFolderId_(val);
+    else if (type === "vatRate")  vatRate_ = parseFloat(val) || VAT_RATE;
   }
-  return { products: products, sizes: sizes, company: company, folders: folders };
+  var pc = getProductConfig();
+  return { products: pc.products, sizes: pc.sizes, company: company, folders: folders, vatRate: vatRate_ };
 }
 
 function saveConfig(data) {
   var ss = SpreadsheetApp.getActiveSpreadsheet(), sheet = ss.getSheetByName(CONFIG.configSheet) || ss.insertSheet(CONFIG.configSheet);
   sheet.clearContents(); sheet.appendRow(["type", "value"]);
-  (data.products || []).forEach(function(p) { sheet.appendRow(["product", p]); });
-  (data.sizes    || []).forEach(function(s) { sheet.appendRow(["size",    s]); });
   if (data.company) { sheet.appendRow(["company", data.company.name || ""]); sheet.appendRow(["nameEN", data.company.nameEN || ""]); sheet.appendRow(["address", data.company.address || ""]); sheet.appendRow(["tel", data.company.tel || ""]); sheet.appendRow(["taxId", data.company.taxId || ""]); }
-  if (data.folders) { sheet.appendRow(["invoiceFolder", data.folders.invoice || ""]); sheet.appendRow(["bnFolder", data.folders.bn || ""]); }
+  if (data.folders) { sheet.appendRow(["folderDN", data.folders.dn || ""]); sheet.appendRow(["folderTI", data.folders.ti || ""]); sheet.appendRow(["folderBN", data.folders.bn || ""]); sheet.appendRow(["folderBNCombined", data.folders.bnCombined || ""]); }
+  return { success: true };
+}
+
+function getProductConfig() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet(), sheet = ss.getSheetByName("Config_Products");
+  if (!sheet) return { products: [], sizes: [] };
+  var data = sheet.getDataRange().getValues(), products = [], sizes = [];
+  for (var i = 1; i < data.length; i++) {
+    var type = String(data[i][0]).trim(), val = String(data[i][1]).trim();
+    if      (type === "product") products.push(val);
+    else if (type === "size")    sizes.push(val);
+  }
+  return { products: products, sizes: sizes };
+}
+
+function addProduct(name, type) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet(), sheet = ss.getSheetByName("Config_Products");
+  if (!sheet) { sheet = ss.insertSheet("Config_Products"); sheet.appendRow(["type", "value"]); }
+  var trimmed = String(name).trim();
+  if (!trimmed) return { success: false, error: "ชื่อสินค้าว่าง" };
+  var rowType = (type === "size") ? "size" : "product";
+  sheet.appendRow([rowType, trimmed]);
+  return { success: true, name: trimmed };
+}
+
+function getProducts() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet(), sheet = ss.getSheetByName("Config_Products");
+  if (!sheet || sheet.getLastRow() <= 1) return [];
+  var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues();
+  var result = [];
+  for (var i = 0; i < data.length; i++) {
+    var type = String(data[i][0]).trim(), value = String(data[i][1]).trim();
+    if (type && value) result.push({ type: type, value: value, row: i + 2 });
+  }
+  return result;
+}
+
+function updateProduct(row, value) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet(), sheet = ss.getSheetByName("Config_Products");
+  if (!sheet) throw new Error("ไม่พบ Config_Products");
+  var trimmed = String(value).trim();
+  if (!trimmed) throw new Error("ชื่อว่าง");
+  sheet.getRange(row, 2).setValue(trimmed);
+  return { success: true };
+}
+
+function deleteProduct(row) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet(), sheet = ss.getSheetByName("Config_Products");
+  if (!sheet) throw new Error("ไม่พบ Config_Products");
+  sheet.deleteRow(row);
   return { success: true };
 }
 
@@ -615,7 +858,7 @@ function saveConfig(data) {
 // ============================================================
 
 function getNextTaxInvoiceNumber() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet(), sheet = ss.getSheetByName(TAX_INVOICE_SHEET), yearYY = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yy");
+  var ss = SpreadsheetApp.getActiveSpreadsheet(), sheet = ss.getSheetByName(CONFIG.tiSheet), yearYY = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yy");
   if (!sheet || sheet.getLastRow() <= 1) return "IV-" + yearYY + "-000001";
   var lastDataRow = getLastNonEmptyRow(sheet, "A");
   if (lastDataRow <= 1) return "IV-" + yearYY + "-000001";
@@ -627,17 +870,18 @@ function getNextTaxInvoiceNumber() {
 }
 
 function getTaxInvoices(startDate, endDate, search) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet(), sheet = ss.getSheetByName(TAX_INVOICE_SHEET);
+  var ss = SpreadsheetApp.getActiveSpreadsheet(), sheet = ss.getSheetByName(CONFIG.tiSheet);
   if (!sheet || sheet.getLastRow() <= 1) return [];
   var lastDataRow = getLastNonEmptyRow(sheet, "A");
   if (lastDataRow <= 1) return [];
-  var data = sheet.getRange(1, 1, lastDataRow, 17).getValues(), start = startDate ? new Date(startDate) : null, end = endDate ? new Date(endDate) : null;
+  var data = sheet.getRange(1, 1, lastDataRow, 18).getValues(), start = startDate ? new Date(startDate) : null, end = endDate ? new Date(endDate) : null;
   if (start) start.setHours(0, 0, 0, 0);
   if (end)   end.setHours(23, 59, 59);
   var grouped = {};
   for (var i = 1; i < data.length; i++) {
     var row = data[i], invoiceNo = String(row[0]).trim();
     if (!invoiceNo) continue;
+    if (String(row[17]).trim() === "CANCELLED") continue;
     var rowDate = new Date(row[1]), name = String(row[2]).trim();
     if (start && rowDate < start) continue;
     if (end   && rowDate > end)   continue;
@@ -650,14 +894,225 @@ function getTaxInvoices(startDate, endDate, search) {
   var result = Object.values(grouped);
   result.forEach(function(inv) {
     var sub = inv.items.reduce(function(s, it) { return s + (parseFloat(it.amount) || 0); }, 0);
-    inv.subtotal = parseFloat(sub.toFixed(2)); inv.vatAmt = parseFloat((sub * 0.07).toFixed(2)); inv.grandTotal = parseFloat((sub + sub * 0.07).toFixed(2));
+    inv.subtotal = parseFloat(sub.toFixed(2)); inv.vatAmt = parseFloat((sub * VAT_RATE).toFixed(2)); inv.grandTotal = parseFloat((sub + sub * VAT_RATE).toFixed(2));
   });
   return result.sort(function(a, b) { return b.id.localeCompare(a.id); });
 }
 
+// ── Cancel / Restore ──────────────────────────────────────
+
+function cancelDeliveryNote(invoiceId) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(CONFIG.invoiceHistory);
+  if (!sheet) throw new Error("ไม่พบ sheet");
+  var lastDataRow = getLastNonEmptyRow(sheet, "A");
+  if (lastDataRow <= 1) throw new Error("ไม่พบใบส่งของ " + invoiceId);
+  var colA = sheet.getRange(2, 1, lastDataRow - 1, 1).getValues();
+  for (var i = 0; i < colA.length; i++) {
+    if (String(colA[i][0]).trim() === invoiceId) sheet.getRange(i + 2, 16).setValue("CANCELLED");
+  }
+  return { success: true };
+}
+
+function restoreDeliveryNote(invoiceId) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(CONFIG.invoiceHistory);
+  if (!sheet) throw new Error("ไม่พบ sheet");
+  var lastDataRow = getLastNonEmptyRow(sheet, "A");
+  if (lastDataRow <= 1) return { success: true };
+  var colA = sheet.getRange(2, 1, lastDataRow - 1, 1).getValues();
+  for (var i = 0; i < colA.length; i++) {
+    if (String(colA[i][0]).trim() === invoiceId) sheet.getRange(i + 2, 16).clearContent();
+  }
+  return { success: true };
+}
+
+function getCancelledDeliveryNotes(search) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(CONFIG.invoiceHistory);
+  if (!sheet || sheet.getLastRow() <= 1) return [];
+  var lastDataRow = getLastNonEmptyRow(sheet, "A");
+  if (lastDataRow <= 1) return [];
+  var data = sheet.getRange(1, 1, lastDataRow, 16).getValues();
+  var grouped = {};
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    if (String(row[15]).trim() !== "CANCELLED") continue;
+    var invoiceNo = String(row[0]).trim(), name = String(row[2]).trim();
+    if (!invoiceNo || !name) continue;
+    if (search) { var q = search.toLowerCase(); if (!invoiceNo.toLowerCase().includes(q) && !name.toLowerCase().includes(q)) continue; }
+    if (!grouped[invoiceNo]) {
+      var rowDate = new Date(row[1]);
+      grouped[invoiceNo] = { id: invoiceNo, date: Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "yyyy-MM-dd"), name: name, address: String(row[3]).trim(), phone: String(row[4]).trim(), total: row[11], pdfUrl: row[12] ? String(row[12]).trim() : "", portraitUrl: row[14] ? String(row[14]).trim() : "", cancelled: true, items: [] };
+    }
+    grouped[invoiceNo].items.push({ desc: String(row[5]).trim(), desc2: String(row[6]).trim(), detail: String(row[7]).trim(), qty: row[8], unitPrice: row[9], amount: row[10] });
+  }
+  return Object.values(grouped).sort(function(a, b) { return b.id.localeCompare(a.id); });
+}
+
+function cancelTaxInvoice(invoiceId) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(CONFIG.tiSheet);
+  if (!sheet) throw new Error("ไม่พบ sheet");
+  var lastDataRow = getLastNonEmptyRow(sheet, "A");
+  if (lastDataRow <= 1) throw new Error("ไม่พบใบกำกับภาษี " + invoiceId);
+  var colA = sheet.getRange(2, 1, lastDataRow - 1, 1).getValues();
+  for (var i = 0; i < colA.length; i++) {
+    if (String(colA[i][0]).trim() === invoiceId) sheet.getRange(i + 2, 18).setValue("CANCELLED");
+  }
+  return { success: true };
+}
+
+function restoreTaxInvoice(invoiceId) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(CONFIG.tiSheet);
+  if (!sheet) throw new Error("ไม่พบ sheet");
+  var lastDataRow = getLastNonEmptyRow(sheet, "A");
+  if (lastDataRow <= 1) return { success: true };
+  var colA = sheet.getRange(2, 1, lastDataRow - 1, 1).getValues();
+  for (var i = 0; i < colA.length; i++) {
+    if (String(colA[i][0]).trim() === invoiceId) sheet.getRange(i + 2, 18).clearContent();
+  }
+  return { success: true };
+}
+
+function getCancelledTaxInvoices(search) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(CONFIG.tiSheet);
+  if (!sheet || sheet.getLastRow() <= 1) return [];
+  var lastDataRow = getLastNonEmptyRow(sheet, "A");
+  if (lastDataRow <= 1) return [];
+  var data = sheet.getRange(1, 1, lastDataRow, 18).getValues();
+  var grouped = {};
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    if (String(row[17]).trim() !== "CANCELLED") continue;
+    var invoiceNo = String(row[0]).trim(), name = String(row[2]).trim();
+    if (!invoiceNo || !name) continue;
+    if (search) { var q = search.toLowerCase(); if (!invoiceNo.toLowerCase().includes(q) && !name.toLowerCase().includes(q)) continue; }
+    if (!grouped[invoiceNo]) {
+      var rowDate = new Date(row[1]);
+      grouped[invoiceNo] = { id: invoiceNo, date: Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "yyyy-MM-dd"), name: name, address: String(row[3]).trim(), phone: String(row[4]).trim(), taxId: String(row[5]).trim(), invoiceRef: String(row[6]).trim(), pdfUrl: row[13] ? String(row[13]).trim() : "", portraitUrl: row[16] ? String(row[16]).trim() : "", cancelled: true, items: [] };
+    }
+    grouped[invoiceNo].items.push({ desc: String(row[7]).trim(), desc2: String(row[8]).trim(), detail: String(row[9]).trim(), qty: row[10], unitPrice: row[11], amount: row[12] });
+  }
+  var result = Object.values(grouped);
+  result.forEach(function(inv) {
+    var sub = inv.items.reduce(function(s, it) { return s + (parseFloat(it.amount) || 0); }, 0);
+    inv.subtotal = parseFloat(sub.toFixed(2)); inv.vatAmt = parseFloat((sub * VAT_RATE).toFixed(2)); inv.grandTotal = parseFloat((sub + sub * VAT_RATE).toFixed(2));
+  });
+  return result.sort(function(a, b) { return b.id.localeCompare(a.id); });
+}
+
+// ============================================================
+// CUSTOMER LIST
+// ============================================================
+
+function getCustomerSheet_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(CONFIG.customerSheet);
+  if (!sheet) {
+    sheet = ss.insertSheet(CONFIG.customerSheet);
+    sheet.appendRow(["ชื่อลูกค้า", "ที่อยู่", "โทรศัพท์", "เลขภาษี", "หมายเหตุ"]);
+  }
+  return sheet;
+}
+
+function getCustomers(search) {
+  var sheet = getCustomerSheet_();
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return [];
+  var data = sheet.getRange(2, 1, lastRow - 1, 5).getValues();
+  var q = search ? search.toLowerCase() : "";
+  return data
+    .filter(function(r) { return r[0] && String(r[0]).trim() && String(r[4]).trim() !== "ลบแล้ว"; })
+    .filter(function(r) {
+      if (!q) return true;
+      return String(r[0]).toLowerCase().includes(q) || String(r[1]).toLowerCase().includes(q) || String(r[2]).toLowerCase().includes(q);
+    })
+    .map(function(r) {
+      return { name: String(r[0]).trim(), address: String(r[1]).trim(), phone: String(r[2]).trim(), taxId: String(r[3]).trim(), note: String(r[4]).trim() };
+    });
+}
+
+function createCustomer(data) {
+  var sheet = getCustomerSheet_();
+  var name = String(data.name || "").trim();
+  if (!name) throw new Error("ชื่อลูกค้าห้ามว่าง");
+  // Check uniqueness
+  var lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    var existing = sheet.getRange(2, 1, lastRow - 1, 5).getValues();
+    for (var i = 0; i < existing.length; i++) {
+      if (String(existing[i][0]).trim().toLowerCase() === name.toLowerCase() && String(existing[i][4]).trim() !== "ลบแล้ว") throw new Error("ชื่อ \"" + name + "\" มีอยู่แล้ว");
+    }
+  }
+  sheet.appendRow([name, data.address || "", data.phone || "", data.taxId || "", data.note || ""]);
+  return { success: true };
+}
+
+function updateCustomer(originalName, data) {
+  var sheet = getCustomerSheet_();
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) throw new Error("ไม่พบลูกค้า " + originalName);
+  var rows = sheet.getRange(2, 1, lastRow - 1, 5).getValues();
+  var newName = String(data.name || "").trim();
+  if (!newName) throw new Error("ชื่อลูกค้าห้ามว่าง");
+  var targetRow = -1;
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][0]).trim().toLowerCase() === String(originalName).trim().toLowerCase()) { targetRow = i + 2; break; }
+  }
+  if (targetRow === -1) throw new Error("ไม่พบลูกค้า " + originalName);
+  // Check uniqueness if name is changing
+  if (newName.toLowerCase() !== String(originalName).trim().toLowerCase()) {
+    for (var j = 0; j < rows.length; j++) {
+      if (j + 2 === targetRow) continue;
+      if (String(rows[j][0]).trim().toLowerCase() === newName.toLowerCase()) throw new Error("ชื่อ \"" + newName + "\" มีอยู่แล้ว");
+    }
+  }
+  sheet.getRange(targetRow, 1, 1, 5).setValues([[newName, data.address || "", data.phone || "", data.taxId || "", data.note || ""]]);
+  return { success: true };
+}
+
+function deleteCustomer(name) {
+  var sheet = getCustomerSheet_();
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) throw new Error("ไม่พบลูกค้า " + name);
+  var rows = sheet.getRange(2, 1, lastRow - 1, 5).getValues();
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][0]).trim().toLowerCase() === String(name).trim().toLowerCase() && String(rows[i][4]).trim() !== "ลบแล้ว") {
+      sheet.getRange(i + 2, 5).setValue("ลบแล้ว"); // soft-delete: preserve row for audit history
+      return { success: true };
+    }
+  }
+  throw new Error("ไม่พบลูกค้า " + name);
+}
+
+// Auto-log customer from invoice save — silently upserts (skips if name already exists)
+function autoLogCustomer_(name, address, phone, taxId) {
+  try {
+    name = String(name || "").trim();
+    if (!name) return;
+    var sheet = getCustomerSheet_();
+    var lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      var existing = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      for (var i = 0; i < existing.length; i++) {
+        if (String(existing[i][0]).trim().toLowerCase() === name.toLowerCase()) return; // already exists
+      }
+    }
+    sheet.appendRow([name, address || "", phone || "", taxId || "", ""]);
+  } catch (e) {
+    // Never throw — invoice save must not fail because of customer logging
+    Logger.log("autoLogCustomer_ error: " + e.message);
+  }
+}
+
+// ============================================================
+
 function createTaxInvoiceFromWeb(data) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet(), sheet = ss.getSheetByName(TAX_INVOICE_SHEET);
-  if (!sheet) throw new Error("ไม่พบ sheet '" + TAX_INVOICE_SHEET + "'");
+  var ss = SpreadsheetApp.getActiveSpreadsheet(), sheet = ss.getSheetByName(CONFIG.tiSheet);
+  if (!sheet) throw new Error("ไม่พบ sheet '" + CONFIG.tiSheet + "'");
 
   // Duplicate prevention lock
   var lock = LockService.getScriptLock();
@@ -680,12 +1135,22 @@ function createTaxInvoiceFromWeb(data) {
   // Generate PDF outside lock — use firstWriteRow directly, no re-read
   var pdfUrl = buildTaxInvoiceLandscapePDF(invoiceNo, name, data);
   sheet.getRange(firstWriteRow, 14).setValue(pdfUrl);
+  autoLogCustomer_(name, address, phone, taxId);
   return { invoiceNo: invoiceNo, pdfUrl: pdfUrl };
 }
 
 function thaiMonth(dateStr) {
   var months = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
-  var d = new Date(dateStr);
+  var s = String(dateStr || "");
+  if (!s) return "";
+  var d;
+  if (s.indexOf("/") >= 0) {            // dd/MM/yyyy (e.g. from getBillingNoteDetail)
+    var p = s.split("/");
+    d = new Date(parseInt(p[2], 10), parseInt(p[1], 10) - 1, parseInt(p[0], 10));
+  } else {
+    d = new Date(s);                    // yyyy-MM-dd or other native-parseable
+  }
+  if (isNaN(d.getTime())) return s;
   return d.getDate() + " " + months[d.getMonth()] + " " + (d.getFullYear() + 543);
 }
 
@@ -711,21 +1176,32 @@ function bahtTextGS(amount) {
 
 function buildTaxInvoiceLandscapePDF(invoiceNo, name, data, opts) {
   opts = opts || {};
-  var pageMargin = opts.pageMargin || "8mm 8mm 8mm 15mm";
-  var pageWidth  = opts.pageWidth  || "262mm";
+  var pageMargin      = opts.pageMargin      || "8mm 8mm 8mm 0";
+  var pageWidth       = opts.pageWidth       || "262mm";
+  var pagePaddingTop  = opts.pagePaddingTop  || "10mm";
+  var pageMarginLeft  = opts.pageMarginLeft  || "1.2mm";
   var showDesc2Parens = opts.showDesc2Parens === true;
-  var folder = DriveApp.getFolderById(CONFIG.invoiceFolderId);
+  var centerLock      = opts.centerLock !== false; // default true — center-lock is live (#43)
+  var outerLeft       = opts.outerLeft  || "13mm";   // promoted v1.4.152 (staged v1.4.149–151)
+  var outerRight      = opts.outerRight || "2mm";    // promoted v1.4.152
+  var innerGap        = opts.innerGap   || "3mm";
+  var innerGapL       = opts.innerGapL  || "5mm";    // promoted v1.4.152 — left inner gap (independent of innerGapR)
+  var innerGapR       = opts.innerGapR  || "9mm";    // promoted v1.4.152 — right inner gap
+  // CALIBRATED — divider frozen at paper center (empirical 2026-06-17, @page left:0, 1:1 flex ratio)
+  // Only change via staging re-calibration; do not expose as a user opt
+  var leftHalfWidth   = opts.leftHalfWidth || "151.5mm";
   var cfg    = getConfig();
+  var folder = DriveApp.getFolderById(cfg.folders.ti);
   var co     = cfg.company || {};
   var coName   = co.name   || "หจก. โรงงานกิมเชียง";
-  var coNameEN = co.nameEN || "KIMCHIANG LIMITED PARTNERSHIP";
+  var coNameEN = co.nameEN || "";
   var coAddr   = co.address || "";
   var coTel    = co.tel     || "";
   var coTaxId  = co.taxId   || "";
   var items  = data.items || [];
   var sub    = 0;
   for (var i = 0; i < items.length; i++) sub += parseFloat(items[i].amount) || 0;
-  var vat   = parseFloat((sub * 0.07).toFixed(2));
+  var vat   = parseFloat((sub * (cfg.vatRate || VAT_RATE)).toFixed(2));
   var total = parseFloat((sub + vat).toFixed(2));
 
   // Format address: split into 2 lines at จังหวัด
@@ -755,7 +1231,7 @@ function buildTaxInvoiceLandscapePDF(invoiceNo, name, data, opts) {
     for (var k = 1; k < parts.length; k++) { if (parts[k]) lastContIdx = k; }
     var bdr = lastContIdx >= 0 ? "border-bottom:none;" : "";
     itemRows += "<tr style=\"background:" + (even?"white":"#fafbff") + "\">" +
-      "<td style=\"" + bdr + "color:#181818;overflow:hidden\"><div style=\"display:flex\"><div style=\"width:38mm;flex-shrink:0;white-space:nowrap;overflow:hidden\">" + descLeft + "</div><div style=\"flex:1;white-space:nowrap;overflow:hidden\">" + descRight + "</div></div></td>" +
+      "<td style=\"" + bdr + "color:#181818;overflow:hidden\"><div style=\"display:flex\"><div style=\"width:38mm;flex-shrink:0;white-space:nowrap;overflow:hidden\">" + descLeft + "</div><div style=\"flex:1;min-width:0;white-space:nowrap;overflow:hidden\">" + descRight + "</div></div></td>" +
       "<td style=\"" + bdr + "text-align:center;color:#181818\">" + (it.qty||"") + "</td>" +
       "<td style=\"" + bdr + "text-align:right;color:#181818\">" + (it.unitPrice ? parseFloat(it.unitPrice).toLocaleString("th-TH") : "") + "</td>" +
       "<td style=\"" + bdr + "text-align:right;font-weight:500;color:#181818\">" + (b > 0 ? b.toLocaleString("th-TH") : "") + "</td>" +
@@ -765,7 +1241,7 @@ function buildTaxInvoiceLandscapePDF(invoiceNo, name, data, opts) {
       if (parts[j]) {
         var contBdr = j === lastContIdx ? "" : "border-bottom:none;";
         itemRows += "<tr style=\"background:" + (even?"white":"#fafbff") + "\">" +
-          "<td style=\"" + contBdr + "color:#181818;overflow:hidden\"><div style=\"display:flex\"><div style=\"width:38mm;flex-shrink:0\"></div><div style=\"flex:1;white-space:nowrap;overflow:hidden\">" + parts[j] + "</div></div></td>" +
+          "<td style=\"" + contBdr + "color:#181818;overflow:hidden\"><div style=\"display:flex\"><div style=\"width:38mm;flex-shrink:0\"></div><div style=\"flex:1;min-width:0;white-space:nowrap;overflow:hidden\">" + parts[j] + "</div></div></td>" +
           "<td style=\"" + contBdr + "\"></td>" +
           "<td style=\"" + contBdr + "\"></td>" +
           "<td style=\"" + contBdr + "\"></td>" +
@@ -799,7 +1275,7 @@ function buildTaxInvoiceLandscapePDF(invoiceNo, name, data, opts) {
       docNote  = "<div style=\"font-size:2.5mm;color:#c23934;text-align:right;margin-top:0.5mm\">(ไม่ใช่ใบกำกับภาษี)</div>";
       sigLabel = "ผู้ส่งของ";
     }
-    return "<div class=\"half\">" +
+    return "<div class=\"half" + (centerLock ? (isOriginal ? " left-h" : " right-h") : "") + "\">" +
       "<div class=\"header\">" +
         "<div style=\"flex:1;min-width:0\">" +
           "<div style=\"display:flex;align-items:flex-start;gap:2.5mm\">" +
@@ -864,10 +1340,16 @@ function buildTaxInvoiceLandscapePDF(invoiceNo, name, data, opts) {
     "*{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}" +
     "body{font-family:Prompt,sans-serif}" +
     "@page{size:A4 landscape;margin:" + pageMargin + "}" +
-    ".page{background:white;width:" + pageWidth + ";min-height:182mm;display:flex;gap:5.4mm;padding:3.2mm 0 0 0}" +
+    (centerLock
+      ? ".page{background:white;width:297mm;min-height:182mm;display:flex;gap:0;padding:" + pagePaddingTop + " 0 0 0;margin-left:0}" +
+        ".half{display:flex;flex-direction:column}" +
+        ".half.left-h{flex-shrink:0;width:" + leftHalfWidth + ";padding-left:" + outerLeft + ";padding-right:" + innerGapL + "}" +
+        ".half.right-h{flex:1;min-width:0;padding-left:" + innerGapR + ";padding-right:" + outerRight + "}"
+      : ".page{background:white;width:" + pageWidth + ";min-height:182mm;display:flex;gap:5.4mm;padding:" + pagePaddingTop + " 0 0 0;margin-left:" + pageMarginLeft + "}" +
+        ".half{flex:1;min-width:0;display:flex;flex-direction:column}"
+    ) +
     ".page-break{page-break-after:always}" +
-    ".half{flex:1;min-width:0;display:flex;flex-direction:column}" +
-    ".divider{width:0.3mm;background:#ccc;flex-shrink:0}" +
+    ".divider{width:0;border-left:0.5mm dotted #ddd;flex-shrink:0}" +
     ".header{display:flex;justify-content:space-between;min-height:32mm;margin-bottom:2.9mm;padding-bottom:2.2mm;border-bottom:0.3mm solid #ddd}" +
     ".kc-logo{width:9.5mm;height:9.5mm;background:#032d60;border-radius:1.5mm;text-align:center;line-height:9.5mm;font-weight:700;font-size:5mm;color:white;display:inline-block;vertical-align:middle;flex-shrink:0}" +
     ".company-name{font-size:3.8mm;font-weight:600;color:#181818}" +
@@ -915,8 +1397,8 @@ function buildTaxInvoiceLandscapePDF(invoiceNo, name, data, opts) {
   return "https://drive.google.com/file/d/" + file.getId() + "/view";
 }
 function updateTaxInvoiceFromWeb(invoiceId, data) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet(), sheet = ss.getSheetByName(TAX_INVOICE_SHEET);
-  if (!sheet) throw new Error("ไม่พบ sheet '" + TAX_INVOICE_SHEET + "'");
+  var ss = SpreadsheetApp.getActiveSpreadsheet(), sheet = ss.getSheetByName(CONFIG.tiSheet);
+  if (!sheet) throw new Error("ไม่พบ sheet '" + CONFIG.tiSheet + "'");
   var rows = sheet.getRange(1, 1, sheet.getLastRow(), 16).getValues();
   var name = data.name || "", address = data.address || "", phone = data.phone || "";
   var taxId = data.taxId || "", invRef = data.invoiceRef || "";
@@ -996,6 +1478,7 @@ function updateTaxInvoiceFromWeb(invoiceId, data) {
   sheet.getRange(matchRows[0], 14).setValue("");
   sheet.getRange(matchRows[0], 17).setValue("");
 
+  autoLogCustomer_(name, address, phone, taxId);
   return { success: true, invoiceNo: invoiceId };
 }
 
@@ -1005,8 +1488,8 @@ function updateTaxInvoiceFromWeb(invoiceId, data) {
 // ============================================================
 
 function generateTaxInvoiceLandscapePDFFromWeb(invoiceId) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet(), sheet = ss.getSheetByName(TAX_INVOICE_SHEET);
-  if (!sheet) throw new Error("ไม่พบ sheet '" + TAX_INVOICE_SHEET + "'");
+  var ss = SpreadsheetApp.getActiveSpreadsheet(), sheet = ss.getSheetByName(CONFIG.tiSheet);
+  if (!sheet) throw new Error("ไม่พบ sheet '" + CONFIG.tiSheet + "'");
 
   var lastDataRow = getLastNonEmptyRow(sheet, "A");
   var rows = sheet.getRange(1, 1, Math.max(lastDataRow, 1), 16).getValues();
@@ -1042,8 +1525,8 @@ function generateTaxInvoiceLandscapePDFFromWeb(invoiceId) {
 // ============================================================
 
 function generateTaxInvoicePortraitPDFFromWeb(invoiceId) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet(), sheet = ss.getSheetByName(TAX_INVOICE_SHEET);
-  if (!sheet) throw new Error("ไม่พบ sheet '" + TAX_INVOICE_SHEET + "'");
+  var ss = SpreadsheetApp.getActiveSpreadsheet(), sheet = ss.getSheetByName(CONFIG.tiSheet);
+  if (!sheet) throw new Error("ไม่พบ sheet '" + CONFIG.tiSheet + "'");
 
   var lastDataRow = getLastNonEmptyRow(sheet, "A");
   var rows = sheet.getRange(1, 1, Math.max(lastDataRow, 1), 16).getValues();
@@ -1083,11 +1566,11 @@ function buildTaxInvoicePortraitPDF(invoiceNo, name, data, opts) {
   var colW3           = altHeaders ? "16mm" : "20mm";
   var colW4           = altHeaders ? "20mm" : "18mm";
   var colW5           = altHeaders ? "11mm" : "7mm";
-  var folder = DriveApp.getFolderById(CONFIG.invoiceFolderId);
   var cfg    = getConfig();
+  var folder = DriveApp.getFolderById(cfg.folders.ti);
   var co     = cfg.company || {};
   var coName   = co.name   || "หจก. โรงงานกิมเชียง";
-  var coNameEN = co.nameEN || "KIMCHIANG LIMITED PARTNERSHIP";
+  var coNameEN = co.nameEN || "";
   var coAddr   = co.address || "";
   var coTel    = co.tel     || "";
   var coTaxId  = co.taxId   || "";
@@ -1097,7 +1580,7 @@ function buildTaxInvoicePortraitPDF(invoiceNo, name, data, opts) {
   var items  = data.items || [];
   var sub    = 0;
   for (var i = 0; i < items.length; i++) sub += parseFloat(items[i].amount) || 0;
-  var vat   = parseFloat((sub * 0.07).toFixed(2));
+  var vat   = parseFloat((sub * (cfg.vatRate || VAT_RATE)).toFixed(2));
   var total = parseFloat((sub + vat).toFixed(2));
 
   function fmt(n) { return parseFloat(n).toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
@@ -1117,7 +1600,7 @@ function buildTaxInvoicePortraitPDF(invoiceNo, name, data, opts) {
     for (var k = 1; k < parts.length; k++) { if (parts[k]) lastContIdx = k; }
     var bdr = lastContIdx >= 0 ? "border-bottom:none;" : "";
     itemRows += "<tr style=\"background:" + (even ? "white" : "#fafbff") + "\">" +
-      "<td style=\"" + bdr + "color:#181818;overflow:hidden\"><div style=\"display:flex\"><div style=\"width:49mm;flex-shrink:0;white-space:nowrap;overflow:hidden\">" + descLeft + "</div><div style=\"flex:1;white-space:nowrap;overflow:hidden\">" + descRight + "</div></div></td>" +
+      "<td style=\"" + bdr + "color:#181818;overflow:hidden\"><div style=\"display:flex\"><div style=\"width:49mm;flex-shrink:0;white-space:nowrap;overflow:hidden\">" + descLeft + "</div><div style=\"flex:1;min-width:0;white-space:nowrap;overflow:hidden\">" + descRight + "</div></div></td>" +
       "<td style=\"" + bdr + "text-align:center;color:#181818\">" + (it.qty || "") + "</td>" +
       "<td style=\"" + bdr + "text-align:right;color:#181818\">" + (it.unitPrice ? parseFloat(it.unitPrice).toLocaleString("th-TH") : "") + "</td>" +
       "<td style=\"" + bdr + "text-align:right;font-weight:500;color:#181818\">" + (b > 0 ? b.toLocaleString("th-TH") : "") + "</td>" +
@@ -1127,7 +1610,7 @@ function buildTaxInvoicePortraitPDF(invoiceNo, name, data, opts) {
       if (parts[j]) {
         var contBdr = j === lastContIdx ? "" : "border-bottom:none;";
         itemRows += "<tr style=\"background:" + (even ? "white" : "#fafbff") + "\">" +
-          "<td style=\"" + contBdr + "color:#181818;overflow:hidden\"><div style=\"display:flex\"><div style=\"width:49mm;flex-shrink:0\"></div><div style=\"flex:1;white-space:nowrap;overflow:hidden\">" + parts[j] + "</div></div></td>" +
+          "<td style=\"" + contBdr + "color:#181818;overflow:hidden\"><div style=\"display:flex\"><div style=\"width:49mm;flex-shrink:0\"></div><div style=\"flex:1;min-width:0;white-space:nowrap;overflow:hidden\">" + parts[j] + "</div></div></td>" +
           "<td style=\"" + contBdr + "\"></td>" +
           "<td style=\"" + contBdr + "\"></td>" +
           "<td style=\"" + contBdr + "\"></td>" +
@@ -1347,8 +1830,18 @@ function generateDeliveryNotePortraitPDFFromWeb(invoiceId) {
 function buildDeliveryNoteLandscapePDF(invoiceNo, name, data, opts) {
   opts = opts || {};
   var showDesc2Parens = opts.showDesc2Parens === true;
-  var folder = DriveApp.getFolderById(CONFIG.invoiceFolderId);
+  var centerLock     = opts.centerLock !== false; // default true — center-lock live (#46)
+  var outerLeft      = opts.outerLeft      || "13mm";
+  var outerRight     = opts.outerRight     || "2mm";
+  var innerGap       = opts.innerGap       || "3mm";
+  var innerGapL      = opts.innerGapL      || "5mm";  // promoted v1.4.155
+  var innerGapR      = opts.innerGapR      || "9mm";  // promoted v1.4.155
+  var pagePaddingTop = opts.pagePaddingTop || "10mm"; // promoted v1.4.155
+  // CALIBRATED — divider frozen at paper center (empirical 2026-06-17, @page left:0, 1:1 flex ratio, same printer as TI)
+  // Only change via staging re-calibration; do not expose as a user opt
+  var leftHalfWidth  = opts.leftHalfWidth  || "151.5mm";
   var cfg    = getConfig();
+  var folder = DriveApp.getFolderById(cfg.folders.dn);
   var co     = cfg.company || {};
   var coName   = co.name   || "หจก. โรงงานกิมเชียง";
   var items  = data.items || [];
@@ -1370,7 +1863,7 @@ function buildDeliveryNoteLandscapePDF(invoiceNo, name, data, opts) {
     for (var k = 1; k < parts.length; k++) { if (parts[k]) lastContIdx = k; }
     var bdr = lastContIdx < 0 ? "border-bottom:0.2mm solid #e0e0e0;" : "";
     itemRows += "<tr style=\"background:" + (even ? "white" : "#f8f8f8") + "\">" +
-      "<td style=\"padding:0.9mm 1.5mm;" + bdr + "border-right:0.1mm solid #e0e0e0;overflow:hidden\"><div style=\"display:flex\"><div style=\"width:38mm;flex-shrink:0;white-space:nowrap;overflow:hidden\">" + descLeft + "</div><div style=\"flex:1;white-space:nowrap;overflow:hidden\">" + descRight + "</div></div></td>" +
+      "<td style=\"padding:0.9mm 1.5mm;" + bdr + "border-right:0.1mm solid #e0e0e0;overflow:hidden\"><div style=\"display:flex\"><div style=\"width:38mm;flex-shrink:0;white-space:nowrap;overflow:hidden\">" + descLeft + "</div><div style=\"flex:1;min-width:0;white-space:nowrap;overflow:hidden\">" + descRight + "</div></div></td>" +
       "<td style=\"padding:0.9mm 1.5mm;" + bdr + "border-right:0.1mm solid #e0e0e0;text-align:center\">" + (it.qty || "") + "</td>" +
       "<td style=\"padding:0.9mm 1.5mm;" + bdr + "border-right:0.1mm solid #e0e0e0;text-align:right\">" + (it.unitPrice ? parseFloat(it.unitPrice).toLocaleString("th-TH", {minimumFractionDigits:2}) : "") + "</td>" +
       "<td style=\"padding:0.9mm 1.5mm;" + bdr + "text-align:right;font-weight:500\">" + (it.amount ? fmt(it.amount) : "") + "</td>" +
@@ -1380,7 +1873,7 @@ function buildDeliveryNoteLandscapePDF(invoiceNo, name, data, opts) {
       if (parts[j]) {
         var contBdr = j === lastContIdx ? "border-bottom:0.2mm solid #e0e0e0;" : "";
         itemRows += "<tr style=\"background:" + (even ? "white" : "#f8f8f8") + "\">" +
-          "<td style=\"padding:0.9mm 1.5mm;" + contBdr + "border-right:0.1mm solid #e0e0e0;overflow:hidden\"><div style=\"display:flex\"><div style=\"width:38mm;flex-shrink:0\"></div><div style=\"flex:1;white-space:nowrap;overflow:hidden\">" + parts[j] + "</div></div></td>" +
+          "<td style=\"padding:0.9mm 1.5mm;" + contBdr + "border-right:0.1mm solid #e0e0e0;overflow:hidden\"><div style=\"display:flex\"><div style=\"width:38mm;flex-shrink:0\"></div><div style=\"flex:1;min-width:0;white-space:nowrap;overflow:hidden\">" + parts[j] + "</div></div></td>" +
           "<td style=\"padding:0.9mm 1.5mm;" + contBdr + "border-right:0.1mm solid #e0e0e0\"></td>" +
           "<td style=\"padding:0.9mm 1.5mm;" + contBdr + "border-right:0.1mm solid #e0e0e0\"></td>" +
           "<td style=\"padding:0.9mm 1.5mm;" + contBdr + "\"></td>" +
@@ -1395,8 +1888,8 @@ function buildDeliveryNoteLandscapePDF(invoiceNo, name, data, opts) {
 
   function half(isOriginal) {
     var copyBadge = isOriginal ? "" : "<span style=\"font-size:3.9mm;color:#888;font-weight:400;margin-left:2mm;vertical-align:middle\">(สำเนา)</span>";
-    var coNameEN  = co.nameEN || "KIMCHIANG LIMITED PARTNERSHIP";
-    return "<div class=\"half\">" +
+    var coNameEN = co.nameEN || "";
+    return "<div class=\"half" + (centerLock ? (isOriginal ? " left-h" : " right-h") : "") + "\">" +
       "<div style=\"display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:5mm;padding-bottom:3.5mm;border-bottom:0.5mm solid #111\">" +
         "<div style=\"display:flex;align-items:center;gap:3mm\">" +
           "<div style=\"background:#111;color:white;font-size:6mm;font-weight:700;width:11mm;height:11mm;display:flex;align-items:center;justify-content:center;letter-spacing:-0.3mm;border-radius:1.2mm;flex-shrink:0\">KC</div>" +
@@ -1459,10 +1952,18 @@ function buildDeliveryNoteLandscapePDF(invoiceNo, name, data, opts) {
   var css = "<style>" + fontCss +
     "html,body{background:white!important;font-family:Prompt,sans-serif;color:#111}" +
     "*{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}" +
-    "@page{size:A4 landscape;margin:12mm 9mm 9mm 9mm}" +
-    ".page{width:277mm;display:flex;gap:6mm;padding-top:6mm}" +
-    ".half{flex:1;min-width:0;display:flex;flex-direction:column}" +
-    ".vdivider{width:0.3mm;background:#ccc;flex-shrink:0}" +
+    (centerLock
+      ? "@page{size:A4 landscape;margin:8mm 8mm 8mm 0}" +
+        ".page{width:297mm;display:flex;gap:0;padding-top:" + pagePaddingTop + ";margin-left:0}" +
+        ".half{display:flex;flex-direction:column}" +
+        ".half.left-h{flex-shrink:0;width:" + leftHalfWidth + ";padding-left:" + outerLeft + ";padding-right:" + innerGapL + "}" +
+        ".half.right-h{flex:1;min-width:0;padding-left:" + innerGapR + ";padding-right:" + outerRight + "}" +
+        ".vdivider{width:0;border-left:0.5mm dotted #ddd;flex-shrink:0}"
+      : "@page{size:A4 landscape;margin:12mm 9mm 9mm 9mm}" +
+        ".page{width:277mm;display:flex;gap:6mm;padding-top:6mm}" +
+        ".half{flex:1;min-width:0;display:flex;flex-direction:column}" +
+        ".vdivider{width:0.3mm;background:#ccc;flex-shrink:0}"
+    ) +
     "</style>";
 
   var html = "<!DOCTYPE html><html lang=\"th\"><head><meta charset=\"UTF-8\">" + css +
@@ -1480,11 +1981,11 @@ function buildDeliveryNoteLandscapePDF(invoiceNo, name, data, opts) {
 function buildDeliveryNotePortraitPDF(invoiceNo, name, data, opts) {
   opts = opts || {};
   var showDesc2Parens = opts.showDesc2Parens === true;
-  var folder = DriveApp.getFolderById(CONFIG.invoiceFolderId);
   var cfg    = getConfig();
+  var folder = DriveApp.getFolderById(cfg.folders.dn);
   var co     = cfg.company || {};
   var coName   = co.name   || "หจก. โรงงานกิมเชียง";
-  var coNameEN = co.nameEN || "KIMCHIANG LIMITED PARTNERSHIP";
+  var coNameEN = co.nameEN || "";
   var items  = data.items || [];
   var total  = 0;
   for (var i = 0; i < items.length; i++) total += parseFloat(items[i].amount) || 0;
@@ -1504,7 +2005,7 @@ function buildDeliveryNotePortraitPDF(invoiceNo, name, data, opts) {
     for (var k = 1; k < parts.length; k++) { if (parts[k]) lastContIdx = k; }
     var bdr = lastContIdx < 0 ? "border-bottom:0.2mm solid #e0e0e0;" : "";
     itemRows += "<tr style=\"background:" + (even ? "white" : "#f8f8f8") + "\">" +
-      "<td style=\"padding:1.2mm 1.5mm;" + bdr + "border-right:0.1mm solid #e0e0e0;overflow:hidden\"><div style=\"display:flex\"><div style=\"width:44mm;flex-shrink:0;white-space:nowrap;overflow:hidden\">" + descLeft + "</div><div style=\"flex:1;white-space:nowrap;overflow:hidden\">" + descRight + "</div></div></td>" +
+      "<td style=\"padding:1.2mm 1.5mm;" + bdr + "border-right:0.1mm solid #e0e0e0;overflow:hidden\"><div style=\"display:flex\"><div style=\"width:44mm;flex-shrink:0;white-space:nowrap;overflow:hidden\">" + descLeft + "</div><div style=\"flex:1;min-width:0;white-space:nowrap;overflow:hidden\">" + descRight + "</div></div></td>" +
       "<td style=\"padding:1.2mm 1.5mm;" + bdr + "border-right:0.1mm solid #e0e0e0;text-align:center\">" + (it.qty || "") + "</td>" +
       "<td style=\"padding:1.2mm 1.5mm;" + bdr + "border-right:0.1mm solid #e0e0e0;text-align:right\">" + (it.unitPrice ? parseFloat(it.unitPrice).toLocaleString("th-TH", {minimumFractionDigits:2}) : "") + "</td>" +
       "<td style=\"padding:1.2mm 1.5mm;" + bdr + "text-align:right;font-weight:500\">" + (it.amount ? fmt(it.amount) : "") + "</td>" +
@@ -1514,7 +2015,7 @@ function buildDeliveryNotePortraitPDF(invoiceNo, name, data, opts) {
       if (parts[j]) {
         var contBdr = j === lastContIdx ? "border-bottom:0.2mm solid #e0e0e0;" : "";
         itemRows += "<tr style=\"background:" + (even ? "white" : "#f8f8f8") + "\">" +
-          "<td style=\"padding:1.2mm 1.5mm;" + contBdr + "border-right:0.1mm solid #e0e0e0;overflow:hidden\"><div style=\"display:flex\"><div style=\"width:44mm;flex-shrink:0\"></div><div style=\"flex:1;white-space:nowrap;overflow:hidden\">" + parts[j] + "</div></div></td>" +
+          "<td style=\"padding:1.2mm 1.5mm;" + contBdr + "border-right:0.1mm solid #e0e0e0;overflow:hidden\"><div style=\"display:flex\"><div style=\"width:44mm;flex-shrink:0\"></div><div style=\"flex:1;min-width:0;white-space:nowrap;overflow:hidden\">" + parts[j] + "</div></div></td>" +
           "<td style=\"padding:1.2mm 1.5mm;" + contBdr + "border-right:0.1mm solid #e0e0e0\"></td>" +
           "<td style=\"padding:1.2mm 1.5mm;" + contBdr + "border-right:0.1mm solid #e0e0e0\"></td>" +
           "<td style=\"padding:1.2mm 1.5mm;" + contBdr + "\"></td>" +
@@ -1610,214 +2111,357 @@ function buildDeliveryNotePortraitPDF(invoiceNo, name, data, opts) {
 }
 
 // ============================================================
-// TEST FUNCTIONS — run from Apps Script editor, all use hardcoded mock data (no sheet reads/writes)
-//
-// Workflow:
-//   1. All template changes go into the *Test() variant first (via opts parameter)
-//   2. Run *Test() → verify PDF output looks correct
-//   3. Only after confirmed → apply the change to the original builder and deploy
-//
-// Pattern:
-//   test[Format]()              = original / production behavior (no opts override)
-//   stagingTest[Format]()       = staging variant for layout experiments (opts applied)
+// BILLING NOTE HTML PDF (ใบวางบิล) — Portrait
 // ============================================================
 
-// Delivery note portrait PDF (2 pages: ต้นฉบับ + สำเนา, A4 portrait)
-function testDeliveryNotePortrait() {
-  var invoiceNo = "DN-TEST-002";
-  var name = "ตงเชิง";
-  var data = {
-    date: "2026-06-05",
-    name: name,
-    address: "",
-    phone: "",
-    items: [
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XXXL", detail: "ฟ้า 1 คละสี 2",                                    qty: 3,  unitPrice: 2590, amount: 7770  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XXL",  detail: "ฟ้า 1 เขียว 1 ขาว 1 คละสี 1",                    qty: 4,  unitPrice: 2155, amount: 8620  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XL",   detail: "ฟ้า 1 เขียว 1 ขาว 1 คละสี 1 | พรเจริญ ลป. จาก ทีเอส", qty: 3,  unitPrice: 1900, amount: 5700  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XL",   detail: "ขาว 2 คละสี 8 | นัวอรุณ ซม. จาก ทีเอส",          qty: 10, unitPrice: 1900, amount: 19000 },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "L",    detail: "",                                                  qty: 10, unitPrice: 1030, amount: 10300 },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "M",    detail: "เค เอส ระนอง จาก คุณลักษณ์",                      qty: 10, unitPrice: 930,  amount: 9300  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XXXL", detail: "ฟ้า 3 ซม 2 เขียว 2 ขาว 5 | ชิงหงัวว อ. ฝาง จาก วรพจน์", qty: 1, unitPrice: 2590, amount: 2590 }
-    ]
-  };
-  Logger.log("Testing delivery note portrait: " + invoiceNo);
-  var pdfUrl = buildDeliveryNotePortraitPDF(invoiceNo, name, data);
-  Logger.log(pdfUrl);
+function buildBillingNotePortraitPDF(invoiceNo, name, data) {
+  var cfg    = getConfig();
+  var folder = DriveApp.getFolderById(cfg.folders.bn);
+  var page   = bnPortraitPageHTML(invoiceNo, name, data, cfg);
+  var html = "<!DOCTYPE html><html lang=\"th\"><head><meta charset=\"UTF-8\">" + bnPortraitCSS() +
+    "</head><body style=\"background:white;padding:0 12mm\">" + page + "</body></html>";
+  var blob    = Utilities.newBlob(html, "text/html; charset=utf-8", invoiceNo + "_billing_portrait.html");
+  var pdfBlob = blob.getAs("application/pdf");
+  pdfBlob.setName("KC_BillingNote_P_" + invoiceNo + "_" + name + ".pdf");
+  var file = folder.createFile(pdfBlob);
+  return "https://drive.google.com/file/d/" + file.getId() + "/view";
 }
 
-// TEST ONLY — same data as testDeliveryNotePortrait but without () around desc2 (size) for layout comparison
-function stagingTestDeliveryNotePortrait() {
-  var invoiceNo = "DN-TEST-002";
-  var name = "ตงเชิง";
-  var data = {
-    date: "2026-06-05",
-    name: name,
-    address: "",
-    phone: "",
-    items: [
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XXXL", detail: "ฟ้า 1 คละสี 2",                                    qty: 3,  unitPrice: 2590, amount: 7770  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XXL",  detail: "ฟ้า 1 เขียว 1 ขาว 1 คละสี 1",                    qty: 4,  unitPrice: 2155, amount: 8620  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XL",   detail: "ฟ้า 1 เขียว 1 ขาว 1 คละสี 1 | พรเจริญ ลป. จาก ทีเอส", qty: 3,  unitPrice: 1900, amount: 5700  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XL",   detail: "ขาว 2 คละสี 8 | นัวอรุณ ซม. จาก ทีเอส",          qty: 10, unitPrice: 1900, amount: 19000 },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "L",    detail: "",                                                  qty: 10, unitPrice: 1030, amount: 10300 },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "M",    detail: "เค เอส ระนอง จาก คุณลักษณ์",                      qty: 10, unitPrice: 930,  amount: 9300  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XXXL", detail: "ฟ้า 3 ซม 2 เขียว 2 ขาว 5 | ชิงหงัวว อ. ฝาง จาก วรพจน์", qty: 1, unitPrice: 2590, amount: 2590 }
-    ]
-  };
-  Logger.log("Testing delivery note portrait (no parens): " + invoiceNo);
-  var pdfUrl = buildDeliveryNotePortraitPDF(invoiceNo, name, data, { showDesc2Parens: false });
-  Logger.log(pdfUrl);
+// #107 — page-only HTML (no wrapper/save) so combined print can concatenate multiple BNs
+function bnPortraitPageHTML(invoiceNo, name, data, cfg) {
+  var co       = cfg.company || {};
+  var coName   = co.name   || "หจก. โรงงานกิมเชียง";
+  var coNameEN = co.nameEN || "";
+  var coAddr   = co.address || "";
+  var coTel    = co.tel     || "";
+  var am = coAddr.match(/^(.*?)\s*(จังหวัด.*)/);
+  var addrLine1 = am ? am[1].trim() : coAddr.trim();
+  var addrLine2 = am ? am[2].trim() : "";
+
+  var invoices = data.invoices || [];
+  var total    = parseFloat(data.total) || 0;
+
+  function fmt(n) { return parseFloat(n).toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
+  // Handle dd/MM/yyyy or yyyy-MM-dd → short Thai: "23 เม.ย. 68"
+  function thaiShort(d) {
+    if (!d) return "";
+    var months = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+    var dd, mm, yyyy;
+    if (String(d).indexOf("/") >= 0) {
+      var p = String(d).split("/"); dd = parseInt(p[0]); mm = parseInt(p[1]); yyyy = parseInt(p[2]);
+    } else if (String(d).indexOf("-") >= 0) {
+      var p = String(d).split("-"); yyyy = parseInt(p[0]); mm = parseInt(p[1]); dd = parseInt(p[2]);
+    } else { return String(d); }
+    return dd + " " + months[mm - 1] + " " + String(yyyy + 543).slice(2);
+  }
+
+  // 10 fixed rows
+  var itemRows = "";
+  for (var i = 0; i < 10; i++) {
+    var inv  = invoices[i] || null;
+    var even = i % 2 === 0;
+    var bg   = even ? "white" : "#f8f8f8";
+    var bdr  = "border-bottom:0.2mm solid #e0e0e0;";
+    var bdrR = "border-right:0.1mm solid #e0e0e0;";
+    if (inv) {
+      var dnDate = inv.dnDate || inv.date || "";
+      var amt    = parseFloat(inv.amount || inv.total) || 0;
+      var b = Math.floor(amt);
+      var s = Math.round((amt - b) * 100);
+      itemRows +=
+        "<tr style=\"background:" + bg + ";height:7mm\">" +
+        "<td style=\"padding:1.2mm 1.5mm;" + bdr + bdrR + "text-align:center\">" + (i + 1) + "</td>" +
+        "<td style=\"padding:1.2mm 1.5mm;" + bdr + bdrR + "font-weight:500\">" + (inv.dnNo || inv.no || "") + "</td>" +
+        "<td style=\"padding:1.2mm 1.5mm;" + bdr + bdrR + "text-align:center\">" + thaiShort(dnDate) + "</td>" +
+        "<td style=\"padding:1.2mm 1.5mm;" + bdr + bdrR + "\"></td>" +
+        "<td style=\"padding:1.2mm 1.5mm;" + bdr + bdrR + "text-align:right;font-weight:500\">" + (b > 0 ? b.toLocaleString("th-TH") : "") + "</td>" +
+        "<td style=\"padding:1.2mm 1.5mm;" + bdr + "text-align:center\">" + (b > 0 ? String(s).padStart(2,"0") : "") + "</td>" +
+        "</tr>";
+    } else {
+      itemRows +=
+        "<tr style=\"background:" + bg + ";height:7mm\">" +
+        "<td style=\"padding:1.2mm 1.5mm;" + bdr + bdrR + "\"></td>" +
+        "<td style=\"padding:1.2mm 1.5mm;" + bdr + bdrR + "\"></td>" +
+        "<td style=\"padding:1.2mm 1.5mm;" + bdr + bdrR + "\"></td>" +
+        "<td style=\"padding:1.2mm 1.5mm;" + bdr + bdrR + "\"></td>" +
+        "<td style=\"padding:1.2mm 1.5mm;" + bdr + bdrR + "\"></td>" +
+        "<td style=\"padding:1.2mm 1.5mm;" + bdr + "\"></td>" +
+        "</tr>";
+    }
+  }
+
+  var page =
+    "<div style=\"width:186mm;display:flex;flex-direction:column;padding:12mm 0 9mm 0\">" +
+    // ── Header ──────────────────────────────────────────────
+    "<div style=\"display:flex;justify-content:space-between;align-items:flex-start;min-height:22mm;margin-bottom:3.6mm;padding-bottom:2.7mm;border-bottom:0.3mm solid #ddd\">" +
+      "<div>" +
+        "<div style=\"display:flex;align-items:flex-start;gap:2.5mm\">" +
+          "<div style=\"background:#111;color:white;font-size:5.5mm;font-weight:700;width:10mm;height:10mm;display:flex;align-items:center;justify-content:center;letter-spacing:-0.3mm;border-radius:1.5mm;flex-shrink:0\">KC</div>" +
+          "<div>" +
+            "<div style=\"font-size:4mm;font-weight:600;color:#111\">" + coName + "</div>" +
+            "<div style=\"font-size:3mm;font-weight:500;color:#111;margin-top:0.3mm\">" + coNameEN + "</div>" +
+          "</div>" +
+        "</div>" +
+        (addrLine1 ? "<div style=\"font-size:2.8mm;color:#6b6b6b;margin-top:0.7mm\">" + addrLine1 + "</div>" : "") +
+        (addrLine2 ? "<div style=\"font-size:2.8mm;color:#6b6b6b\">" + addrLine2 + (coTel ? " &nbsp; Tel/Fax : " + coTel : "") + "</div>" : (coTel ? "<div style=\"font-size:2.8mm;color:#6b6b6b\">Tel/Fax : " + coTel + "</div>" : "")) +
+      "</div>" +
+      "<div style=\"text-align:right;flex-shrink:0;margin-left:5mm\">" +
+        "<div style=\"font-size:3mm;color:#6b6b6b\">เลขที่</div>" +
+        "<div style=\"font-size:3mm;font-weight:500;color:#111;white-space:nowrap\">" + invoiceNo + "</div>" +
+      "</div>" +
+    "</div>" +
+    // ── Doc title ───────────────────────────────────────────
+    "<div style=\"font-size:6mm;font-weight:600;color:#111;margin-bottom:4mm\">ใบวางบิล</div>" +
+    // ── Info band ───────────────────────────────────────────
+    "<div style=\"display:flex;gap:0;margin-bottom:4mm;font-size:3.5mm;background:#fafafa;border-radius:1mm;padding:2mm 2.5mm\">" +
+      "<div style=\"display:grid;grid-template-columns:auto 1fr;gap:1mm 2mm;width:40%;flex-shrink:0\">" +
+        "<span style=\"color:#999;font-weight:500;white-space:nowrap\">วันที่</span><span style=\"color:#111\">" + thaiMonth(data.date) + "</span>" +
+        "<span style=\"color:#999;font-weight:500;white-space:nowrap\">ชื่อ</span><span style=\"color:#111;font-weight:500\">" + (data.name || "") + "</span>" +
+        "<span style=\"color:#999;font-weight:500;white-space:nowrap\">โทรศัพท์</span><span style=\"color:#111\">" + (data.phone || "") + "</span>" +
+      "</div>" +
+      "<div style=\"display:grid;grid-template-columns:auto 1fr;gap:1mm 2mm;width:60%;min-width:0;padding-left:3mm;align-content:start\">" +
+        "<span style=\"color:#999;font-weight:500;white-space:nowrap\">ที่อยู่</span><span style=\"color:#111;word-break:break-word;line-height:1.6\">" + (data.address || "") + "</span>" +
+      "</div>" +
+    "</div>" +
+    // ── Sub-text ────────────────────────────────────────────
+    "<div style=\"font-size:3mm;color:#888;margin-bottom:3mm\">ได้รับใบวางบิลตามรายการข้างล่างนี้แล้ว เพื่อตรวจสอบและพร้อมชำระเงินไม่เกินกว่านี้</div>" +
+    // ── Invoice table ───────────────────────────────────────
+    "<table style=\"width:100%;border-collapse:collapse;font-size:3.5mm;margin-bottom:4mm;table-layout:fixed\">" +
+      "<colgroup><col style=\"width:8mm\"><col style=\"width:74mm\"><col style=\"width:26mm\"><col style=\"width:26mm\"><col><col style=\"width:10mm\"></colgroup>" +
+      "<thead><tr style=\"background:#111;color:white\">" +
+        "<th style=\"padding:1.5mm 1.5mm;text-align:center;font-weight:500;font-size:3.2mm;border-right:0.1mm solid rgba(255,255,255,0.25)\">#</th>" +
+        "<th style=\"padding:1.5mm 1.5mm;text-align:left;font-weight:500;font-size:3.2mm;border-right:0.1mm solid rgba(255,255,255,0.25)\">เลขที่บิล</th>" +
+        "<th style=\"padding:1.5mm 1.5mm;text-align:center;font-weight:500;font-size:3.2mm;border-right:0.1mm solid rgba(255,255,255,0.25)\">วันที่บิล</th>" +
+        "<th style=\"padding:1.5mm 1.5mm;text-align:center;font-weight:500;font-size:3.2mm;border-right:0.1mm solid rgba(255,255,255,0.25)\">ครบกำหนด</th>" +
+        "<th style=\"padding:1.5mm 1.5mm;text-align:right;font-weight:500;font-size:3.2mm;border-right:0.1mm solid rgba(255,255,255,0.25)\">จำนวนเงิน</th>" +
+        "<th style=\"padding:1.5mm 1.5mm;text-align:center;font-weight:500;font-size:3.2mm\">สต.</th>" +
+      "</tr></thead>" +
+      "<tbody>" + itemRows + "</tbody>" +
+      "<tfoot><tr>" +
+        "<td colspan=\"3\" style=\"border-top:0.6mm solid #111;padding:1.5mm 1.5mm;font-size:3.2mm;color:#666\">รวม <strong style=\"color:#111\">" + invoices.length + "</strong> ฉบับ</td>" +
+        "<td style=\"border-top:0.6mm solid #111;padding:1.5mm 1.5mm;text-align:right;font-weight:600;font-size:3.2mm;color:#555\">รวมเงินทั้งสิ้น</td>" +
+        "<td colspan=\"2\" style=\"border-top:0.6mm solid #111;padding:1.5mm 1.5mm;text-align:right;font-weight:700;font-size:4mm\">" + fmt(total) + "</td>" +
+      "</tr></tfoot>" +
+    "</table>" +
+    // ── Baht text ───────────────────────────────────────────
+    "<div style=\"margin-top:4mm;margin-bottom:3mm;display:flex;align-items:center;gap:2mm\">" +
+      "<span style=\"font-size:3.5mm;color:#999;white-space:nowrap\">จำนวนเงิน (ตัวอักษร)</span>" +
+      "<span style=\"flex:1;font-size:4mm;padding:1mm 1.5mm;background:#f5f5f5;border-radius:0.8mm;color:#333\">(" + bahtTextGS(total) + ")</span>" +
+    "</div>" +
+    "<div style=\"min-height:4mm\"></div>" +
+    // ── Footer / acknowledgment + signature ─────────────────
+    "<div style=\"border-top:0.3mm solid #bbb;padding-top:3mm;margin-top:2mm\">" +
+      "<div style=\"font-size:3.5mm;font-weight:500;color:#111;margin-bottom:0.5mm\">ข้าพเจ้าได้รับบิลตามรายการข้างต้นไว้ถูกต้องเรียบร้อยแล้ว</div>" +
+      "<div style=\"font-size:3mm;color:#999;margin-bottom:4mm\">I have received the above billing amount in good order</div>" +
+      "<div style=\"display:grid;grid-template-columns:1fr 1fr;gap:6mm\">" +
+        "<div>" +
+          "<div style=\"font-size:3.5mm;font-weight:500;color:#111\">ผู้รับบิล</div>" +
+          "<div style=\"font-size:3mm;color:#999\">Bill receiver</div>" +
+          "<div style=\"width:100%;border-bottom:0.3mm solid #bbb;height:8mm;margin-top:2mm\"></div>" +
+        "</div>" +
+        "<div>" +
+          "<div style=\"font-size:3.5mm;font-weight:500;color:#111\">ให้มาติดต่อรับเงินวันที่</div>" +
+          "<div style=\"font-size:3mm;color:#999\">Date of collecting</div>" +
+          "<div style=\"width:100%;border-bottom:0.3mm solid #bbb;height:8mm;margin-top:2mm\"></div>" +
+        "</div>" +
+      "</div>" +
+    "</div>" +
+    "</div>";
+
+  return page;
 }
 
-// Delivery note landscape PDF (2 copies side-by-side, A4 landscape)
-function testDeliveryNoteLandscape() {
-  var invoiceNo = "DN-TEST-002";
-  var name = "ตงเชิง";
-  var data = {
-    date: "2026-06-05",
-    name: name,
-    address: "",
-    phone: "",
-    items: [
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XXXL", detail: "ฟ้า 1 คละสี 2",                                    qty: 3,  unitPrice: 2590, amount: 7770  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XXL",  detail: "ฟ้า 1 เขียว 1 ขาว 1 คละสี 1",                    qty: 4,  unitPrice: 2155, amount: 8620  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XL",   detail: "ฟ้า 1 เขียว 1 ขาว 1 คละสี 1 | พรเจริญ ลป. จาก ทีเอส", qty: 3,  unitPrice: 1900, amount: 5700  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XL",   detail: "ขาว 2 คละสี 8 | นัวอรุณ ซม. จาก ทีเอส",          qty: 10, unitPrice: 1900, amount: 19000 },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "L",    detail: "",                                                  qty: 10, unitPrice: 1030, amount: 10300 },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "M",    detail: "เค เอส ระนอง จาก คุณลักษณ์",                      qty: 10, unitPrice: 930,  amount: 9300  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XXXL", detail: "ฟ้า 3 ซม 2 เขียว 2 ขาว 5 | ชิงหงัวว อ. ฝาง จาก วรพจน์", qty: 1, unitPrice: 2590, amount: 2590 }
-    ]
-  };
-  Logger.log("Testing delivery note landscape: " + invoiceNo);
-  var pdfUrl = buildDeliveryNoteLandscapePDF(invoiceNo, name, data);
-  Logger.log(pdfUrl);
+// ============================================================
+// Billing note landscape PDF (1 page, A4 landscape, 2-up fold-and-cut: ต้นฉบับ + สำเนา)
+// Center-lock architecture — divider frozen at physical paper center (same as TI/DN landscape)
+// CALIBRATED leftHalfWidth: 151.5mm (borrowed from TI/DN — same printer HP DeskJet 2800, same @page settings)
+// Re-calibrate via stagingTestBillingNoteLandscape() if printer or @page margins change
+// ============================================================
+function buildBillingNoteLandscapePDF(invoiceNo, name, data, opts) {
+  opts = opts || {};
+  var cfg    = getConfig();
+  var folder = DriveApp.getFolderById(cfg.folders.bn);
+  var page   = bnLandscapePageHTML(invoiceNo, name, data, cfg, opts);
+  var html   = "<!DOCTYPE html><html lang=\"th\"><head><meta charset=\"UTF-8\">" + bnLandscapeCSS(opts) +
+    "</head><body style=\"background:white\">" + page + "</body></html>";
+  var blob    = Utilities.newBlob(html, "text/html; charset=utf-8", invoiceNo + "_billing_landscape.html");
+  var pdfBlob = blob.getAs("application/pdf");
+  pdfBlob.setName("KC_BillingNote_L_" + invoiceNo + "_" + name + ".pdf");
+  var file = folder.createFile(pdfBlob);
+  return "https://drive.google.com/file/d/" + file.getId() + "/view";
 }
 
-// TEST ONLY — same data as testDeliveryNoteLandscape but without () around desc2 (size) for layout comparison
-function stagingTestDeliveryNoteLandscape() {
-  var invoiceNo = "DN-TEST-002";
-  var name = "ตงเชิง";
-  var data = {
-    date: "2026-06-05",
-    name: name,
-    address: "",
-    phone: "",
-    items: [
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XXXL", detail: "ฟ้า 1 คละสี 2",                                    qty: 3,  unitPrice: 2590, amount: 7770  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XXL",  detail: "ฟ้า 1 เขียว 1 ขาว 1 คละสี 1",                    qty: 4,  unitPrice: 2155, amount: 8620  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XL",   detail: "ฟ้า 1 เขียว 1 ขาว 1 คละสี 1 | พรเจริญ ลป. จาก ทีเอส", qty: 3,  unitPrice: 1900, amount: 5700  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XL",   detail: "ขาว 2 คละสี 8 | นัวอรุณ ซม. จาก ทีเอส",          qty: 10, unitPrice: 1900, amount: 19000 },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "L",    detail: "",                                                  qty: 10, unitPrice: 1030, amount: 10300 },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "M",    detail: "เค เอส ระนอง จาก คุณลักษณ์",                      qty: 10, unitPrice: 930,  amount: 9300  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XXXL", detail: "ฟ้า 3 ซม 2 เขียว 2 ขาว 5 | ชิงหงัวว อ. ฝาง จาก วรพจน์", qty: 1, unitPrice: 2590, amount: 2590 }
-    ]
-  };
-  Logger.log("Testing delivery note landscape (no parens): " + invoiceNo);
-  var pdfUrl = buildDeliveryNoteLandscapePDF(invoiceNo, name, data, { showDesc2Parens: false });
-  Logger.log(pdfUrl);
+// #107 — landscape CSS (opts-aware; calibrated divider). Shared by single + combined builders.
+function bnLandscapeCSS(opts) {
+  opts = opts || {};
+  var outerLeft      = opts.outerLeft      || "13mm";   // min safe for HP DeskJet 2800 non-printable zone
+  var outerRight     = opts.outerRight     || "2mm";
+  var innerGapL      = opts.innerGapL      || "5mm";
+  var innerGapR      = opts.innerGapR      || "9mm";
+  var pagePaddingTop = opts.pagePaddingTop || "10mm";
+  var leftHalfWidth  = opts.leftHalfWidth  || "151.5mm"; // CALIBRATED — divider at paper center; change only via staging re-calibration
+  return "<style>" + PROMPT_FONT_CSS +
+    "html,body{background:white!important;font-family:Prompt,sans-serif;color:#111}" +
+    "*{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}" +
+    "@page{size:A4 landscape;margin:8mm 8mm 8mm 0}" +
+    ".page{width:297mm;display:flex;gap:0;padding-top:" + pagePaddingTop + ";margin-left:0}" +
+    ".half{display:flex;flex-direction:column}" +
+    ".half.left-h{flex-shrink:0;width:" + leftHalfWidth + ";padding-left:" + outerLeft + ";padding-right:" + innerGapL + "}" +
+    ".half.right-h{flex:1;min-width:0;padding-left:" + innerGapR + ";padding-right:" + outerRight + "}" +
+    ".divider{width:0;border-left:0.5mm dotted #ddd;flex-shrink:0}" +
+    "</style>";
 }
 
-// Tax invoice landscape PDF (2 copies side-by-side, A4 landscape) — uses hardcoded mock data, no sheet required
-function testTaxInvoiceLandscape() {
-  var invoiceNo = "IV-26-000099";
-  var name = "ตงเชิง";
-  var data = {
-    date: "2026-06-05",
-    name: name,
-    address: "",
-    phone: "",
-    taxId: "",
-    invoiceRef: "DN-TEST-002",
-    items: [
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XXXL", detail: "ฟ้า 1 คละสี 2",                                       qty: 3,  unitPrice: 2590, amount: 7770  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XXL",  detail: "ฟ้า 1 เขียว 1 ขาว 1 คละสี 1",                        qty: 4,  unitPrice: 2155, amount: 8620  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XL",   detail: "ฟ้า 1 เขียว 1 ขาว 1 คละสี 1 | พรเจริญ ลป. จาก ทีเอส", qty: 3,  unitPrice: 1900, amount: 5700  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XL",   detail: "ขาว 2 คละสี 8 | นัวอรุณ ซม. จาก ทีเอส",              qty: 10, unitPrice: 1900, amount: 19000 },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "L",    detail: "",                                                     qty: 10, unitPrice: 1030, amount: 10300 },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "M",    detail: "เค เอส ระนอง จาก คุณลักษณ์",                          qty: 10, unitPrice: 930,  amount: 9300  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XXXL", detail: "ฟ้า 3 ซม 2 เขียว 2 ขาว 5 | ชิงหงัวว อ. ฝาง จาก วรพจน์", qty: 1,  unitPrice: 2590, amount: 2590  }
-    ]
-  };
-  Logger.log("Testing tax invoice landscape: " + invoiceNo);
-  var pdfUrl = buildTaxInvoiceLandscapePDF(invoiceNo, name, data);
-  Logger.log(pdfUrl);
+// #107 — page-only HTML (no wrapper/save) so combined print can concatenate multiple BNs
+function bnLandscapePageHTML(invoiceNo, name, data, cfg, opts) {
+  opts = opts || {};
+  var centerLock = opts.centerLock !== false; // default true
+  var co     = cfg.company || {};
+  var coName   = co.name   || "หจก. โรงงานกิมเชียง";
+  var coNameEN = co.nameEN || "";
+  var coAddr   = co.address || "";
+  var coTel    = co.tel     || "";
+  var am = coAddr.match(/^(.*?)\s*(จังหวัด.*)/);
+  var addrLine1 = am ? am[1].trim() : coAddr.trim();
+  var addrLine2 = am ? am[2].trim() : "";
+
+  var invoices = data.invoices || [];
+  var total    = parseFloat(data.total) || 0;
+
+  function fmt(n) { return parseFloat(n).toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
+  function thaiShort(d) {
+    if (!d) return "";
+    var months = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+    var dd, mm, yyyy;
+    if (String(d).indexOf("/") >= 0) {
+      var p = String(d).split("/"); dd = parseInt(p[0]); mm = parseInt(p[1]); yyyy = parseInt(p[2]);
+    } else if (String(d).indexOf("-") >= 0) {
+      var p = String(d).split("-"); yyyy = parseInt(p[0]); mm = parseInt(p[1]); dd = parseInt(p[2]);
+    } else { return String(d); }
+    return dd + " " + months[mm - 1] + " " + String(yyyy + 543).slice(2);
+  }
+
+  // 10 fixed rows, height:6mm (narrower half — smaller than portrait's 7mm)
+  var itemRows = "";
+  for (var i = 0; i < 10; i++) {
+    var inv  = invoices[i] || null;
+    var even = i % 2 === 0;
+    var bg   = even ? "white" : "#f8f8f8";
+    var bdr  = "border-bottom:0.2mm solid #e0e0e0;";
+    var bdrR = "border-right:0.1mm solid #e0e0e0;";
+    if (inv) {
+      var dnDate = inv.dnDate || inv.date || "";
+      var amt    = parseFloat(inv.amount || inv.total) || 0;
+      var b = Math.floor(amt);
+      var s = Math.round((amt - b) * 100);
+      itemRows +=
+        "<tr style=\"background:" + bg + ";height:6mm\">" +
+        "<td style=\"padding:1mm 1.5mm;" + bdr + bdrR + "text-align:center;font-size:2.5mm\">" + (i + 1) + "</td>" +
+        "<td style=\"padding:1mm 1.5mm;" + bdr + bdrR + "font-weight:500;font-size:2.7mm\">" + (inv.dnNo || inv.no || "") + "</td>" +
+        "<td style=\"padding:1mm 1.5mm;" + bdr + bdrR + "text-align:center;font-size:2.5mm\">" + thaiShort(dnDate) + "</td>" +
+        "<td style=\"padding:1mm 1.5mm;" + bdr + bdrR + "\"></td>" +
+        "<td style=\"padding:1mm 1.5mm;" + bdr + bdrR + "text-align:right;font-weight:500;font-size:2.7mm\">" + (b > 0 ? b.toLocaleString("th-TH") : "") + "</td>" +
+        "<td style=\"padding:1mm 1.5mm;" + bdr + "text-align:center;font-size:2.5mm\">" + (b > 0 ? String(s).padStart(2,"0") : "") + "</td>" +
+        "</tr>";
+    } else {
+      itemRows +=
+        "<tr style=\"background:" + bg + ";height:6mm\">" +
+        "<td style=\"padding:1mm 1.5mm;" + bdr + bdrR + "\"></td>" +
+        "<td style=\"padding:1mm 1.5mm;" + bdr + bdrR + "\"></td>" +
+        "<td style=\"padding:1mm 1.5mm;" + bdr + bdrR + "\"></td>" +
+        "<td style=\"padding:1mm 1.5mm;" + bdr + bdrR + "\"></td>" +
+        "<td style=\"padding:1mm 1.5mm;" + bdr + bdrR + "\"></td>" +
+        "<td style=\"padding:1mm 1.5mm;" + bdr + "\"></td>" +
+        "</tr>";
+    }
+  }
+
+  function half(isOriginal) {
+    var copyBadge = isOriginal ? "" :
+      "<span style=\"font-size:3.2mm;color:#888;font-weight:400;margin-left:2mm;vertical-align:middle\">(สำเนา)</span>";
+    return "<div class=\"half" + (centerLock ? (isOriginal ? " left-h" : " right-h") : "") + "\">" +
+      // ── Header ──────────────────────────────────────────────
+      "<div style=\"display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:2.2mm;border-bottom:0.3mm solid #ddd;margin-bottom:2.5mm\">" +
+        "<div>" +
+          "<div style=\"display:flex;align-items:flex-start;gap:2mm;margin-bottom:0.8mm\">" +
+            "<div style=\"background:#111;color:white;font-size:4.5mm;font-weight:700;width:8.5mm;height:8.5mm;display:flex;align-items:center;justify-content:center;letter-spacing:-0.3mm;border-radius:1.2mm;flex-shrink:0\">KC</div>" +
+            "<div>" +
+              "<div style=\"font-size:3.2mm;font-weight:600;color:#111\">" + coName + "</div>" +
+              "<div style=\"font-size:2.4mm;font-weight:500;color:#111;margin-top:0.2mm\">" + coNameEN + "</div>" +
+            "</div>" +
+          "</div>" +
+          (addrLine1 ? "<div style=\"font-size:2.2mm;color:#6b6b6b\">" + addrLine1 + "</div>" : "") +
+          (addrLine2 ? "<div style=\"font-size:2.2mm;color:#6b6b6b\">" + addrLine2 + (coTel ? " &nbsp; Tel/Fax : " + coTel : "") + "</div>" : (coTel ? "<div style=\"font-size:2.2mm;color:#6b6b6b\">Tel/Fax : " + coTel + "</div>" : "")) +
+        "</div>" +
+        "<div style=\"text-align:right;flex-shrink:0;margin-left:3mm\">" +
+          "<div style=\"font-size:2.2mm;color:#6b6b6b\">เลขที่</div>" +
+          "<div style=\"font-size:2.2mm;font-weight:500;color:#111;white-space:nowrap\">" + invoiceNo + "</div>" +
+        "</div>" +
+      "</div>" +
+      // ── Doc title ───────────────────────────────────────────
+      "<div style=\"font-size:4.5mm;font-weight:600;color:#111;margin-bottom:2.5mm\">ใบวางบิล" + copyBadge + "</div>" +
+      // ── Info band ───────────────────────────────────────────
+      "<div style=\"display:flex;gap:0;margin-bottom:2.5mm;font-size:2.7mm;background:#fafafa;border-radius:1mm;padding:1.5mm 2mm\">" +
+        "<div style=\"display:grid;grid-template-columns:auto 1fr;gap:0.7mm 1.5mm;width:40%;flex-shrink:0;align-content:start\">" +
+          "<span style=\"color:#999;font-weight:500;white-space:nowrap\">วันที่</span><span style=\"color:#111\">" + thaiMonth(data.date) + "</span>" +
+          "<span style=\"color:#999;font-weight:500;white-space:nowrap\">ชื่อ</span><span style=\"color:#111;font-weight:500\">" + (data.name || "") + "</span>" +
+          "<span style=\"color:#999;font-weight:500;white-space:nowrap\">โทรศัพท์</span><span style=\"color:#111\">" + (data.phone || "") + "</span>" +
+        "</div>" +
+        "<div style=\"display:grid;grid-template-columns:auto 1fr;gap:0.7mm 1.5mm;width:60%;min-width:0;padding-left:2.5mm;align-content:start\">" +
+          "<span style=\"color:#999;font-weight:500;white-space:nowrap\">ที่อยู่</span><span style=\"color:#111;word-break:break-word;line-height:1.5\">" + (data.address || "") + "</span>" +
+        "</div>" +
+      "</div>" +
+      // ── Sub-text ────────────────────────────────────────────
+      "<div style=\"font-size:2.2mm;color:#888;margin-bottom:2mm\">ได้รับใบวางบิลตามรายการข้างล่างนี้แล้ว เพื่อตรวจสอบและพร้อมชำระเงินไม่เกินกว่านี้</div>" +
+      // ── Invoice table ───────────────────────────────────────
+      "<table style=\"width:100%;border-collapse:collapse;font-size:2.7mm;margin-bottom:2.5mm;table-layout:fixed\">" +
+        "<colgroup><col style=\"width:6mm\"><col style=\"width:40%\"><col style=\"width:18mm\"><col style=\"width:18mm\"><col><col style=\"width:8mm\"></colgroup>" +
+        "<thead><tr style=\"background:#111;color:white\">" +
+          "<th style=\"padding:1.2mm 1.5mm;text-align:center;font-weight:500;font-size:2.5mm;border-right:0.1mm solid rgba(255,255,255,0.25)\">#</th>" +
+          "<th style=\"padding:1.2mm 1.5mm;text-align:left;font-weight:500;font-size:2.5mm;border-right:0.1mm solid rgba(255,255,255,0.25)\">เลขที่บิล</th>" +
+          "<th style=\"padding:1.2mm 1.5mm;text-align:center;font-weight:500;font-size:2.5mm;border-right:0.1mm solid rgba(255,255,255,0.25)\">วันที่บิล</th>" +
+          "<th style=\"padding:1.2mm 1.5mm;text-align:center;font-weight:500;font-size:2.5mm;border-right:0.1mm solid rgba(255,255,255,0.25)\">ครบกำหนด</th>" +
+          "<th style=\"padding:1.2mm 1.5mm;text-align:right;font-weight:500;font-size:2.5mm;border-right:0.1mm solid rgba(255,255,255,0.25)\">จำนวนเงิน</th>" +
+          "<th style=\"padding:1.2mm 1.5mm;text-align:center;font-weight:500;font-size:2.5mm\">สต.</th>" +
+        "</tr></thead>" +
+        "<tbody>" + itemRows + "</tbody>" +
+        "<tfoot><tr>" +
+          "<td colspan=\"3\" style=\"border-top:0.5mm solid #111;padding:1.2mm 1.5mm;font-size:2.4mm;color:#666\">รวม <strong style=\"color:#111\">" + invoices.length + "</strong> ฉบับ</td>" +
+          "<td style=\"border-top:0.5mm solid #111;padding:1.2mm 1.5mm;text-align:right;font-size:2.4mm;font-weight:600\">รวมเงินทั้งสิ้น</td>" +
+          "<td colspan=\"2\" style=\"border-top:0.5mm solid #111;padding:1.2mm 1.5mm;text-align:right;font-weight:700;font-size:3.5mm\">" + fmt(total) + "</td>" +
+        "</tr></tfoot>" +
+      "</table>" +
+      // ── Baht text ───────────────────────────────────────────
+      "<div style=\"display:flex;align-items:center;gap:1.5mm;margin-bottom:2mm\">" +
+        "<span style=\"font-size:2.4mm;color:#999;white-space:nowrap\">จำนวนเงิน (ตัวอักษร)</span>" +
+        "<span style=\"flex:1;font-size:3mm;padding:0.8mm 1.2mm;background:#f5f5f5;border-radius:0.7mm;color:#333\">(" + bahtTextGS(total) + ")</span>" +
+      "</div>" +
+      // ── Footer ──────────────────────────────────────────────
+      "<div style=\"border-top:0.3mm solid #bbb;padding-top:4mm;margin-top:auto\">" +
+        "<div style=\"font-size:2.7mm;font-weight:500;color:#111;margin-bottom:0.5mm\">ข้าพเจ้าได้รับบิลตามรายการข้างต้นไว้ถูกต้องเรียบร้อยแล้ว</div>" +
+        "<div style=\"font-size:2.3mm;color:#999;margin-bottom:3mm\">I have received the above billing amount in good order</div>" +
+        "<div style=\"display:grid;grid-template-columns:1fr 1fr;gap:4mm\">" +
+          "<div>" +
+            "<div style=\"font-size:2.7mm;font-weight:500;color:#111\">ผู้รับบิล</div>" +
+            "<div style=\"font-size:2.3mm;color:#999\">Bill receiver</div>" +
+            "<div style=\"width:100%;border-bottom:0.3mm solid #bbb;height:6mm;margin-top:1.5mm\"></div>" +
+          "</div>" +
+          "<div>" +
+            "<div style=\"font-size:2.7mm;font-weight:500;color:#111\">ให้มาติดต่อรับเงินวันที่</div>" +
+            "<div style=\"font-size:2.3mm;color:#999\">Date of collecting</div>" +
+            "<div style=\"width:100%;border-bottom:0.3mm solid #bbb;height:6mm;margin-top:1.5mm\"></div>" +
+          "</div>" +
+        "</div>" +
+      "</div>" +
+    "</div>";
+  }
+
+  return "<div class=\"page\">" + half(true) + "<div class=\"divider\"></div>" + half(false) + "</div>";
 }
 
-// TEST ONLY — same data as testTaxInvoiceLandscape but without () around desc2 (size) for layout comparison
-function stagingTestTaxInvoiceLandscape() {
-  var invoiceNo = "IV-26-000099";
-  var name = "ตงเชิง";
-  var data = {
-    date: "2026-06-05",
-    name: name,
-    address: "",
-    phone: "",
-    taxId: "",
-    invoiceRef: "DN-TEST-002",
-    items: [
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XXXL", detail: "ฟ้า 1 คละสี 2",                                       qty: 3,  unitPrice: 2590, amount: 7770  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XXL",  detail: "ฟ้า 1 เขียว 1 ขาว 1 คละสี 1",                        qty: 4,  unitPrice: 2155, amount: 8620  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XL",   detail: "ฟ้า 1 เขียว 1 ขาว 1 คละสี 1 | พรเจริญ ลป. จาก ทีเอส", qty: 3,  unitPrice: 1900, amount: 5700  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XL",   detail: "ขาว 2 คละสี 8 | นัวอรุณ ซม. จาก ทีเอส",              qty: 10, unitPrice: 1900, amount: 19000 },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "L",    detail: "",                                                     qty: 10, unitPrice: 1030, amount: 10300 },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "M",    detail: "เค เอส ระนอง จาก คุณลักษณ์",                          qty: 10, unitPrice: 930,  amount: 9300  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XXXL", detail: "ฟ้า 3 ซม 2 เขียว 2 ขาว 5 | ชิงหงัวว อ. ฝาง จาก วรพจน์", qty: 1,  unitPrice: 2590, amount: 2590  }
-    ]
-  };
-  Logger.log("Testing TI landscape (no parens): " + invoiceNo);
-  var pdfUrl = buildTaxInvoiceLandscapePDF(invoiceNo, name, data, { showDesc2Parens: false });
-  Logger.log(pdfUrl);
-}
-
-// Tax invoice portrait PDF (4 pages: tax+receipt x ต้นฉบับ+สำเนา) — uses hardcoded mock data, no sheet required
-function testTaxInvoicePortrait() {
-  var invoiceNo = "IV-26-000039";
-  var name = "ตงเชิง";
-  var data = {
-    date: "2026-06-05",
-    name: name,
-    address: "",
-    phone: "",
-    taxId: "",
-    invoiceRef: "DN-TEST-002",
-    items: [
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XXXL", detail: "ฟ้า 1 คละสี 2",                                       qty: 3,  unitPrice: 2590, amount: 7770  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XXL",  detail: "ฟ้า 1 เขียว 1 ขาว 1 คละสี 1",                        qty: 4,  unitPrice: 2155, amount: 8620  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XL",   detail: "ฟ้า 1 เขียว 1 ขาว 1 คละสี 1 | พรเจริญ ลป. จาก ทีเอส", qty: 3,  unitPrice: 1900, amount: 5700  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XL",   detail: "ขาว 2 คละสี 8 | นัวอรุณ ซม. จาก ทีเอส",              qty: 10, unitPrice: 1900, amount: 19000 },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "L",    detail: "",                                                     qty: 10, unitPrice: 1030, amount: 10300 },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "M",    detail: "เค เอส ระนอง จาก คุณลักษณ์",                          qty: 10, unitPrice: 930,  amount: 9300  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XXXL", detail: "ฟ้า 3 ซม 2 เขียว 2 ขาว 5 | ชิงหงัวว อ. ฝาง จาก วรพจน์", qty: 1,  unitPrice: 2590, amount: 2590  }
-    ]
-  };
-  Logger.log("Testing tax invoice portrait: " + invoiceNo);
-  var pdfUrl = buildTaxInvoicePortraitPDF(invoiceNo, name, data);
-  Logger.log(pdfUrl);
-}
-
-// TEST ONLY — same data as testTaxInvoicePortrait but without () around desc2 (size) for layout comparison
-function stagingTestTaxInvoicePortrait() {
-  var invoiceNo = "IV-26-000039";
-  var name = "ตงเชิง";
-  var data = {
-    date: "2026-06-05",
-    name: name,
-    address: "",
-    phone: "",
-    taxId: "",
-    invoiceRef: "DN-TEST-002",
-    items: [
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XXXL", detail: "ฟ้า 1 คละสี 2",                                       qty: 3,  unitPrice: 2590, amount: 7770  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XXL",  detail: "ฟ้า 1 เขียว 1 ขาว 1 คละสี 1",                        qty: 4,  unitPrice: 2155, amount: 8620  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XL",   detail: "ฟ้า 1 เขียว 1 ขาว 1 คละสี 1 | พรเจริญ ลป. จาก ทีเอส", qty: 3,  unitPrice: 1900, amount: 5700  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XL",   detail: "ขาว 2 คละสี 8 | นัวอรุณ ซม. จาก ทีเอส",              qty: 10, unitPrice: 1900, amount: 19000 },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "L",    detail: "",                                                     qty: 10, unitPrice: 1030, amount: 10300 },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "M",    detail: "เค เอส ระนอง จาก คุณลักษณ์",                          qty: 10, unitPrice: 930,  amount: 9300  },
-      { desc: "ซันฟลาวเวอร์  (SF)", desc2: "XXXL", detail: "ฟ้า 3 ซม 2 เขียว 2 ขาว 5 | ชิงหงัวว อ. ฝาง จาก วรพจน์", qty: 1,  unitPrice: 2590, amount: 2590  }
-    ]
-  };
-  Logger.log("Testing tax invoice portrait (no parens, alt headers): " + invoiceNo);
-  var pdfUrl = buildTaxInvoicePortraitPDF(invoiceNo, name, data, { showDesc2Parens: false, altHeaders: true });
-  Logger.log(pdfUrl);
-}
+// ============================================================
+// TEST / STAGING functions moved to Staging.gs (#44, 2026-06-19)
+// All test*() / stagingTest*() run manually from the Apps Script editor.
+// ============================================================

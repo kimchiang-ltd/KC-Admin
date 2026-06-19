@@ -1,5 +1,5 @@
-# KC Factory System — Daily Log 2026-06-16
-**Code.gs:** v1.4.128 | **KCFactory.jsx:** v1.4.17
+# KC Factory System — Daily Log 2026-06-16 (session ran to 01:00 on 2026-06-17)
+**Code.gs:** v1.4.128 → v1.4.152 | **KCFactory.jsx:** v1.4.17
 
 ---
 
@@ -49,11 +49,14 @@
 ### PDF Rules
 
 - **Template changes go into stagingTest first** — all PDF layout/style changes must be implemented in the `stagingTest[Format]()` function (via opts) before touching the original builder; only apply to original after confirmed; never modify a production builder directly for experimental changes
+- **Every staging opts change = its own version bump + experiment log entry** — log format inside each stagingTest function: `vX.X.XXX: tested [what] — [result/why]`; mark promoted entries with `→ live`; active test with `← testing`; idle with `[no active experiment]`
+- **Staging may be identical to live when no experiment is in progress** — that is fine
 - **Show mockups/previews before code** for any UI or PDF change
 
 ### Session & Work Style
 
-- **Session scope discipline** — agree on agenda at session start; unplanned work gets parked in Outstanding Items, not acted on mid-session; doc updates are always in scope
+- **Backlog doc workflow** — `KC_Backlog.md` is the live working file; update it freely during sessions. `KC_Daily_Progress_YYYY-MM-DD.md` is the permanent record; sync from backlog at end of day only. During a session, only touch `KC_Backlog.md` for outstanding items.
+- **Session scope discipline** — agree on agenda at session start; unplanned work gets parked in `KC_Backlog.md`, not acted on mid-session; doc updates are always in scope
   - Agree on a session agenda first — before any work begins, list what we're tackling and stick to it
   - One work area per session — e.g. PDF fixes only, or frontend only; avoid jumping between unrelated areas
   - Parking lot rule — anything that surfaces mid-session outside agreed scope gets logged to Outstanding Items, not acted on
@@ -171,7 +174,8 @@ Complexity: S = small · M = medium · L = large · XL = extra large
 | 17 | File naming prefix P_/L_ | D: Add prefix to saved filenames so files are identifiable without opening | P3xS | 2026-06-12 | ⏳ Pending |
 | 13 | Page color label (portrait) | D: Small colored label per page matching physical paper set (green/yellow/white/blue)<br>Note: Placement TBD with director | P4xS | 2026-06-11 | ⏳ Pending |
 | 37 | GAS @page margin not respected | D: GAS PDF renderer likely ignores `@page{margin}` CSS; `.page{width}` is the effective control<br>Note: Known constraint; investigate further or accept limitation | P4xS | 2026-06-13 | ⏳ Pending |
-| 43 | TI landscape — too much left space | D: Current left edge (~16.95mm from paper edge) is visibly wider than v1.4.129 (8mm @page). Reducing `pageMarginLeft` shifts divider off-center; need to widen `pageWidth` simultaneously. | P3xS | 2026-06-16 | ⏳ Pending |
+| 43 | TI landscape — too much left space | D: Promoted center-lock to live in v1.4.147. Gap balance finalised in v1.4.152. leftHalfWidth frozen at 151.5mm. outerLeft:13mm, innerGapL:5mm, innerGapR:9mm, outerRight:2mm. | P3xS | 2026-06-16 | ✅ Done |
+| 44 | Clean up staging test functions | D: Review all `stagingTest*()` functions — remove any one-off experiments that are no longer needed; keep only functions actively used for ongoing experiments or calibration. Related to #22 (Split Code.gs). | P4xS | 2026-06-16 | ⏳ Pending |
 | 35 | TI portrait header fix | D: "ราคาหน่วยละ" + "จำนวนเงิน" wrapping to 2 lines; สต. column clipping "00"<br>Note: Fixed in v1.4.126–128 via altHeaders opt; promoted to live | — | 2026-06-13 | ✅ Done |
 | **Doc** | | | | | |
 | 6 | Delete/cancel invoice | D: Soft delete — mark cancelled in sheet; confirm dialog; keep row for audit<br>Note: Scope TBD: DN only or both? | P2xM | 2026-06-11 | ⏳ Pending |
@@ -224,3 +228,43 @@ Complexity: S = small · M = medium · L = large · XL = extra large
 |---|---|---|
 | PC dev environment | Installed GitHub Desktop + Node.js/npm on new PC; cloned KC-Admin repo to `Documents\GitHub\KC-Admin`; npm install + npm run dev verified | 2026-06-16 |
 | New session doc | Created KC_Daily_Progress_2026-06-16.md; added #40/#41/#42; marked #38/#39 done | 2026-06-16 |
+
+### Code.gs (v1.4.134 → v1.4.152) — continued
+
+| Version | Change | Rationale |
+|---|---|---|
+| v1.4.135 | Add `stagingTestCenterLine()`: generates PDF with vertical `\|` chars at 129.35mm from .page left to verify paper center | Calibration tool for center verification |
+| v1.4.136 | stagingTestCenterLine: fix line not visible — width 0.5→2mm, background-color:red | Line was invisible at 0.5mm |
+| v1.4.137 | stagingTestCenterLine: drop `position:absolute` (unsupported in GAS PDF); use `padding-left:129.35mm` on text chars instead | GAS PDF does not support position:absolute |
+| v1.4.138 | stagingTestCenterLine: padding-left 129.35→130.35mm (+1mm; ~half "m" width still off from paper center) | Fine-tune center line position |
+| v1.4.139 | Update staging workflow comment block: clarify approve-before-promote rule | Workflow documentation |
+| v1.4.140 | Add experiment log comment to stagingTestTaxInvoiceLandscape(); add per-stagingTest log rule | Workflow documentation |
+| v1.4.141 | Staging workflow: each opts change = version bump + log entry; full experiment log added | Workflow documentation |
+| v1.4.142 | Add `centerLock` opt to `buildTaxInvoiceLandscapePDF` (outerLeft/outerRight/innerGap); add `stagingTestTaxInvoiceLandscapeCenterLock()` (#43) | New center-lock architecture: left half fixed width, right half flex:1 |
+| v1.4.143 | TI landscape staging: divider solid 0.3mm grey → dotted 0.5mm #aaa | Visual refinement of divider line |
+| v1.4.144 | TI landscape staging: divider color #aaa → #ddd (match header bottom border) → live | Less prominent divider |
+| v1.4.145 | TI landscape: add `leftHalfWidth` opt; staging tests 154.5mm | Attempted 2:1 ratio — overshot; divider 3mm RIGHT of center |
+| v1.4.146 | TI landscape staging: leftHalfWidth 154.5→151.5mm (overshot corrected; flex width ratio = 1:1 not 2:1) | Divider at paper center ✓ |
+| v1.4.147 | TI landscape: promote center-lock to live — centerLock default true, pageMargin 0, leftHalfWidth frozen 151.5mm (#43) | #43 closed |
+| v1.4.148 | TI landscape staging: gap balance test — outerLeft 15→9mm, innerGap 3→9mm, outerRight 8→2mm | Balance achieved but KC logo clipped (only "C" visible) |
+| v1.4.149 | TI landscape staging: split innerGapL/innerGapR opts; outerLeft:11.5mm, innerGapL:6.5mm, right side unchanged | Logo clear; address lines 2–3 still clip |
+| v1.4.150 | TI landscape staging: outerLeft:12.5mm, innerGapL:5.5mm | Line 1 address clear; lines 2–3 still clip first character |
+| v1.4.151 | TI landscape staging: outerLeft:13mm, innerGapL:5mm | All content clear ✓ |
+| v1.4.152 | TI landscape: promote gap balance to live — outerLeft:13mm, outerRight:2mm, innerGapL:5mm, innerGapR:9mm | Gap balance live; divider holds at 151.5mm (13+133.5+5=151.5mm ✓) |
+
+### Documents
+
+| Item | Change |
+|---|---|
+| KC_Backlog.md | Added lessons learned: 1:1 flex width ratio, center-lock calibration (151.5mm), printer non-printable area floor (~13mm outerLeft), gap balance final values, @page right margin hypothesis |
+| GAS_PDF_Rendering_Calibration.docx | Created academic essay (Harvard style) documenting all GAS PDF empirical findings: 2:1 ratio for page offset, 1:1 ratio for flex width, center-lock architecture and calibration, gap balance experiments, non-printable area constraint, @page right hypothesis. Versions v1.4.129–v1.4.152. |
+
+---
+### New Items Logged at Session Close
+
+| # | Item | Notes |
+|---|---|---|
+| 45 | Trim Code.gs version log | Keep last 10 in header; archive older to CHANGELOG.md. P4xS. |
+| 46 | DN landscape — apply GAS PDF knowledge | GAS empirical rules documented; DN is single-page (no center-lock). Start with #8 (EN name). P2xS. |
+
+*🔒 FROZEN — session ended ~01:00 on 2026-06-17. Start KC_Daily_Progress_2026-06-17.md for next session.*
