@@ -2,6 +2,10 @@
 // KC Factory System — Web App
 // ============================================================
 // Version History (last 15 — full log in KC_Daily_Progress_2026-06-18.md)
+// v1.4.90 (2026-06-19) — #129b BNCreateView: useEffect on mount calls handleSearch() so current month's DNs auto-load when opening BN Create (no need to click ค้นหา first)
+// v1.4.89 (2026-06-19) — #135 DN+TI custWarning modal: guardedSave now stores full customer objects in custWarning; modal shows "หมายถึงลูกค้านี้ใช่ไหม?"; "ใช่ ใช้ชื่อนี้" auto-fills name/address/phone from matched customer; "ไม่ ใช้ชื่อที่พิมพ์" proceeds with typed name. allCustomers added to DN+TI destructuring.
+// v1.4.88 (2026-06-19) — #134 BNCreateView done state: replace conditional <a> with always-visible PDF Btn; ptLoading state + handleGenBnPdf (mirrors BNDetailView generatePortrait — generates on-demand if no cached URL, stores result in customers state)
+// v1.4.87 (2026-06-19) — #129 BillingNotePage: remove cache guard from useEffect (was if(!cache["bnList"]) → now always calls loadBnList on mount so switching back to BN tab refreshes the list)
 // v1.4.86 (2026-06-19) — #111 P1: extract useInvoiceForm hook + initInvoiceItems — shared DN+TI form LOGIC only (items/state/refs, updateItem/updateDetail, addRow/addContinuationRow [detailAttr], removeRow, cellInput, checkProductName, checkNameSimilarity, guardedSave). Each form keeps own fields/JSX/payload/api (tables/cards/summary unchanged). No behavior change; updateItem now functional setState. ~190 lines dedup. #78 state portion folded in.
 // v1.4.85 (2026-06-19) — fix atLimit display: dw now uses desc+desc2 only (was getDescText which included detail, causing red limit msg to fire too early in detail field)
 // v1.4.84 (2026-06-19) — #127 refine: newCustWarning modal gets 3-way choice (ใช่ เพิ่ม / ไม่ ไม่ต้องเพิ่ม / ยกเลิก); "ไม่" still saves, sets skipCustomerLogRef → skipAutoLog=true in payload → Code.gs skips autoLogCustomer_; ConfirmModal: onSecondary+secondaryLabel props (neutral middle btn)
@@ -353,8 +357,12 @@ function useInvoiceForm({ initial, isEdit, products, detailAttr }) {
   // sets saving state and calls the form-supplied doSave({ filled, cleanItems, skipLog }).
   const guardedSave = async (name, doSave) => {
     if (!isEdit && !custConfirmedRef.current) {
-      const similar = findSimilarCustomers(name, allCustomers);
-      if (similar.length > 0) { setCustWarning(similar); return; }
+      const similarNames = findSimilarCustomers(name, allCustomers);
+      if (similarNames.length > 0) {
+        // #135 — store full customer objects so modal can auto-fill name/address/phone on "ใช่"
+        const similarFull = allCustomers.filter(c => similarNames.includes(c.name));
+        setCustWarning(similarFull); return;
+      }
       const isKnown = allCustomers.some(c => (c.name||"").trim().toLowerCase() === name.trim().toLowerCase());
       if (!isKnown && name.trim()) { setNewCustWarning(name.trim()); return; }
     }
@@ -603,7 +611,7 @@ function ProductAutocomplete({ value, onChange, onBlur, products, style }) {
               onMouseDown={e => { e.preventDefault(); onChange(p); setOpen(false); }}
               onMouseEnter={() => setHighlightedIndex(i)}
               onMouseLeave={() => setHighlightedIndex(-1)}
-              style={{ padding: "6px 10px", fontSize: 12, cursor: "pointer", borderBottom: `0.5px solid ${C.borderLight}`, background: highlightedIndex === i ? "#EEF2FF" : "white" }}
+              style={{ padding: "6px 10px", fontSize: 12, cursor: "pointer", borderBottom: `0.5px solid ${C.borderLight}`, background: highlightedIndex === i ? "#C7D7FF" : "white" }}
             >{p}</div>
           ))}
         </div>,
@@ -620,7 +628,7 @@ function DeliveryNoteForm({ initial, onSave, onCancel, isEdit, products, setProd
   const [phone, setPhone]     = useState(initial?.phone || "");
   const {
     items, removedOrigItems, saving, error, pendingDelete, setPendingDelete,
-    rowEditMode, setRowEditMode, setAllCustomers,
+    rowEditMode, setRowEditMode, allCustomers, setAllCustomers,
     custWarning, setCustWarning, newCustWarning, setNewCustWarning,
     productWarning, setProductWarning, addingProduct, setAddingProduct,
     custConfirmedRef, skipCustomerLogRef, nameSelectedFromListRef,
@@ -644,11 +652,14 @@ function DeliveryNoteForm({ initial, onSave, onCancel, isEdit, products, setProd
   return (
     <>
     {pendingDelete !== null && <ConfirmModal message="ยืนยันลบ?" onConfirm={() => { removeRow(pendingDelete); setPendingDelete(null); }} onCancel={() => setPendingDelete(null)} enterConfirm />}
+    {/* #135 — "ใช่ ใช้ชื่อนี้" auto-fills name/address/phone from matched customer; "ไม่ ใช้ชื่อที่พิมพ์" proceeds with typed name */}
     {custWarning && <ConfirmModal
-      message={`พบชื่อที่คล้ายกันในระบบ:\n"${custWarning.join('", "')}"\n\nดำเนินการบันทึกด้วยชื่อ "${name}" ต่อใช่ไหม?`}
-      onConfirm={() => { custConfirmedRef.current = true; setCustWarning(null); }}
+      message={`พบชื่อที่คล้ายกันในระบบ:\n"${custWarning.map(c => c.name).join('", "')}"\n\nหมายถึงลูกค้านี้ใช่ไหม?`}
+      onConfirm={() => { const m = custWarning[0]; setName(m.name); setAddress(m.address || ""); setPhone(m.phone || ""); custConfirmedRef.current = true; setCustWarning(null); }}
+      secondaryLabel="ไม่ ใช้ชื่อที่พิมพ์"
+      onSecondary={() => { custConfirmedRef.current = true; setCustWarning(null); }}
       onCancel={() => setCustWarning(null)}
-      confirmLabel="ใช่ บันทึก"
+      confirmLabel="ใช่ ใช้ชื่อนี้"
     />}
     {newCustWarning && <ConfirmModal
       message={`ลูกค้า "${newCustWarning}" ยังไม่มีในระบบ — บันทึกเป็นลูกค้าใหม่ด้วยหรือไม่?`}
@@ -2514,6 +2525,7 @@ function BNCreateView({ onBack }) {
   const [dnPopup, setDnPopup]         = useState(null); // #101 DN popup from done-state list
   const [dnCacheBN, setDnCacheBN]     = useState({});
   const [monthCache, setMonthCache]   = useState({}); // #118 per-month search cache (key "y-m")
+  const [ptLoading, setPtLoading]     = useState(false); // #134 on-demand PDF for done state
 
   const months = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
 
@@ -2585,6 +2597,9 @@ function BNCreateView({ onBack }) {
     }
   };
 
+  // #129b — auto-search current month on first open (mirrors goMonth behaviour)
+  useEffect(() => { handleSearch(); }, []);
+
   const handleConfirm = (result) => {
     setCustomers(prev => prev.map((c, i) => i === selectedIdx
       ? { ...c, generated: true, createdBnNo: result.bnNo, createdPdfUrl: result.pdfUrl, createdCount: result.count, createdTotal: result.total, createdDate: result.date }
@@ -2603,6 +2618,22 @@ function BNCreateView({ onBack }) {
       if (nextPending >= 0) setSelectedIdx(nextPending);
       return prev;
     });
+  };
+
+  // #134 — on-demand portrait PDF for done state (mirrors BNDetailView generatePortrait)
+  const handleGenBnPdf = async () => {
+    const bnNo = selectedCust?.createdBnNo;
+    if (!bnNo) return;
+    if (selectedCust.createdPdfUrl) { window.open(selectedCust.createdPdfUrl, "_blank", "noopener,noreferrer"); return; }
+    setPtLoading(true);
+    try {
+      const res = await api.generateBillingNotePortraitPDF(bnNo);
+      if (res?.url) {
+        setCustomers(prev => prev.map((c, i) => i === selectedIdx ? { ...c, createdPdfUrl: res.url } : c));
+        window.open(res.url, "_blank", "noopener,noreferrer");
+      }
+    } catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); }
+    finally { setPtLoading(false); }
   };
 
   const togglePrintItem = (i) => setPrintQueue(prev => prev.map((q, j) => j===i ? { ...q, checked: !q.checked } : q));
@@ -2730,14 +2761,12 @@ function BNCreateView({ onBack }) {
                     <div style={{ color: C.muted, fontSize: 11, marginBottom: 2 }}>รวมเงิน</div>
                     <div style={{ fontWeight: 600, color: C.accent }}>฿{(selectedCust.createdTotal||0).toLocaleString()}</div>
                   </div>
-                  {selectedCust.createdPdfUrl && (
-                    <div style={{ alignSelf: "flex-end" }}>
-                      <a href={selectedCust.createdPdfUrl} target="_blank" rel="noopener noreferrer"
-                        style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: "white", background: C.accent, padding: "5px 12px", borderRadius: 4, textDecoration: "none", fontWeight: 500 }}>
-                        <FileText size={13}/> เปิด PDF
-                      </a>
-                    </div>
-                  )}
+                  {/* #134 — always show PDF button; generates on-demand if not cached */}
+                  <div style={{ alignSelf: "flex-end" }}>
+                    <Btn small onClick={handleGenBnPdf} disabled={ptLoading}>
+                      {ptLoading ? <Loader size={13}/> : <FileText size={13}/>} PDF
+                    </Btn>
+                  </div>
                 </div>
                 {/* #101 — billed DN list, clickable → DNDetailPopup */}
                 {(selectedCust.invoices || []).length > 0 && (
@@ -2867,7 +2896,7 @@ function BillingNotePage({ cache, updateCache, goListRequest, onViewChange }) {
     }
   };
 
-  useEffect(() => { if (!cache["bnList"]) loadBnList(); }, []);
+  useEffect(() => { loadBnList(); }, []);
 
   if (view === "create") return <BNCreateView onBack={() => { updateCache("bnList", null); loadBnList(); setView("list"); }} />;
   if (view === "detail") return <BNDetailView bnNo={selectedBnNo} onBack={() => setView("list")}
@@ -2936,7 +2965,7 @@ function TaxInvoiceForm({ initial, onSave, onCancel, isEdit, products, setProduc
   const [invoiceRef, setInvoiceRef] = useState(initial?.invoiceRef || "");
   const {
     items, removedOrigItems, saving, error, pendingDelete, setPendingDelete,
-    rowEditMode, setRowEditMode, setAllCustomers,
+    rowEditMode, setRowEditMode, allCustomers, setAllCustomers,
     custWarning, setCustWarning, newCustWarning, setNewCustWarning,
     productWarning, setProductWarning, addingProduct, setAddingProduct,
     custConfirmedRef, skipCustomerLogRef, nameSelectedFromListRef,
@@ -2962,11 +2991,14 @@ function TaxInvoiceForm({ initial, onSave, onCancel, isEdit, products, setProduc
   return (
     <>
     {pendingDelete !== null && <ConfirmModal message="ยืนยันลบ?" onConfirm={() => { removeRow(pendingDelete); setPendingDelete(null); }} onCancel={() => setPendingDelete(null)} enterConfirm />}
+    {/* #135 — "ใช่ ใช้ชื่อนี้" auto-fills name/address/phone from matched customer; "ไม่ ใช้ชื่อที่พิมพ์" proceeds with typed name */}
     {custWarning && <ConfirmModal
-      message={`พบชื่อที่คล้ายกันในระบบ:\n"${custWarning.join('", "')}"\n\nดำเนินการบันทึกด้วยชื่อ "${name}" ต่อใช่ไหม?`}
-      onConfirm={() => { custConfirmedRef.current = true; setCustWarning(null); }}
+      message={`พบชื่อที่คล้ายกันในระบบ:\n"${custWarning.map(c => c.name).join('", "')}"\n\nหมายถึงลูกค้านี้ใช่ไหม?`}
+      onConfirm={() => { const m = custWarning[0]; setName(m.name); setAddress(m.address || ""); setPhone(m.phone || ""); custConfirmedRef.current = true; setCustWarning(null); }}
+      secondaryLabel="ไม่ ใช้ชื่อที่พิมพ์"
+      onSecondary={() => { custConfirmedRef.current = true; setCustWarning(null); }}
       onCancel={() => setCustWarning(null)}
-      confirmLabel="ใช่ บันทึก"
+      confirmLabel="ใช่ ใช้ชื่อนี้"
     />}
     {newCustWarning && <ConfirmModal
       message={`ลูกค้า "${newCustWarning}" ยังไม่มีในระบบ — บันทึกเป็นลูกค้าใหม่ด้วยหรือไม่?`}
@@ -3731,7 +3763,7 @@ export default function App({ userEmail, userName, onLogout }) {
           ))}
         </div>
         <div style={{ padding: "10px 16px", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)" }}>app v1.4.86{gsVersion ? <span>  ·  gs v{gsVersion}</span> : null}</span>
+          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)" }}>app v1.4.90{gsVersion ? <span>  ·  gs v{gsVersion}</span> : null}</span>
         </div>
       </div>
 
