@@ -2,6 +2,32 @@
 // KC Factory System — Web App
 // ============================================================
 // Version History (last 15 — full log in KC_Daily_Progress_2026-06-18.md)
+// v1.4.116 (2026-06-23) — #149 apiCall: replace JSONP with fetch() — fixes ERR_BLOCKED_BY_ORB on Chrome profiles with strict privacy settings
+// v1.4.115 (2026-06-23) — #131 ProductPage: cache productList (load only if !cache["productList"]); lock/unlock guard (locked by default, hides add/edit/delete)
+// v1.4.114 (2026-06-23) — #128 BNListView: search box width 240→200 (match DN/TI); toolbar alignItems flex-start→center (fix รีเฟรช btn misalign)
+// v1.4.113 (2026-06-23) — #147 DN+TI cancelled section: auto-load all cancelled items on expand (no need to type+search first)
+// v1.4.112 (2026-06-23) — BillingNotePage: re-add cache guard to useEffect (only fetch if !cache["bnList"]); bust still happens on create/save
+// v1.4.111 (2026-06-23) — #140 DN form: DETAIL_WARN_DN_L 16→15u (yellow warn triggers earlier)
+// v1.4.110 (2026-06-23) — #140 DN form: fix red msg threshold — use DETAIL_MAX_DN_L-1.1 (18.9u) since hard-block prevents stored value from ever reaching 20u exactly
+// v1.4.109 (2026-06-23) — #140 DN form: detail col hard-block at DETAIL_MAX_DN_L=20u (onChange rejects input when descWidthV2>=20); warn message changes to "เต็มแล้ว — กด Enter เพื่อขึ้นบรรทัดใหม่"
+// v1.4.108 (2026-06-23) — #140 DN form: DN_MAX_ROWS=20 (2 pages, matches Code.gs cap); useInvoiceForm maxRows param; flatMap page-break divider "── หน้าที่ X ──" every 10 rows; descWidthV2 (mirrors Code.gs Thai=1.0/non-Thai=1.1/space=4/15/zero-width skip); DESC_MAX_DN_L=17/DETAIL_WARN_DN_L=16/DETAIL_MAX_DN_L=20 (calibrated for landscape 33mm desc/38.5mm detail); TI constants/descWidth untouched
+// v1.4.107 (2026-06-23) — #141 QuotationPage: validation errors use centered inline dialog (alertMsg state) instead of browser alert()
+// v1.4.106 (2026-06-23) — #141 QuotationPage: move ยกเลิก/สร้าง PDF buttons to top nav bar (always visible, no scroll needed)
+// v1.4.105 (2026-06-23) — #141 QuotationPage: cache history list (qtList key, only reloads after generate); fix ISO date display in history table
+// v1.4.104 (2026-06-23) — #141 QuotationPage: success dialog with "📄 เปิด PDF" / "กลับรายการ" buttons after generate
+// v1.4.103 (2026-06-23) — #141 QuotationPage: after PDF created/updated → alert popup → navigate back to history list
+// v1.4.102 (2026-06-23) — #141 QuotationPage: validation errors use alert() popup instead of silent footer text
+// v1.4.101 (2026-06-23) — #141 QuotationPage: drop modal/portal → view-based nav (list/form) matching DN pattern; back button + breadcrumb; scrollable form page
+// v1.4.100 (2026-06-23) — #141 QuotationPage: form panel 380→500px; preview scale 0.75→0.85; เปิด PDF moved to footer right with buttons
+// v1.4.99 (2026-06-23) — #141 QuotationPage: items use ProductAutocomplete+size (desc+desc2 concat); Enter→next row; remove specific placeholders; pass sizes prop
+// v1.4.98 (2026-06-23) — #141 QuotationPage: modal full content-area (left:220 to right edge); history matches DN layout (QT-XXXXXX link, search bar, พบ X รายการ); preview scale 0.75
+// v1.4.97 (2026-06-23) — #141 QuotationPage: redesign as history-main + modal (form left / live preview right); add QuotationPreview component
+// v1.4.96 (2026-06-22) — #141 HomePage: add FileSearch to ICON_MAP (quotation card was showing text instead of icon)
+// v1.4.95 (2026-06-22) — #141 QuotationPage: QT History list + load + rowId state; api listQuotations/loadQuotation
+// v1.4.94 (2026-06-22) — #141 QuotationPage: add signerName input; pass to generateQuotationPDF
+// v1.4.93 (2026-06-22) — #141 QuotationPage: fix date input font (add fontFamily:inherit to cellS)
+// v1.4.92 (2026-06-22) — #141 QuotationPage: ใบเสนอราคา form + generateQuotationPDF + nav item + folderQT in Settings
+// v1.4.91 (2026-06-19) — #133 remove updateDetail hard block (DETAIL_MAX guard); update dw to check it.desc only (desc2 now has own 12mm col; combined width no longer meaningful)
 // v1.4.90 (2026-06-19) — #129b BNCreateView: useEffect on mount calls handleSearch() so current month's DNs auto-load when opening BN Create (no need to click ค้นหา first)
 // v1.4.89 (2026-06-19) — #135 DN+TI custWarning modal: guardedSave now stores full customer objects in custWarning; modal shows "หมายถึงลูกค้านี้ใช่ไหม?"; "ใช่ ใช้ชื่อนี้" auto-fills name/address/phone from matched customer; "ไม่ ใช้ชื่อที่พิมพ์" proceeds with typed name. allCustomers added to DN+TI destructuring.
 // v1.4.88 (2026-06-19) — #134 BNCreateView done state: replace conditional <a> with always-visible PDF Btn; ptLoading state + handleGenBnPdf (mirrors BNDetailView generatePortrait — generates on-demand if no cached URL, stores result in customers state)
@@ -50,7 +76,7 @@
 
 import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
-import { FileText, ClipboardList, Receipt, Package, BarChart2, Printer, Pencil, Save, Search, RefreshCw, Loader, CheckCircle, Square, Eye, Folder, Home, Check, LayoutDashboard, ArrowLeftRight, Users, Settings, Plus, ChevronLeft, Calendar, ChevronDown } from "lucide-react";
+import { FileText, ClipboardList, Receipt, FileSearch, Package, BarChart2, Printer, Pencil, Save, Search, RefreshCw, Loader, CheckCircle, Square, Eye, Folder, Home, Check, LayoutDashboard, ArrowLeftRight, Users, Settings, Plus, ChevronLeft, Calendar, ChevronDown } from "lucide-react";
 // ============================================================
 // CONFIG — ใส่ Apps Script URL ที่นี่หลัง Deploy
 // ============================================================
@@ -67,33 +93,26 @@ async function apiCall(action, params = {}) {
   const dedupeKey = action + JSON.stringify(params);
   if (_pendingCalls[dedupeKey]) return _pendingCalls[dedupeKey];
 
-  const promise = new Promise((resolve, reject) => {
-    const callbackName = "gc_" + Math.random().toString(36).slice(2);
-    const url = new URL(SCRIPT_URL);
-    url.searchParams.set("action", action);
-    url.searchParams.set("callback", callbackName);
-    Object.entries(params).forEach(([k, v]) => {
-      url.searchParams.set(k, typeof v === "object" ? JSON.stringify(v) : String(v ?? ""));
-    });
-
-    window[callbackName] = (json) => {
-      delete window[callbackName];
-      delete _pendingCalls[dedupeKey];
-      try { document.head.removeChild(script); } catch(e) {}
-      if (!json.success) reject(new Error(json.error || "API error"));
-      else resolve(json.data);
-    };
-
-    const script = document.createElement("script");
-    script.src = url.toString();
-    script.onerror = () => {
-      delete window[callbackName];
-      delete _pendingCalls[dedupeKey];
-      try { document.head.removeChild(script); } catch(e) {}
-      reject(new Error("Failed to load script"));
-    };
-    document.head.appendChild(script);
+  const url = new URL(SCRIPT_URL);
+  url.searchParams.set("action", action);
+  Object.entries(params).forEach(([k, v]) => {
+    url.searchParams.set(k, typeof v === "object" ? JSON.stringify(v) : String(v ?? ""));
   });
+
+  const promise = fetch(url.toString())
+    .then(r => {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    })
+    .then(json => {
+      delete _pendingCalls[dedupeKey];
+      if (!json.success) throw new Error(json.error || "API error");
+      return json.data;
+    })
+    .catch(err => {
+      delete _pendingCalls[dedupeKey];
+      throw err;
+    });
 
   _pendingCalls[dedupeKey] = promise;
   return promise;
@@ -131,6 +150,9 @@ const api = {
   generateTaxInvoiceLandscapePDF: (id) => apiCall("generateTaxInvoiceLandscapePDF", { id }),
   generateDeliveryNoteLandscapePDF:  (id) => apiCall("generateDeliveryNoteLandscapePDF", { id }),
   generateDeliveryNotePortraitPDF:   (id) => apiCall("generateDeliveryNotePortraitPDF", { id }),
+  generateQuotationPDF: (data) => apiCall("generateQuotationPDF", data),
+  listQuotations:       ()     => apiCall("listQuotations"),
+  loadQuotation:        (id)   => apiCall("loadQuotation", { rowId: id }),
   getVersion: () => apiCall("getVersion"),
   // Cancel / restore
   cancelDeliveryNote:        (id)     => apiCall("cancelDeliveryNote",        { id }),
@@ -172,6 +194,7 @@ const NAV = [
   { key: "invoice",    label: "ใบส่งของ",           icon: "FileText",        section: "เอกสาร" },
   { key: "billing",    label: "ใบวางบิล",           icon: "ClipboardList",   section: "เอกสาร" },
   { key: "taxinvoice", label: "ใบกำกับภาษี",        icon: "Receipt",         section: "เอกสาร" },
+  { key: "quotation",  label: "ใบเสนอราคา",         icon: "FileSearch",      section: "เอกสาร" },
   { key: "stock",      label: "สินค้า",             icon: "Package",         section: "คลังสินค้า" },
   { key: "stockmove",  label: "เคลื่อนไหวสต็อก",   icon: "ArrowLeftRight",  section: "คลังสินค้า" },
   { key: "customers",  label: "รายชื่อลูกค้า",      icon: "Users",           section: "ลูกค้า" },
@@ -236,14 +259,13 @@ const ErrorBox = ({ msg, onRetry }) => (
 
 // ── Invoice Components ─────────────────────────────────────
 
-const ITEMS_COUNT = 10;
+const ITEMS_COUNT = 10;            // TI page cap (portrait, single page)
+const DN_MAX_ROWS = 20;            // DN landscape cap (2 pages × 10 rows, matches Code.gs MAX_ITEM_ROWS_V2)
 const emptyItem  = () => ({ desc: "", desc2: "", detail: "", qty: "", unitPrice: "", amount: "" });
 
 // Description width estimator — Thai chars count 1.5x (wider glyphs), others 1x
-// DESC_MAX = landscape limit (~64mm col / 3mm font). Warns user before PDF overflows.
-// DETAIL_MAX = right block of desc col (~38.5mm at 2.5mm font). GAS PDF expands row height for overflow — only fix is a hard cap.
-// DETAIL_WARN = soft yellow warning threshold; DETAIL_MAX = hard red block threshold.
-const DESC_MAX   = 48;
+// Used by TI (portrait) only. DN landscape uses descWidthV2 + _DN_L constants below.
+const DESC_MAX   = 42;
 const DETAIL_WARN = 25;
 const DETAIL_MAX  = 34;
 const SIMILARITY_THRESHOLD = 0.75;
@@ -252,6 +274,26 @@ function descWidth(text) {
   for (let j = 0; j < text.length; j++) {
     const c = text.charCodeAt(j);
     w += (c >= 0x0E00 && c <= 0x0E7F) ? 1.5 : 1;
+  }
+  return w;
+}
+// DN landscape width estimator — mirrors Code.gs descWidthV2_ exactly.
+// Thai base = 1.0u, non-Thai = 1.1u, space = 4/15u, zero-width diacritics (ั ิ ี ึ ื ุ ู ็ ่ ้ ๊ ๋ ์ ํ) = 0u.
+// Calibrated thresholds for landscape layout (content 133.5mm, desc col 33mm, detail col 38.5mm):
+//   DESC_MAX_DN_L=17  — desc col clips at ~17u  (=DETAIL_THRESHOLD_V2 × 33/38.5)
+//   DETAIL_WARN_DN_L=16 — warn before auto-split threshold
+//   DETAIL_MAX_DN_L=20 — matches Code.gs DETAIL_THRESHOLD_V2 exactly (auto-split point)
+const DN_ZERO_WIDTH = new Set([0x0E31,0x0E34,0x0E35,0x0E36,0x0E37,0x0E38,0x0E39,0x0E47,0x0E48,0x0E49,0x0E4A,0x0E4B,0x0E4C,0x0E4D]);
+const DESC_MAX_DN_L   = 17;
+const DETAIL_WARN_DN_L = 15;
+const DETAIL_MAX_DN_L  = 20;
+function descWidthV2(text) {
+  let w = 0;
+  for (let j = 0; j < text.length; j++) {
+    const c = text.charCodeAt(j);
+    if (DN_ZERO_WIDTH.has(c)) continue;
+    if (c === 0x0020) { w += 4/15; continue; }
+    w += (c >= 0x0E00 && c <= 0x0E7F) ? 1.0 : 1.1;
   }
   return w;
 }
@@ -278,7 +320,7 @@ function initInvoiceItems(initial, isEdit) {
 // payload shape, and api call (those differ per document type — intentionally not shared).
 // detailAttr: the data-* attribute used to refocus a new continuation row ("data-detail-idx"
 // for DN, "data-ti-detail-idx" for TI) — keeps the two forms' DOM namespaces separate.
-function useInvoiceForm({ initial, isEdit, products, detailAttr }) {
+function useInvoiceForm({ initial, isEdit, products, detailAttr, maxRows = ITEMS_COUNT }) {
   const [items,            setItems]            = useState(() => initInvoiceItems(initial, isEdit));
   const [removedOrigItems, setRemovedOrigItems] = useState([]);
   const [saving,           setSaving]           = useState(false);
@@ -320,12 +362,12 @@ function useInvoiceForm({ initial, isEdit, products, detailAttr }) {
     }));
   };
   const updateDetail = (i, val) => {
-    if (descWidth(val) <= DETAIL_MAX) updateItem(i, "detail", val);
+    updateItem(i, "detail", val); // #133: no hard cap — PDF clips via overflow:hidden in nested table
   };
 
-  const addRow = () => { if (items.length < ITEMS_COUNT) setItems([...items, emptyItem()]); };
+  const addRow = () => { if (items.length < maxRows) setItems([...items, emptyItem()]); };
   const addContinuationRow = (afterIndex) => {
-    if (items.length >= ITEMS_COUNT) return;
+    if (items.length >= maxRows) return;
     const next = [...items];
     next.splice(afterIndex + 1, 0, { ...emptyItem(), _cont: true });
     setItems(next);
@@ -541,7 +583,7 @@ function CustomerAutocomplete({ value, onChange, onSelect, onCustomersLoaded, on
   );
 }
 
-function ProductAutocomplete({ value, onChange, onBlur, products, style }) {
+function ProductAutocomplete({ value, onChange, onBlur, onEnter, products, style }) {
   const [open, setOpen] = useState(false);
   const [rect, setRect] = useState(null);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
@@ -587,6 +629,12 @@ function ProductAutocomplete({ value, onChange, onBlur, products, style }) {
         onFocus={openDropdown}
         onKeyDown={e => {
           if (e.key === "Escape") { setOpen(false); return; }
+          if (e.key === "Enter") {
+            if (open && highlightedIndex >= 0 && filtered.length > 0) {
+              e.preventDefault(); onChange(filtered[highlightedIndex]); setOpen(false);
+            } else if (onEnter) { e.preventDefault(); onEnter(); }
+            return;
+          }
           if (!open || filtered.length === 0) return;
           if (e.key === "ArrowDown") {
             e.preventDefault();
@@ -594,10 +642,6 @@ function ProductAutocomplete({ value, onChange, onBlur, products, style }) {
           } else if (e.key === "ArrowUp") {
             e.preventDefault();
             setHighlightedIndex(i => Math.max(i - 1, 0));
-          } else if (e.key === "Enter" && highlightedIndex >= 0) {
-            e.preventDefault();
-            onChange(filtered[highlightedIndex]);
-            setOpen(false);
           }
         }}
         onBlur={() => { setOpen(false); if (onBlur) onBlur(); }}
@@ -634,7 +678,7 @@ function DeliveryNoteForm({ initial, onSave, onCancel, isEdit, products, setProd
     custConfirmedRef, skipCustomerLogRef, nameSelectedFromListRef,
     checkProductName, checkNameSimilarity, updateItem, updateDetail,
     addRow, addContinuationRow, removeRow, cellInput, guardedSave,
-  } = useInvoiceForm({ initial, isEdit, products, detailAttr: "data-detail-idx" });
+  } = useInvoiceForm({ initial, isEdit, products, detailAttr: "data-detail-idx", maxRows: DN_MAX_ROWS });
 
   const total = items.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0);
 
@@ -720,7 +764,7 @@ function DeliveryNoteForm({ initial, onSave, onCancel, isEdit, products, setProd
 
       <div style={{ padding: 16, borderBottom: `0.5px solid ${C.border}` }}>
         <div style={{ marginBottom: 6 }}>
-          <SectionTitle>รายการสินค้า <span style={{ fontSize: 10, fontWeight: 400, color: items.length >= ITEMS_COUNT ? C.danger : items.length >= ITEMS_COUNT - 2 ? C.warning : C.muted }}>({items.length}/{ITEMS_COUNT} แถว)</span></SectionTitle>
+          <SectionTitle>รายการสินค้า <span style={{ fontSize: 10, fontWeight: 400, color: items.length >= DN_MAX_ROWS ? C.danger : items.length >= DN_MAX_ROWS - 2 ? C.warning : C.muted }}>({items.length}/{DN_MAX_ROWS} แถว · หน้าที่ {Math.ceil(items.length / 10) || 1}/{Math.ceil(DN_MAX_ROWS / 10)})</span></SectionTitle>
           <div><button onClick={() => setRowEditMode(m => !m)} style={{ fontSize: 12, color: rowEditMode ? "#2a7a3b" : C.danger, fontWeight: 600, background: "none", border: "none", cursor: "pointer", padding: 0 }}>{rowEditMode ? "เสร็จ" : "ลบ"}</button></div>
         </div>
         <div style={{ overflowX: "auto" }}>
@@ -734,12 +778,24 @@ function DeliveryNoteForm({ initial, onSave, onCancel, isEdit, products, setProd
               </tr>
             </thead>
             <tbody>
-              {items.map((it, i) => {
-                const dw = descWidth((it.desc || "") + (it.desc2 ? " " + it.desc2 : ""));
-                const detailW = descWidth(it.detail || "");
-                const atWarn  = detailW >= DETAIL_WARN;
-                const atLimit = dw >= DESC_MAX || detailW >= DETAIL_MAX;
-                return (
+              {items.flatMap((it, i) => {
+                const dw = descWidthV2(it.desc || ""); // #140: DN landscape desc 33mm col; descWidthV2 mirrors Code.gs
+                const detailW = descWidthV2(it.detail || "");
+                const atWarn  = detailW >= DETAIL_WARN_DN_L;
+                const atLimit = dw >= DESC_MAX_DN_L || detailW >= DETAIL_MAX_DN_L;
+                const rows = [];
+                // Page-break divider between every 10 rows
+                if (i > 0 && i % 10 === 0) {
+                  const pageNum = Math.floor(i / 10) + 1;
+                  rows.push(
+                    <tr key={`divider-${i}`}>
+                      <td colSpan={8} style={{ padding: "5px 10px", background: "#e8eeff", textAlign: "center", fontSize: 11, fontWeight: 600, color: C.accent, borderTop: `1.5px dashed ${C.accent}`, borderBottom: `1.5px dashed ${C.accent}` }}>
+                        ── หน้าที่ {pageNum} ──
+                      </td>
+                    </tr>
+                  );
+                }
+                rows.push(
                 <tr key={i} style={{ background: it._cont ? "#f5f7ff" : i % 2 === 0 ? "white" : "#fafbff", borderBottom: `0.5px solid ${C.borderLight}`, borderLeft: atLimit ? `3px solid ${C.danger}` : atWarn ? `3px solid ${C.warning}` : it._cont ? `3px solid ${C.accent}` : "3px solid transparent" }}>
                   <td style={{ padding: "3px 4px", textAlign: "center" }}>
                     {rowEditMode && <button onClick={() => setPendingDelete(i)} title="ลบแถว" style={{ width: 14, height: 14, borderRadius: "50%", border: "none", background: "#e5534b", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 11, lineHeight: 1, padding: 0, flexShrink: 0, fontWeight: 700 }}>−</button>}
@@ -759,11 +815,11 @@ function DeliveryNoteForm({ initial, onSave, onCancel, isEdit, products, setProd
                   <td style={{ padding: "3px 6px" }}>
                     {cellInput(i, "detail", "left", {
                       "data-detail-idx": i,
-                      onChange: e => updateDetail(i, e.target.value),
+                      onChange: e => { if (descWidthV2(e.target.value) < DETAIL_MAX_DN_L) updateDetail(i, e.target.value); },
                       onKeyDown: e => { if (e.key === "Enter") { e.preventDefault(); addContinuationRow(i); } }
                     })}
-                    {atLimit && <div style={{ fontSize: 11, color: C.danger, marginTop: 1 }}>ถึงขีดจำกัด — กด Enter เพื่อขึ้นบรรทัดใหม่</div>}
-                    {!atLimit && atWarn && <div style={{ fontSize: 11, color: C.warning, marginTop: 1 }}>ใกล้จะเต็ม — พิจารณากด Enter ขึ้นบรรทัดใหม่</div>}
+                    {detailW >= DETAIL_MAX_DN_L - 1.1 && <div style={{ fontSize: 11, color: C.danger, marginTop: 1 }}>เต็มแล้ว — กด Enter เพื่อขึ้นบรรทัดใหม่</div>}
+                    {detailW < DETAIL_MAX_DN_L - 1.1 && atWarn && <div style={{ fontSize: 11, color: C.warning, marginTop: 1 }}>ใกล้จะเต็ม — พิจารณากด Enter ขึ้นบรรทัดใหม่</div>}
                   </td>
                   <td style={{ padding: "3px 6px" }}>{!it._cont && cellInput(i, "qty", "right")}</td>
                   <td style={{ padding: "3px 6px" }}>{!it._cont && cellInput(i, "unitPrice", "right")}</td>
@@ -772,6 +828,7 @@ function DeliveryNoteForm({ initial, onSave, onCancel, isEdit, products, setProd
                   </td>
                 </tr>
                 );
+                return rows;
               })}
               <tr style={{ background: "#f0f4ff", borderTop: `1px solid ${C.border}` }}>
                 <td colSpan={7} style={{ padding: "8px 10px", textAlign: "right", fontWeight: 500 }}>ยอดรวม</td>
@@ -780,7 +837,7 @@ function DeliveryNoteForm({ initial, onSave, onCancel, isEdit, products, setProd
             </tbody>
           </table>
         </div>
-        <button onClick={addRow} disabled={items.length >= ITEMS_COUNT} style={{ fontSize: 11, color: items.length >= ITEMS_COUNT ? C.muted : C.accent, background: "none", border: `0.5px dashed ${items.length >= ITEMS_COUNT ? C.muted : C.accent}`, borderRadius: 4, padding: "4px 12px", cursor: items.length >= ITEMS_COUNT ? "not-allowed" : "pointer", marginTop: 8, width: "100%", opacity: items.length >= ITEMS_COUNT ? 0.5 : 1 }}>+ เพิ่มแถว (สินค้าใหม่) {items.length >= ITEMS_COUNT ? "— เต็ม 10 แถวแล้ว" : ""}</button>
+        <button onClick={addRow} disabled={items.length >= DN_MAX_ROWS} style={{ fontSize: 11, color: items.length >= DN_MAX_ROWS ? C.muted : C.accent, background: "none", border: `0.5px dashed ${items.length >= DN_MAX_ROWS ? C.muted : C.accent}`, borderRadius: 4, padding: "4px 12px", cursor: items.length >= DN_MAX_ROWS ? "not-allowed" : "pointer", marginTop: 8, width: "100%", opacity: items.length >= DN_MAX_ROWS ? 0.5 : 1 }}>+ เพิ่มแถว (สินค้าใหม่) {items.length >= DN_MAX_ROWS ? `— เต็ม ${DN_MAX_ROWS} แถวแล้ว` : ""}</button>
       </div>
 
       {error && <div style={{ margin: "0 16px 8px", padding: "8px 12px", background: C.dangerBg, color: C.danger, borderRadius: 6, fontSize: 12 }}>⚠️ {error}</div>}
@@ -1081,6 +1138,9 @@ function DeliveryNotePage({ products, setProducts, sizes, cache, updateCache, on
     finally { setCancelLoading(false); }
   }, [cancelSearch]);
 
+  // #147 auto-load all cancelled items when section is expanded
+  useEffect(() => { if (cancelSectionOpen) loadCancelled(); }, [cancelSectionOpen]);
+
   const handleSelect    = (inv) => { setSelected(inv); setView("detail", inv.id); };
   const handleCreateNew = () => { setSelected(null); setView("create", "สร้างใหม่"); };
   const handleSaveNew   = (result) => {
@@ -1269,6 +1329,405 @@ function EditableList({ title, icon, items, setItems, placeholder }) {
   );
 }
 
+// ── #141 QuotationPage ─────────────────────────────────────
+function QuotationPage({ products, sizes, onViewChange, cache, updateCache }) {
+  const { useState, useEffect, useRef } = React;
+  const UNITS    = ["ชิ้น", "โหล", "กล่อง", "อัน", "แพ็ค", "ถุง"];
+  const MAX_ROWS = 15;
+  const emptyItem = () => ({ desc: "", desc2: "", price: "", unit: "ชิ้น" });
+  const rowRefs  = useRef([]);
+
+  const [view,       setView_]      = useState("list");
+  const setView = (v, label) => { setView_(v); onViewChange?.(label ?? null); };
+
+  const QT_CACHE = "qtList";
+  const [histLoad,   setHistLoad]   = useState(false);
+  const [search,     setSearch]     = useState("");
+  const history = cache?.[QT_CACHE] || [];
+
+  const [date,       setDate]       = useState(new Date().toISOString().slice(0, 10));
+  const [to,         setTo]         = useState("");
+  const [subject,    setSubject]    = useState("");
+  const [items,      setItems]      = useState(() => Array.from({ length: MAX_ROWS }, emptyItem));
+  const [remarks,    setRemarks]    = useState("");
+  const [signerName, setSignerName] = useState("");
+  const [editRowId,  setEditRowId]  = useState(null);
+  const [loading,    setLoading]    = useState(false);
+  const [pdfUrl,     setPdfUrl]     = useState(null);
+  const [error,      setError]      = useState("");
+  const [company,    setCompany]    = useState(null);
+  const [successUrl, setSuccessUrl] = useState(null); // triggers success dialog
+  const [alertMsg,   setAlertMsg]   = useState("");   // validation/error alert
+
+  const updateItem = (idx, field, val) =>
+    setItems(prev => prev.map((it, i) => i === idx ? { ...it, [field]: val } : it));
+
+  const loadHistory = async () => {
+    setHistLoad(true);
+    try { const res = await api.listQuotations(); updateCache?.(QT_CACHE, res.rows || []); } catch (_) {}
+    setHistLoad(false);
+  };
+
+  useEffect(() => { if (!cache?.[QT_CACHE]) loadHistory(); }, []);
+
+  const openCreate = () => {
+    setDate(new Date().toISOString().slice(0, 10));
+    setTo(""); setSubject("");
+    setItems(Array.from({ length: MAX_ROWS }, emptyItem));
+    setRemarks(""); setSignerName("");
+    setEditRowId(null); setPdfUrl(null); setError("");
+    setView("form", "สร้างใหม่");
+    if (!company) api.getConfig().then(cfg => setCompany(cfg.company || {})).catch(() => {});
+  };
+
+  const openEdit = async (id) => {
+    try {
+      const res = await api.loadQuotation(id);
+      setDate(res.date || new Date().toISOString().slice(0, 10));
+      setTo(res.to || ""); setSubject(res.subject || "");
+      const loaded = res.items || [];
+      setItems(Array.from({ length: MAX_ROWS }, (_, i) => loaded[i]
+        ? { desc: loaded[i].name || "", desc2: "", price: loaded[i].price || "", unit: loaded[i].unit || "ชิ้น" }
+        : emptyItem()));
+      setRemarks(res.remarks || ""); setSignerName(res.signerName || "");
+      setEditRowId(res.rowId); setPdfUrl(res.pdfUrl || null); setError("");
+      setView("form", qtNo(id));
+      if (!company) api.getConfig().then(cfg => setCompany(cfg.company || {})).catch(() => {});
+    } catch (err) { alert(err.message); }
+  };
+
+  const handleGenerate = async () => {
+    if (!to.trim())      { setAlertMsg("กรุณากรอกชื่อผู้รับ (เรียน)"); return; }
+    if (!subject.trim()) { setAlertMsg("กรุณากรอกเรื่อง"); return; }
+    const filledItems = items
+      .filter(it => it.desc || it.price)
+      .map(it => ({ name: [it.desc, it.desc2].filter(Boolean).join(" "), price: it.price, unit: it.unit }));
+    if (!filledItems.length) { setAlertMsg("กรุณากรอกรายการสินค้าอย่างน้อย 1 รายการ"); return; }
+    setLoading(true); setPdfUrl(null); setError("");
+    try {
+      const res = await api.generateQuotationPDF({ date, to, subject, items: filledItems, remarks, signerName, rowId: editRowId });
+      setPdfUrl(res.url); setEditRowId(res.rowId);
+      updateCache?.(QT_CACHE, null); loadHistory();
+      setSuccessUrl(res.url);
+    } catch (err) { setAlertMsg("เกิดข้อผิดพลาด: " + err.message); setError(err.message); }
+    finally { setLoading(false); }
+  };
+
+  const labelS = { fontSize: 11, color: C.muted, marginBottom: 3 };
+  const cellS  = { border: `1px solid ${C.border}`, borderRadius: 4, padding: "5px 8px", fontSize: 13, width: "100%", boxSizing: "border-box", background: "white", fontFamily: "inherit" };
+
+  const qtNo = id => `QT-${String(id).padStart(6, "0")}`;
+  const fmtHistDate = d => {
+    if (!d) return "";
+    const dt = new Date(d);
+    if (isNaN(dt)) return d;
+    return `${String(dt.getDate()).padStart(2,"0")}/${String(dt.getMonth()+1).padStart(2,"0")}/${dt.getFullYear()}`;
+  };
+  const q = search.trim().toLowerCase();
+  const filtered = q
+    ? history.filter(h => h.to?.toLowerCase().includes(q) || h.subject?.toLowerCase().includes(q) || qtNo(h.id).toLowerCase().includes(q))
+    : history;
+
+  // ── LIST VIEW ──────────────────────────────────────────────
+  if (view === "list") return (
+    <div style={{ padding: "20px 24px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+        <div style={{ fontSize: 17, fontWeight: 600 }}>ใบเสนอราคา</div>
+        <Btn primary onClick={openCreate}><Plus size={14} style={{ marginRight: 5 }} />สร้างใบเสนอราคาใหม่</Btn>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+        <input value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="ค้นหาลูกค้า / เลขที่ / เรื่อง..."
+          style={{ border: `1px solid ${C.border}`, borderRadius: 4, padding: "5px 10px", fontSize: 13, width: 260, fontFamily: "inherit" }} />
+        <span style={{ fontSize: 12, color: C.muted, marginLeft: "auto" }}>
+          {histLoad ? "กำลังโหลด..." : `พบ ${filtered.length} รายการ`}
+        </span>
+      </div>
+      {!histLoad && history.length === 0 && (
+        <div style={{ textAlign: "center", padding: "60px 0", color: C.muted, fontSize: 13 }}>
+          ยังไม่มีรายการ — กด "สร้างใบเสนอราคาใหม่" เพื่อเริ่มต้น
+        </div>
+      )}
+      {!histLoad && history.length > 0 && (
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead>
+            <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
+              <th style={{ padding: "6px 10px", textAlign: "left", color: C.muted, fontWeight: 500, width: 120 }}>เลขที่ใบเสนอราคา</th>
+              <th style={{ padding: "6px 10px", textAlign: "left", color: C.muted, fontWeight: 500, width: 104 }}>วันที่</th>
+              <th style={{ padding: "6px 10px", textAlign: "left", color: C.muted, fontWeight: 500 }}>เรียน</th>
+              <th style={{ padding: "6px 10px", textAlign: "left", color: C.muted, fontWeight: 500 }}>เรื่อง</th>
+              <th style={{ padding: "6px 10px", width: 60 }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(h => (
+              <tr key={h.id} style={{ borderBottom: `1px solid ${C.borderLight}` }}>
+                <td style={{ padding: "8px 10px" }}>
+                  <span onClick={() => openEdit(h.id)} style={{ color: C.accent, cursor: "pointer", fontWeight: 500 }}>{qtNo(h.id)}</span>
+                </td>
+                <td style={{ padding: "8px 10px" }}>{fmtHistDate(h.date)}</td>
+                <td style={{ padding: "8px 10px", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.to}</td>
+                <td style={{ padding: "8px 10px", maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.subject}</td>
+                <td style={{ padding: "8px 10px", textAlign: "right" }}>
+                  {h.pdfUrl && <a href={h.pdfUrl} target="_blank" rel="noopener noreferrer" style={{ color: C.muted, fontSize: 12 }}>PDF</a>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+
+  // ── FORM VIEW (create / edit) ──────────────────────────────
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* Top nav */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+        <button onClick={() => setView("list", null)} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 13, padding: 0 }}>← รายการใบเสนอราคา</button>
+        <span style={{ color: C.muted }}>›</span>
+        <span style={{ fontSize: 13, fontWeight: 500 }}>{editRowId ? `แก้ไข ${qtNo(editRowId)}` : "สร้างใบเสนอราคาใหม่"}</span>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+          {error && <span style={{ color: C.danger, fontSize: 12 }}>{error}</span>}
+          {pdfUrl && <a href={pdfUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: C.accent }}>📄 เปิด PDF</a>}
+          <Btn onClick={() => setView("list", null)}>ยกเลิก</Btn>
+          <Btn primary onClick={handleGenerate} disabled={loading}>
+            {loading ? <><Loader size={12} style={{ animation: "spin 1s linear infinite", marginRight: 5 }} />กำลังสร้าง...</> : editRowId ? "อัพเดท PDF" : "สร้าง PDF"}
+          </Btn>
+        </div>
+      </div>
+
+      {/* Two-column body */}
+      <div style={{ display: "flex", flex: 1, overflow: "hidden", minHeight: 0 }}>
+        {/* Form panel */}
+        <div style={{ width: 500, flexShrink: 0, padding: "16px 24px", overflowY: "auto", borderRight: `1px solid ${C.border}` }}>
+          <div style={{ marginBottom: 10 }}>
+            <div style={labelS}>วันที่</div>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} style={cellS} />
+          </div>
+          <div style={{ marginBottom: 10 }}>
+            <div style={labelS}>เรียน</div>
+            <input value={to} onChange={e => setTo(e.target.value)} style={cellS} />
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <div style={labelS}>เรื่อง</div>
+            <input value={subject} onChange={e => setSubject(e.target.value)} style={cellS} />
+          </div>
+          <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>รายการสินค้า</div>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, marginBottom: 10 }}>
+            <thead>
+              <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
+                <th style={{ width: 18, padding: "3px 2px", color: C.muted, fontWeight: 500, fontSize: 10 }}>#</th>
+                <th style={{ padding: "3px 4px", textAlign: "left", color: C.muted, fontWeight: 500, fontSize: 10 }}>สินค้า</th>
+                <th style={{ width: 62, padding: "3px 4px", textAlign: "left", color: C.muted, fontWeight: 500, fontSize: 10 }}>ขนาด</th>
+                <th style={{ width: 68, padding: "3px 4px", textAlign: "right", color: C.muted, fontWeight: 500, fontSize: 10 }}>ราคา/หน่วย</th>
+                <th style={{ width: 60, padding: "3px 4px", textAlign: "center", color: C.muted, fontWeight: 500, fontSize: 10 }}>หน่วย</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((it, i) => (
+                <tr key={i} style={{ borderBottom: `1px solid ${C.borderLight}` }}>
+                  <td style={{ padding: "2px 2px", textAlign: "center", color: C.muted, fontSize: 10 }}>{i+1}</td>
+                  <td style={{ padding: "2px 2px" }}>
+                    <div ref={el => rowRefs.current[i] = el}>
+                      <ProductAutocomplete
+                        value={it.desc}
+                        onChange={v => updateItem(i, "desc", v)}
+                        products={products}
+                        onEnter={() => { const next = rowRefs.current[i+1]?.querySelector("input"); if (next) next.focus(); }}
+                        style={{ fontSize: 12, padding: "3px 2px" }}
+                      />
+                    </div>
+                  </td>
+                  <td style={{ padding: "2px 2px" }}>
+                    <select value={it.desc2} onChange={e => updateItem(i, "desc2", e.target.value)}
+                      style={{ width: "100%", border: "none", background: "transparent", outline: "none", fontSize: 12, cursor: "pointer", fontFamily: "inherit", padding: "3px 2px" }}>
+                      <option value="">—</option>
+                      {(sizes || []).map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </td>
+                  <td style={{ padding: "2px 4px" }}>
+                    <input type="number" min="0" step="0.01" value={it.price}
+                      onChange={e => updateItem(i, "price", e.target.value)}
+                      style={{ width: "100%", border: "none", padding: "3px 0", background: "transparent", outline: "none", fontSize: 12, textAlign: "right", fontFamily: "inherit" }} />
+                  </td>
+                  <td style={{ padding: "2px 2px" }}>
+                    <select value={it.unit} onChange={e => updateItem(i, "unit", e.target.value)}
+                      style={{ width: "100%", border: "none", background: "transparent", outline: "none", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
+                      {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div style={{ marginBottom: 10 }}>
+            <div style={labelS}>หมายเหตุ / เงื่อนไข</div>
+            <textarea value={remarks} onChange={e => setRemarks(e.target.value)} rows={3}
+              style={{ ...cellS, resize: "vertical", fontFamily: "inherit" }} />
+          </div>
+          <div>
+            <div style={labelS}>ชื่อผู้เสนอราคา</div>
+            <input value={signerName} onChange={e => setSignerName(e.target.value)} style={cellS} />
+          </div>
+        </div>
+
+        {/* Preview panel */}
+        <div style={{ flex: 1, background: "#d8d8d8", overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+          <div style={{ fontSize: 10, color: "#888" }}>ตัวอย่าง (approximate)</div>
+          <QuotationPreview date={date} to={to} subject={subject} items={items} remarks={remarks} signerName={signerName} company={company} />
+        </div>
+      </div>
+
+      {/* Alert dialog (validation / API errors) */}
+      {alertMsg && createPortal(
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
+          <div style={{ background: "white", borderRadius: 10, padding: "24px 28px", minWidth: 260, boxShadow: "0 8px 32px rgba(0,0,0,0.18)", textAlign: "center" }}>
+            <div style={{ fontSize: 14, color: C.text, marginBottom: 20 }}>{alertMsg}</div>
+            <button onClick={() => setAlertMsg("")}
+              style={{ padding: "7px 28px", borderRadius: 6, border: "none", background: C.accent, color: "white", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>
+              ตกลง
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Success dialog */}
+      {successUrl && createPortal(
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
+          <div style={{ background: "white", borderRadius: 10, padding: "28px 32px", minWidth: 280, boxShadow: "0 8px 32px rgba(0,0,0,0.18)", textAlign: "center" }}>
+            <div style={{ fontSize: 22, marginBottom: 8 }}>✅</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 6 }}>{editRowId ? "อัพเดท PDF สำเร็จแล้ว" : "สร้าง PDF สำเร็จแล้ว"}</div>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 22 }}>ต้องการเปิด PDF หรือกลับไปรายการ?</div>
+            <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+              <button onClick={() => { setSuccessUrl(null); setView("list", null); }}
+                style={{ padding: "8px 20px", borderRadius: 6, border: `1px solid ${C.border}`, background: "white", cursor: "pointer", fontSize: 13, color: C.text }}>
+                กลับรายการ
+              </button>
+              <button onClick={() => { window.open(successUrl, "_blank"); setSuccessUrl(null); setView("list", null); }}
+                style={{ padding: "8px 20px", borderRadius: 6, border: "none", background: C.accent, cursor: "pointer", fontSize: 13, color: "white", fontWeight: 500 }}>
+                📄 เปิด PDF
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+    </div>
+  );
+}
+
+// ── QuotationPreview — live PDF preview (browser-rendered) ──
+function QuotationPreview({ date, to, subject, items, remarks, signerName, company }) {
+  const co        = company || {};
+  const coName    = co.name    || "หจก. โรงงานกิมเชียง";
+  const coNameEN  = co.nameEN  || "KIMCHIANG LIMITED PARTNERSHIP";
+  const coAddress = co.address || "";
+  const coTel     = co.tel     || "";
+  const am        = coAddress.match(/^(.*?)\s*(จังหวัด.*)/);
+  const addrLine1 = am ? am[1].trim() : coAddress.trim();
+  const addrLine2 = am ? am[2].trim() : "";
+
+  const MONTHS = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
+  const fmtDate = d => {
+    if (!d) return "";
+    const [y, m, day] = d.split("-");
+    if (!y || !m || !day) return d;
+    return `${parseInt(day)} ${MONTHS[parseInt(m)-1]} ${parseInt(y)+543}`;
+  };
+  const fmtPrice = n => {
+    const v = parseFloat(n);
+    if (isNaN(v) || !String(n).trim()) return "";
+    return v.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  const filled = items
+    .filter(it => it.desc || it.name || it.price)
+    .map(it => ({ ...it, _display: it.desc !== undefined ? [it.desc, it.desc2].filter(Boolean).join(" ") : (it.name || "") }));
+  const scale  = 0.85;
+  const A4W    = 794;
+  const A4H    = 1123;
+  const px     = mm => Math.round(mm * 3.7795);
+
+  return (
+    <div style={{ width: A4W * scale, height: A4H * scale, overflow: "hidden", boxShadow: "0 2px 16px rgba(0,0,0,0.25)", flexShrink: 0 }}>
+      <div style={{ width: A4W, height: A4H, transform: `scale(${scale})`, transformOrigin: "top left" }}>
+        <div style={{ width: A4W, minHeight: A4H, boxSizing: "border-box", padding: `${px(12)}px ${px(14)}px ${px(9)}px`, background: "white", fontFamily: "sans-serif", fontSize: px(3.5), color: "#111" }}>
+
+          {/* Header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: px(1) }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: px(2.5) }}>
+              <div style={{ background: "#111", color: "white", fontSize: px(5.5), fontWeight: 700, width: px(10), height: px(10), display: "flex", alignItems: "center", justifyContent: "center", borderRadius: px(1.5), flexShrink: 0 }}>KC</div>
+              <div>
+                <div style={{ fontSize: px(4), fontWeight: 600 }}>{coName}</div>
+                <div style={{ fontSize: px(3), fontWeight: 500, marginTop: px(0.3) }}>{coNameEN}</div>
+              </div>
+            </div>
+            <div style={{ textAlign: "right", flexShrink: 0, marginLeft: px(5), fontSize: px(2.8), color: "#6b6b6b" }}>
+              {addrLine1 && <div>{addrLine1}</div>}
+              {addrLine2 && <div>{addrLine2}</div>}
+              {coTel && <div>Tel/Fax : {coTel}</div>}
+            </div>
+          </div>
+
+          {/* Doc title */}
+          <div style={{ fontSize: px(6), fontWeight: 600, color: "#111", marginBottom: px(4) }}>ใบเสนอราคา</div>
+
+          {/* Info band */}
+          <div style={{ marginBottom: px(4), fontSize: px(3.5), background: "#fafafa", borderRadius: px(2), padding: `${px(3)}px ${px(2.5)}px`, height: px(22), overflow: "hidden", display: "grid", gridTemplateColumns: "auto 1fr", gap: `${px(1)}px ${px(2)}px`, alignContent: "start" }}>
+            <span style={{ color: "#999", fontWeight: 500, whiteSpace: "nowrap" }}>วันที่</span><span style={{ color: "#111" }}>{fmtDate(date)}</span>
+            <span style={{ color: "#999", fontWeight: 500, whiteSpace: "nowrap" }}>เรียน</span><span style={{ color: "#111", fontWeight: 500 }}>{to}</span>
+            <span style={{ color: "#999", fontWeight: 500, whiteSpace: "nowrap" }}>เรื่อง</span><span style={{ color: "#111", fontWeight: 500 }}>{subject}</span>
+          </div>
+
+          {/* Table */}
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ borderBottom: `${px(0.5)}px solid #111` }}>
+                <th style={{ fontSize: px(3.3), fontWeight: 600, padding: `${px(1.5)}px ${px(2)}px`, color: "#666", textAlign: "center", width: px(8) }}>#</th>
+                <th style={{ fontSize: px(3.3), fontWeight: 600, padding: `${px(1.5)}px ${px(2)}px`, color: "#666", textAlign: "left" }}>รายการสินค้า</th>
+                <th style={{ fontSize: px(3.3), fontWeight: 600, padding: `${px(1.5)}px ${px(2)}px`, color: "#666", textAlign: "right", width: px(24) }}>ราคา/หน่วย</th>
+                <th style={{ fontSize: px(3.3), fontWeight: 600, padding: `${px(1.5)}px ${px(2)}px`, color: "#666", textAlign: "center", width: px(16) }}>หน่วย</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filled.map((it, i) => (
+                <tr key={i}>
+                  <td style={{ fontSize: px(2.9), color: "#bbb", padding: `${px(1.4)}px ${px(2)}px`, borderBottom: `0.7px solid #e0e0e0`, textAlign: "center" }}>{i+1}</td>
+                  <td style={{ fontSize: px(3.5), padding: `${px(1.4)}px ${px(2)}px`, borderBottom: "0.7px solid #e0e0e0" }}>{it._display}</td>
+                  <td style={{ fontSize: px(3.5), padding: `${px(1.4)}px ${px(2)}px`, borderBottom: "0.7px solid #e0e0e0", textAlign: "right" }}>{fmtPrice(it.price)}</td>
+                  <td style={{ fontSize: px(3.5), padding: `${px(1.4)}px ${px(2)}px`, borderBottom: "0.7px solid #e0e0e0", textAlign: "center" }}>{it.unit}</td>
+                </tr>
+              ))}
+              {Array.from({ length: Math.max(0, 15 - filled.length) }).map((_, i) => (
+                <tr key={"e"+i} style={{ height: px(6) }}>
+                  <td style={{ padding: `${px(1.4)}px ${px(2)}px` }}>&nbsp;</td>
+                  <td /><td /><td />
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div style={{ borderTop: "1.1px solid #ccc" }} />
+          <div style={{ fontSize: px(3.3), color: "#888", marginTop: px(2), marginBottom: px(6) }}>* ราคานี้ยังไม่รวมภาษีมูลค่าเพิ่ม (VAT 7%)</div>
+          <div style={{ fontSize: px(3.3), fontWeight: 600, color: "#555", letterSpacing: 1, marginBottom: px(1.5) }}>หมายเหตุ / เงื่อนไข</div>
+          <div style={{ background: "#fafafa", borderRadius: px(2), padding: `${px(2.5)}px ${px(3)}px`, fontSize: px(3.5), minHeight: px(24), whiteSpace: "pre-wrap" }}>{remarks || ""}</div>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: px(4) }}>
+            <div style={{ textAlign: "center", width: px(58.5) }}>
+              <div style={{ marginTop: px(8), borderTop: "0.75px solid #888", paddingTop: px(1.5) }}>
+                {signerName && <div style={{ fontSize: px(3.5), color: "#111", marginBottom: px(0.5) }}>{signerName}</div>}
+                <div style={{ fontSize: px(3.3), color: "#888" }}>ผู้เสนอราคา</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SettingsPage({ onConfigSaved }) {
   const [company, setCompany]   = useState("หจก. โรงงานกิมเชียง");
   const [nameEN,  setNameEN]    = useState("KIMCHIANG LIMITED PARTNERSHIP");
@@ -1279,12 +1738,13 @@ function SettingsPage({ onConfigSaved }) {
   const [folderTI, setFolderTI] = useState("");
   const [folderBN, setFolderBN] = useState("");
   const [folderBNCombined, setFolderBNCombined] = useState("");
+  const [folderQT, setFolderQT] = useState("");
   const [saving, setSaving]     = useState(false);
   const [saved, setSaved]       = useState(false);
   const [error, setError]       = useState("");
   const [loading, setLoading]   = useState(true);
   const [locked, setLocked]     = useState(true);
-  const origFolders = useRef({ dn: "", ti: "", bn: "", bnCombined: "" });
+  const origFolders = useRef({ dn: "", ti: "", bn: "", bnCombined: "", qt: "" });
 
   useEffect(() => {
     (async () => {
@@ -1300,7 +1760,8 @@ function SettingsPage({ onConfigSaved }) {
         const ti = toUrl(cfg.folders?.ti); setFolderTI(ti);
         const bn = toUrl(cfg.folders?.bn); setFolderBN(bn);
         const bnCombined = toUrl(cfg.folders?.bnCombined); setFolderBNCombined(bnCombined);
-        origFolders.current = { dn, ti, bn, bnCombined };
+        const qt = toUrl(cfg.folders?.qt); setFolderQT(qt);
+        origFolders.current = { dn, ti, bn, bnCombined, qt };
       } catch (err) {
         setError("โหลดการตั้งค่าไม่สำเร็จ: " + err.message);
       } finally {
@@ -1316,7 +1777,7 @@ function SettingsPage({ onConfigSaved }) {
     setSaving(true);
     setError("");
     try {
-      const newFolders = { dn: folderDN, ti: folderTI, bn: folderBN, bnCombined: folderBNCombined, [key]: value };
+      const newFolders = { dn: folderDN, ti: folderTI, bn: folderBN, bnCombined: folderBNCombined, qt: folderQT, [key]: value };
       await api.saveConfig({
         company: { name: company, nameEN, address, tel, taxId },
         folders: newFolders,
@@ -1337,7 +1798,7 @@ function SettingsPage({ onConfigSaved }) {
     try {
       await api.saveConfig({
         company: { name: company, nameEN, address, tel, taxId },
-        folders: { dn: folderDN, ti: folderTI, bn: folderBN, bnCombined: folderBNCombined },
+        folders: { dn: folderDN, ti: folderTI, bn: folderBN, bnCombined: folderBNCombined, qt: folderQT },
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
@@ -1390,6 +1851,7 @@ function SettingsPage({ onConfigSaved }) {
             <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ใบกำกับภาษี (TI) Folder URL</div><input value={folderTI} onChange={e => setFolderTI(e.target.value)} onBlur={e => handleFolderBlur("ti", e.target.value, "TI")} disabled={locked} placeholder="https://drive.google.com/drive/folders/..." style={monoS} /></div>
             <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ใบวางบิล (BN) Folder URL</div><input value={folderBN} onChange={e => setFolderBN(e.target.value)} onBlur={e => handleFolderBlur("bn", e.target.value, "BN")} disabled={locked} placeholder="https://drive.google.com/drive/folders/..." style={monoS} /></div>
             <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ใบวางบิลรวมพิมพ์ (BN Combined) Folder URL <span style={{ color: C.muted, opacity: 0.7 }}>— เว้นว่าง = ใช้โฟลเดอร์ย่อย "Combined" อัตโนมัติ</span></div><input value={folderBNCombined} onChange={e => setFolderBNCombined(e.target.value)} onBlur={e => handleFolderBlur("bnCombined", e.target.value, "BN Combined")} disabled={locked} placeholder="(เว้นว่างได้)" style={monoS} /></div>
+            <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ใบเสนอราคา (QT) Folder URL <span style={{ color: C.muted, opacity: 0.7 }}>— เว้นว่าง = บันทึกใน My Drive root</span></div><input value={folderQT} onChange={e => setFolderQT(e.target.value)} onBlur={e => handleFolderBlur("qt", e.target.value, "QT")} disabled={locked} placeholder="(เว้นว่างได้)" style={monoS} /></div>
           </div>
           <div style={{ marginTop: 10, padding: "8px 12px", background: "#f0f4ff", borderRadius: 6, fontSize: 11, color: C.muted }}>
             💡 วาง URL จาก Google Drive ได้เลย — ระบบจะดึง Folder ID ให้อัตโนมัติ
@@ -1587,9 +2049,10 @@ function CustomerPage() {
 
 // ── Product Management Page ────────────────────────────────
 
-function ProductPage() {
+function ProductPage({ cache, updateCache }) {
   const [items, setItems]           = useState([]); // [{type,value,row}]
   const [loading, setLoading]       = useState(true);
+  const [locked, setLocked]         = useState(true);
   const [tab, setTab]               = useState("product"); // "product" | "size"
   const [form, setForm]             = useState(null); // null | { mode:"add"|"edit", row?:number, value:"" }
   const [saving, setSaving]         = useState(false);
@@ -1599,12 +2062,19 @@ function ProductPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { setItems(await api.getProducts()); }
+    try {
+      const result = await api.getProducts();
+      setItems(result);
+      updateCache?.("productList", result);
+    }
     catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); }
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (cache?.["productList"]) { setItems(cache["productList"]); setLoading(false); }
+    else { load(); }
+  }, []);
   useEffect(() => { if (form && formRef.current) formRef.current.scrollIntoView({ behavior: "smooth", block: "start" }); }, [form]);
 
   const visible = items.filter(it => it.type === tab);
@@ -1619,6 +2089,7 @@ function ProductPage() {
         await api.updateProduct(form.row, form.value);
       }
       setForm(null);
+      updateCache?.("productList", null);
       await load();
     } catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); }
     finally { setSaving(false); }
@@ -1626,7 +2097,12 @@ function ProductPage() {
 
   const handleDelete = async () => {
     setDeleteLoading(true);
-    try { await api.deleteProduct(deleteTarget.row); setDeleteTarget(null); await load(); }
+    try {
+      await api.deleteProduct(deleteTarget.row);
+      setDeleteTarget(null);
+      updateCache?.("productList", null);
+      await load();
+    }
     catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); }
     finally { setDeleteLoading(false); }
   };
@@ -1639,7 +2115,13 @@ function ProductPage() {
     <div>
       <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span>📦 จัดการสินค้า</span>
-        <Btn primary onClick={() => setForm({ mode: "add", value: "" })}>+ เพิ่ม{tabLabel}ใหม่</Btn>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button onClick={() => { setLocked(l => !l); if (!locked) setForm(null); }}
+            style={{ background: locked ? C.pageBg : "#fff9e6", border: `0.5px solid ${locked ? C.border : "#f0a500"}`, borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontSize: 12, color: locked ? C.muted : "#b87800", display: "flex", alignItems: "center", gap: 5 }}>
+            {locked ? "🔒 ล็อค" : "🔓 กำลังแก้ไข"}
+          </button>
+          {!locked && <Btn primary onClick={() => setForm({ mode: "add", value: "" })}>+ เพิ่ม{tabLabel}ใหม่</Btn>}
+        </div>
       </div>
 
       {/* Tabs */}
@@ -1655,7 +2137,7 @@ function ProductPage() {
       </div>
 
       {/* Add / Edit form */}
-      {form && (
+      {form && !locked && (
         <div ref={formRef} style={{ background: "#F8FAFF", border: `1px solid ${C.accent}44`, borderRadius: 8, padding: 16, marginBottom: 16 }}>
           <div style={{ fontWeight: 500, marginBottom: 12 }}>{form.mode === "add" ? `เพิ่ม${tabLabel}ใหม่` : `แก้ไข${tabLabel}`}</div>
           <div style={{ marginBottom: 8 }}>
@@ -1696,10 +2178,12 @@ function ProductPage() {
                   <td style={{ ...tdS, textAlign: "center", color: C.muted, fontSize: 12 }}>{i + 1}</td>
                   <td style={{ ...tdS, fontWeight: 500 }}>{it.value}</td>
                   <td style={{ ...tdS, display: "flex", gap: 4, justifyContent: "flex-end" }}>
-                    <button onClick={() => setForm({ mode: "edit", row: it.row, value: it.value })}
-                      style={{ padding: "3px 10px", fontSize: 12, border: "none", borderRadius: 4, background: "#E0E7FF", color: "#3730A3", cursor: "pointer", fontFamily: "Prompt, sans-serif" }}>แก้ไข</button>
-                    <button onClick={() => setDeleteTarget(it)}
-                      style={{ padding: "3px 10px", fontSize: 12, border: "none", borderRadius: 4, background: "#FEE2E2", color: "#991B1B", cursor: "pointer", fontFamily: "Prompt, sans-serif" }}>ลบ</button>
+                    {!locked && <>
+                      <button onClick={() => setForm({ mode: "edit", row: it.row, value: it.value })}
+                        style={{ padding: "3px 10px", fontSize: 12, border: "none", borderRadius: 4, background: "#E0E7FF", color: "#3730A3", cursor: "pointer", fontFamily: "Prompt, sans-serif" }}>แก้ไข</button>
+                      <button onClick={() => setDeleteTarget(it)}
+                        style={{ padding: "3px 10px", fontSize: 12, border: "none", borderRadius: 4, background: "#FEE2E2", color: "#991B1B", cursor: "pointer", fontFamily: "Prompt, sans-serif" }}>ลบ</button>
+                    </>}
                   </td>
                 </tr>
               ))}
@@ -2342,9 +2826,9 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick }) {
 
   return (
     <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>
-      <div style={{ padding: "10px 14px", display: "flex", gap: 8, alignItems: "flex-start", borderBottom: `0.5px solid ${C.border}`, background: "#fafafa", flexWrap: "wrap" }}>
+      <div style={{ padding: "10px 14px", display: "flex", gap: 8, alignItems: "center", borderBottom: `0.5px solid ${C.border}`, background: "#fafafa", flexWrap: "wrap" }}>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="ค้นหาเลขที่ / ลูกค้า..."
-          style={{ ...inputStyle, width: 240, height: 30 }} />
+          style={{ ...inputStyle, width: 200, height: 30 }} />
         <DateRangePicker startDate={dStart} endDate={dEnd} onApply={(s, e) => { setDStart(s); setDEnd(e); }} />
         <Btn small onClick={onRefresh}><RefreshCw size={14}/> รีเฟรช</Btn>
         <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted }}>พบ {filtered.length} รายการ</span>
@@ -2896,7 +3380,7 @@ function BillingNotePage({ cache, updateCache, goListRequest, onViewChange }) {
     }
   };
 
-  useEffect(() => { loadBnList(); }, []);
+  useEffect(() => { if (!cache?.["bnList"]) loadBnList(); }, []);
 
   if (view === "create") return <BNCreateView onBack={() => { updateCache("bnList", null); loadBnList(); setView("list"); }} />;
   if (view === "detail") return <BNDetailView bnNo={selectedBnNo} onBack={() => setView("list")}
@@ -3096,7 +3580,7 @@ function TaxInvoiceForm({ initial, onSave, onCancel, isEdit, products, setProduc
               {items.map((it, i) => {
                 const b = it.amount ? Math.floor(Number(it.amount)) : null;
                 const s = it.amount ? Math.round((Number(it.amount) - Math.floor(Number(it.amount))) * 100) : null;
-                const dw = descWidth((it.desc || "") + (it.desc2 ? " " + it.desc2 : ""));
+                const dw = descWidth(it.desc || ""); // #133: desc is own 38mm col; desc2 separate 12mm col
                 const detailW = descWidth(it.detail || "");
                 const atWarn  = detailW >= DETAIL_WARN;
                 const atLimit = dw >= DESC_MAX || detailW >= DETAIL_MAX;
@@ -3420,6 +3904,9 @@ function TaxInvoicePage({ products, setProducts, sizes, vatRate = 0.07, cache, u
     finally { setCancelLoading(false); }
   }, [cancelSearch]);
 
+  // #147 auto-load all cancelled items when section is expanded
+  useEffect(() => { if (cancelSectionOpen) loadCancelledTI(); }, [cancelSectionOpen]);
+
   const handleSaveNew = (result) => {
     setOk("สร้าง " + result.id + " สำเร็จ!");
     setSaving(false);
@@ -3585,7 +4072,7 @@ function TaxInvoicePage({ products, setProducts, sizes, vatRate = 0.07, cache, u
 
 // ── Home Page ─────────────────────────────────────────────
 function HomePage({ onNavigate }) {
-  const ICON_MAP = { FileText, ClipboardList, Receipt, Package, BarChart2, LayoutDashboard, ArrowLeftRight, Users, Settings };
+  const ICON_MAP = { FileText, ClipboardList, Receipt, FileSearch, Package, BarChart2, LayoutDashboard, ArrowLeftRight, Users, Settings };
   const sections = [...new Set(NAV.filter(n => n.key !== "dashboard" && n.section).map(n => n.section))];
   const dashboard = NAV.find(n => n.key === "dashboard");
 
@@ -3714,14 +4201,15 @@ export default function App({ userEmail, userName, onLogout }) {
       case "invoice":    return <DeliveryNotePage products={products} setProducts={setProducts} sizes={sizes} cache={cache} updateCache={updateCache} onViewChange={setBreadcrumbSuffix} goListRequest={goListRequest} />;
       case "billing":    return <BillingNotePage cache={cache} updateCache={updateCache} goListRequest={goListRequest} onViewChange={setBreadcrumbSuffix} />;
       case "taxinvoice": return <TaxInvoicePage products={products} setProducts={setProducts} sizes={sizes} vatRate={vatRate} cache={cache} updateCache={updateCache} onViewChange={setBreadcrumbSuffix} goListRequest={goListRequest} />;
+      case "quotation":  return <QuotationPage products={products} sizes={sizes} onViewChange={setBreadcrumbSuffix} cache={cache} updateCache={updateCache} />;
       case "settings":   return <SettingsPage />;
       case "customers":  return <CustomerPage />;
-      case "stock":      return <ProductPage />;
+      case "stock":      return <ProductPage cache={cache} updateCache={updateCache} />;
       default:           return <PlaceholderPage title={NAV.find(n => n.key === active)?.label} icon={NAV.find(n => n.key === active)?.icon} />;
     }
   };
 
-  const NAV_ICONS = { FileText, ClipboardList, Receipt, Package, BarChart2, Users, Settings, ArrowLeftRight, LayoutDashboard };
+  const NAV_ICONS = { FileText, ClipboardList, Receipt, FileSearch, Package, BarChart2, Users, Settings, ArrowLeftRight, LayoutDashboard };
 
   const NavItem = ({ item }) => (
     <div onClick={() => { if (item.key === active) setGoListRequest(n => n + 1); else setActive(item.key); }} style={{
@@ -3763,7 +4251,7 @@ export default function App({ userEmail, userName, onLogout }) {
           ))}
         </div>
         <div style={{ padding: "10px 16px", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)" }}>app v1.4.90{gsVersion ? <span>  ·  gs v{gsVersion}</span> : null}</span>
+          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)" }}>app v1.4.116{gsVersion ? <span>  ·  gs v{gsVersion}</span> : null}</span>
         </div>
       </div>
 
