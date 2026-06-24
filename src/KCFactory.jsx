@@ -1,82 +1,41 @@
 // ============================================================
 // KC Factory System — Web App
 // ============================================================
-// Version History (last 15 — full log in KC_Daily_Progress_2026-06-18.md)
-// v1.4.116 (2026-06-23) — #149 apiCall: replace JSONP with fetch() — fixes ERR_BLOCKED_BY_ORB on Chrome profiles with strict privacy settings
-// v1.4.115 (2026-06-23) — #131 ProductPage: cache productList (load only if !cache["productList"]); lock/unlock guard (locked by default, hides add/edit/delete)
-// v1.4.114 (2026-06-23) — #128 BNListView: search box width 240→200 (match DN/TI); toolbar alignItems flex-start→center (fix รีเฟรช btn misalign)
-// v1.4.113 (2026-06-23) — #147 DN+TI cancelled section: auto-load all cancelled items on expand (no need to type+search first)
-// v1.4.112 (2026-06-23) — BillingNotePage: re-add cache guard to useEffect (only fetch if !cache["bnList"]); bust still happens on create/save
-// v1.4.111 (2026-06-23) — #140 DN form: DETAIL_WARN_DN_L 16→15u (yellow warn triggers earlier)
-// v1.4.110 (2026-06-23) — #140 DN form: fix red msg threshold — use DETAIL_MAX_DN_L-1.1 (18.9u) since hard-block prevents stored value from ever reaching 20u exactly
-// v1.4.109 (2026-06-23) — #140 DN form: detail col hard-block at DETAIL_MAX_DN_L=20u (onChange rejects input when descWidthV2>=20); warn message changes to "เต็มแล้ว — กด Enter เพื่อขึ้นบรรทัดใหม่"
-// v1.4.108 (2026-06-23) — #140 DN form: DN_MAX_ROWS=20 (2 pages, matches Code.gs cap); useInvoiceForm maxRows param; flatMap page-break divider "── หน้าที่ X ──" every 10 rows; descWidthV2 (mirrors Code.gs Thai=1.0/non-Thai=1.1/space=4/15/zero-width skip); DESC_MAX_DN_L=17/DETAIL_WARN_DN_L=16/DETAIL_MAX_DN_L=20 (calibrated for landscape 33mm desc/38.5mm detail); TI constants/descWidth untouched
-// v1.4.107 (2026-06-23) — #141 QuotationPage: validation errors use centered inline dialog (alertMsg state) instead of browser alert()
-// v1.4.106 (2026-06-23) — #141 QuotationPage: move ยกเลิก/สร้าง PDF buttons to top nav bar (always visible, no scroll needed)
-// v1.4.105 (2026-06-23) — #141 QuotationPage: cache history list (qtList key, only reloads after generate); fix ISO date display in history table
-// v1.4.104 (2026-06-23) — #141 QuotationPage: success dialog with "📄 เปิด PDF" / "กลับรายการ" buttons after generate
-// v1.4.103 (2026-06-23) — #141 QuotationPage: after PDF created/updated → alert popup → navigate back to history list
-// v1.4.102 (2026-06-23) — #141 QuotationPage: validation errors use alert() popup instead of silent footer text
-// v1.4.101 (2026-06-23) — #141 QuotationPage: drop modal/portal → view-based nav (list/form) matching DN pattern; back button + breadcrumb; scrollable form page
-// v1.4.100 (2026-06-23) — #141 QuotationPage: form panel 380→500px; preview scale 0.75→0.85; เปิด PDF moved to footer right with buttons
-// v1.4.99 (2026-06-23) — #141 QuotationPage: items use ProductAutocomplete+size (desc+desc2 concat); Enter→next row; remove specific placeholders; pass sizes prop
-// v1.4.98 (2026-06-23) — #141 QuotationPage: modal full content-area (left:220 to right edge); history matches DN layout (QT-XXXXXX link, search bar, พบ X รายการ); preview scale 0.75
-// v1.4.97 (2026-06-23) — #141 QuotationPage: redesign as history-main + modal (form left / live preview right); add QuotationPreview component
-// v1.4.96 (2026-06-22) — #141 HomePage: add FileSearch to ICON_MAP (quotation card was showing text instead of icon)
-// v1.4.95 (2026-06-22) — #141 QuotationPage: QT History list + load + rowId state; api listQuotations/loadQuotation
-// v1.4.94 (2026-06-22) — #141 QuotationPage: add signerName input; pass to generateQuotationPDF
-// v1.4.93 (2026-06-22) — #141 QuotationPage: fix date input font (add fontFamily:inherit to cellS)
-// v1.4.92 (2026-06-22) — #141 QuotationPage: ใบเสนอราคา form + generateQuotationPDF + nav item + folderQT in Settings
-// v1.4.91 (2026-06-19) — #133 remove updateDetail hard block (DETAIL_MAX guard); update dw to check it.desc only (desc2 now has own 12mm col; combined width no longer meaningful)
-// v1.4.90 (2026-06-19) — #129b BNCreateView: useEffect on mount calls handleSearch() so current month's DNs auto-load when opening BN Create (no need to click ค้นหา first)
-// v1.4.89 (2026-06-19) — #135 DN+TI custWarning modal: guardedSave now stores full customer objects in custWarning; modal shows "หมายถึงลูกค้านี้ใช่ไหม?"; "ใช่ ใช้ชื่อนี้" auto-fills name/address/phone from matched customer; "ไม่ ใช้ชื่อที่พิมพ์" proceeds with typed name. allCustomers added to DN+TI destructuring.
-// v1.4.88 (2026-06-19) — #134 BNCreateView done state: replace conditional <a> with always-visible PDF Btn; ptLoading state + handleGenBnPdf (mirrors BNDetailView generatePortrait — generates on-demand if no cached URL, stores result in customers state)
-// v1.4.87 (2026-06-19) — #129 BillingNotePage: remove cache guard from useEffect (was if(!cache["bnList"]) → now always calls loadBnList on mount so switching back to BN tab refreshes the list)
-// v1.4.86 (2026-06-19) — #111 P1: extract useInvoiceForm hook + initInvoiceItems — shared DN+TI form LOGIC only (items/state/refs, updateItem/updateDetail, addRow/addContinuationRow [detailAttr], removeRow, cellInput, checkProductName, checkNameSimilarity, guardedSave). Each form keeps own fields/JSX/payload/api (tables/cards/summary unchanged). No behavior change; updateItem now functional setState. ~190 lines dedup. #78 state portion folded in.
-// v1.4.85 (2026-06-19) — fix atLimit display: dw now uses desc+desc2 only (was getDescText which included detail, causing red limit msg to fire too early in detail field)
-// v1.4.84 (2026-06-19) — #127 refine: newCustWarning modal gets 3-way choice (ใช่ เพิ่ม / ไม่ ไม่ต้องเพิ่ม / ยกเลิก); "ไม่" still saves, sets skipCustomerLogRef → skipAutoLog=true in payload → Code.gs skips autoLogCustomer_; ConfirmModal: onSecondary+secondaryLabel props (neutral middle btn)
-// v1.4.83 (2026-06-19) — fix updateDetailItem + updateDetailTI: remove incorrect DESC_MAX combined-width guard (detail is separate right block → only DETAIL_MAX applies)
-// v1.4.82 (2026-06-19) — #127 DN+TI forms: new customer prompt on save (if name unknown to allCustomers + no similar match → ConfirmModal before save proceeds)
-// v1.4.81 (2026-06-19) — #125 BNDetailView: PDF button on-demand (generateBillingNotePortraitPDF, cache col H, clears on edit); remove conditional <a> tag
-// v1.4.80 (2026-06-19) — #124 BNEditForm: editable address+phone (pre-filled from detail, passed to editBillingNote → BN History cols M/N); api.generateBillingNotePortraitPDF
-// v1.4.79 (2026-06-19) — #123 BN landscape PDF: remove format toggle from BNCustomerPanel (always portrait at creation); add แบบพิมพ์ btn to BNDetailView (cached in landscapeUrl, cleared on edit); api.generateBillingNoteLandscapePDF
-// v1.4.78 (2026-06-19) — #115 BNCustomerPanel: editable address + phone (per-BN override); pre-filled from cust, reset on customer switch, passed to confirmBN
-// v1.4.77 (2026-06-19) — #102 BN format toggle: แนวตั้ง/แนวนอน → PDF/แบบพิมพ์; label รูปแบบ PDF → รูปแบบ (3 places: BNEditForm, BNCustomerPanel, print queue)
-// v1.4.76 (2026-06-19) — #122 shared DateRangePicker (เดือน/ทั้งปี + year nav + month grid + custom range, collapsed dropdown); replaces date inputs in DN+TI lists; BN Create month-grid nav (monthOnly); BN History date filter
-// v1.4.75 (2026-06-19) — #121 DN list default = last 3 months (was current month) + "ทั้งหมด" button (clears date range → loads all); wider default seeds _dnStore so more BN DN-opens are instant
-// v1.4.74 (2026-06-19) — #120 BN breadcrumb: BillingNotePage setView pushes suffix (BN no / สร้างใบวางบิล) via onViewChange → top path shows Home › เอกสาร › ใบวางบิล › <BN> like DN/TI
-// v1.4.73 (2026-06-19) — #119 fix: clicking ใบวางบิล nav now returns to BN list (goListRequest wired to BillingNotePage; was missing — only DN/TI had it)
-// v1.4.72 (2026-06-19) — #116 cross-reuse: DN list load seeds shared _dnStore (id→detail w/ items) so opening those DNs from BN is instant (no getDNDetail fetch)
-// v1.4.71 (2026-06-19) — #118 BN Create month cache: handleSearch caches results per "y-m" (instant revisit on month nav); ค้นหา forces refresh; create invalidates current month
-// v1.4.70 (2026-06-19) — #116 DN popup: session-wide _dnStore cache shared across all DNDetailPopup uses (survives navigation) — each DN fetched once, later opens instant
-// v1.4.69 (2026-06-19) — #99 BN Create: month nav ‹ › auto-loads the list (handleSearch(m,y)); no ค้นหา click needed
-// v1.4.68 (2026-06-19) — #103 refine: print queue sits right under content (scroll region flex 0 1 auto) instead of pinned to viewport bottom; still shrinks+scrolls when content tall
-// v1.4.67 (2026-06-19) — #100/#101/#103 BN Create fixes: scrollbar-gutter stable (date/format row no longer shifts); print queue pinned to bottom of right pane (no jump); done state shows clickable DN list (→ DNDetailPopup)
-// v1.4.66 (2026-06-19) — #105 BN History caching: BillingNotePage uses app-level cache for list + detail (survives navigation, instant on return); detail seeded from enriched list row (Option B) so first open is instant too
-// v1.4.65 (2026-06-19) — #110 Settings: add BN Combined folder URL field (blank = auto subfolder); saved via saveConfig folders.bnCombined
-// v1.4.64 (2026-06-19) — #107 BN print queue: พิมพ์เลย generates ONE combined PDF in chosen format (รูปแบบ แนวตั้ง/แนวนอน picker) via printCombinedBillingNotes; opens single file + marks printed (was one tab per BN)
-// v1.4.63 (2026-06-19) — #106 BN print queue: seed from all created BNs on search (shows even w/ nothing created this visit); checked = !printed; พิมพ์เลย marks printed in DB (col K) so rows stay unchecked on revisit
-// v1.4.62 (2026-06-19) — #104 fix: BN Create restores created state on revisit — reads backend generated flag + fills BN no/date/count/total/PDF from getBillingNotes() (was hardcoded generated:false)
-// v1.4.61 (2026-06-19) — #95 dead code cleanup: remove _REMOVED_CreateBNTab_placeholder + BNHistoryTab (~251 lines)
-// v1.4.60 (2026-06-19) — #96 fix: left list independent scroll; date/format fixed grid; done state shows BN+PDF; print queue in right pane; DN popup in panel
-// v1.4.59 (2026-06-18) — #96 BNCreateView redesign: split-pane; BNCustomerPanel with checkbox DN table, date picker, format toggle, inline confirm; print queue
-// v1.4.58 (2026-06-18) — #97 fix: BNDetailView cache — bnDetailCache in BillingNotePage; first open fetches+stores; onSaved busts cache
-// v1.4.57 (2026-06-18) — #97 fix: DNDetailPopup cache — dnCache in BNDetailView; re-open same DN instant
-// v1.4.56 (2026-06-18) — #97 BNDetailView redesign: breadcrumb+status badge+action buttons; DNDetailPopup; BNEditForm; cancelBillingNote; BNListView cancelled badge; 4 new api methods
-// v1.4.55 (2026-06-18) — #93 fix: customer.name → customer.customer field mismatch in BNCreateView + BNPreviewModal
-// v1.4.54 (2026-06-18) — #93 fix: add Plus + ChevronLeft to lucide-react import
-// v1.4.53 (2026-06-18) — #93 BillingNotePage view-based (list/create/detail); BNListView clickable rows; BNDetailView; api.getBillingNoteDetail
-// v1.4.46 (2026-06-18) — #83 ProductAutocomplete keyboard nav (ArrowUp/Down/Enter/Escape)
-// v1.4.45 (2026-06-18) — #72 ProductPage: CRUD for Config_Products; api.getProducts/updateProduct/deleteProduct/addProduct
-// v1.4.41 (2026-06-18) — #82 ProductAutocomplete dropdown: fixed positioning via createPortal + body zoom fix
-// v1.4.36 (2026-06-18) — #71 ProductAutocomplete: free-text autocomplete replacing <select> in DN+TI forms
-// v1.4.29 (2026-06-17) — #54 similar name warning in DN+TI save; custWarning ConfirmModal
-// v1.4.22 (2026-06-17) — #6 soft cancel/restore for DN+TI; 6 new api methods; ConfirmModal confirmLabel prop
+// Version History (condensed — full detail in KC_Daily_Progress_2026-06-18.md)
+// v1.4.133 (2026-06-24) — #155 QR: use download URL (uc?export=download) instead of Drive viewer — forces file download on mobile so user can share as file in LINE
+// v1.4.132 (2026-06-24) — #172 QR modal: replace Google Chart API with qrcode npm (client-side generation, no external dependency)
+// v1.4.131 (2026-06-24) — #155 DN detail: add QR button → generates portrait PDF if needed → shows QR modal for scanning with LINE on mobile
+// v1.4.130 (2026-06-24) — #168 fix dashboard icon: move NAV_ICONS to module level (was inside App); remove duplicate ICON_MAP from HomePage — single source for all icon lookups
+// v1.4.129 (2026-06-23) — Scroll fixes: body margin+overflow, contentRef scroll-to-top on detail open, sticky title+search for DN and TI, sticky title for BN
+// v1.4.128 (2026-06-23) — OtherPage hub under เอกสาร: move ใบเสนอราคา into อื่นๆ with hub-style landing and drill-down nav
+// v1.4.127 (2026-06-23) — SettingsPage lazy load: hub renders instantly; config fetched only on entering company/folders view; cached in settingsConfig key
+// v1.4.126 (2026-06-23) — icon cleanup: replace all emoji (🏢📁📦👥🔒🔓←▼▶📄🖨) with lucide icons throughout; add Building/Lock/Unlock/ChevronRight imports
+// v1.4.125 (2026-06-23) — #132 nav restructure: สินค้า+ลูกค้า moved into ระบบ/SettingsPage hub; hub grid → drill-down views (ข้อมูลบริษัท/Drive/สินค้า/ลูกค้า)
+// v1.4.124 (2026-06-23) — #94 remove react-dom: drop createPortal (all 3 uses already position:fixed — portal unnecessary); fix BN list JSX fragment
+// v1.4.123 (2026-06-23) — #153 pagination: 50/page on DN/TI/BN/QT lists; Paginator component; page resets on search/date change
+// v1.4.122 (2026-06-23) — #148 DN/TI/QT search box: add boxSizing border-box (matches BN height); TI placeholder updated
+// v1.4.121 (2026-06-23) — #148 QT search placeholder shorten ("ค้นหาลูกค้า / เลขที่...")
+// v1.4.120 (2026-06-23) — #148 uniform list page headers: QT icon+16/500+card wrapper+search style; BN create btn; BNListView cancelled section
+// v1.4.119 (2026-06-23) — #151 HR scope: nav section + placeholder page
+// v1.4.118 (2026-06-23) — #150 DN portrait split-button PDF: ต้นฉบับ default / ต้นฉบับ+สำเนา; 2-page not cached
+// v1.4.117 (2026-06-23) — topbar counter-zoom (zoom: 1/fontScale) — A+/A- fixed position
+// v1.4.116 (2026-06-23) — #149 apiCall: fetch() replaces JSONP (fixes ERR_BLOCKED_BY_ORB)
+// v1.4.115 (2026-06-23) — #131 ProductPage: cache + lock/unlock guard (locked by default)
+// v1.4.114 (2026-06-23) — #128 BNListView: search 240→200; toolbar alignItems center
+// v1.4.113 (2026-06-23) — #147 DN+TI cancelled: auto-load all on expand
+// v1.4.112 (2026-06-23) — BillingNotePage: restore cache guard in useEffect
+// v1.4.108–111 (2026-06-23) — #140 DN landscape multi-page: maxRows=20, page-break dividers, descWidthV2, hard-block at 20u, red threshold fix, DETAIL_WARN 16→15u
+// v1.4.92–107 (2026-06-22/23) — #141 QuotationPage full build: form+history+live preview, ProductAutocomplete items, signer, cache, success dialog, top-nav buttons, centered validation dialog
+// v1.4.83–91 (2026-06-19) — #111 useInvoiceForm shared hook (dedup DN+TI ~190 lines); BN cache/useEffect fixes; BNCreateView auto-load; custWarning 3-way modal; #133 remove DETAIL_MAX hard block
+// v1.4.69–82 (2026-06-19) — BN refinements: month auto-load, DN cache cross-reuse, BN breadcrumb, DateRangePicker, format+PDF tweaks, editable address/phone, PDF on-demand, new-customer prompt (#99–#127)
+// v1.4.53–68 (2026-06-18/19) — #93–#110 BillingNote core build: view-based nav, BNCreateView split-pane, BNDetailView+DNDetailPopup+BNEditForm, print queue, combined PDF, History caching, DN 3-month default
+// v1.4.36–46 (2026-06-18) — ProductAutocomplete free-text+portal+keyboard nav (#71/#82/#83); ProductPage CRUD (#72)
+// v1.4.22–29 (2026-06-17) — DN+TI soft cancel/restore (#6); similar-name save warning (#54)
 // ============================================================
 
 import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
-import { createPortal } from "react-dom";
-import { FileText, ClipboardList, Receipt, FileSearch, Package, BarChart2, Printer, Pencil, Save, Search, RefreshCw, Loader, CheckCircle, Square, Eye, Folder, Home, Check, LayoutDashboard, ArrowLeftRight, Users, Settings, Plus, ChevronLeft, Calendar, ChevronDown } from "lucide-react";
+import QRCode from "qrcode";
+import { FileText, ClipboardList, Receipt, FileSearch, Package, BarChart2, Printer, Pencil, Save, Search, RefreshCw, Loader, CheckCircle, Square, Eye, Folder, Home, Check, LayoutDashboard, LayoutGrid, ArrowLeftRight, Users, Settings, Plus, ChevronLeft, ChevronRight, ChevronDown, Calendar, Building, Lock, Unlock, QrCode } from "lucide-react";
 // ============================================================
 // CONFIG — ใส่ Apps Script URL ที่นี่หลัง Deploy
 // ============================================================
@@ -149,7 +108,7 @@ const api = {
   generateTaxInvoicePortraitPDF:          (id) => apiCall("generateTaxInvoicePortraitPDF", { id }),
   generateTaxInvoiceLandscapePDF: (id) => apiCall("generateTaxInvoiceLandscapePDF", { id }),
   generateDeliveryNoteLandscapePDF:  (id) => apiCall("generateDeliveryNoteLandscapePDF", { id }),
-  generateDeliveryNotePortraitPDF:   (id) => apiCall("generateDeliveryNotePortraitPDF", { id }),
+  generateDeliveryNotePortraitPDF:   (id, includeCopy) => apiCall("generateDeliveryNotePortraitPDF", { id, includeCopy: !!includeCopy }),
   generateQuotationPDF: (data) => apiCall("generateQuotationPDF", data),
   listQuotations:       ()     => apiCall("listQuotations"),
   loadQuotation:        (id)   => apiCall("loadQuotation", { rowId: id }),
@@ -194,10 +153,9 @@ const NAV = [
   { key: "invoice",    label: "ใบส่งของ",           icon: "FileText",        section: "เอกสาร" },
   { key: "billing",    label: "ใบวางบิล",           icon: "ClipboardList",   section: "เอกสาร" },
   { key: "taxinvoice", label: "ใบกำกับภาษี",        icon: "Receipt",         section: "เอกสาร" },
-  { key: "quotation",  label: "ใบเสนอราคา",         icon: "FileSearch",      section: "เอกสาร" },
-  { key: "stock",      label: "สินค้า",             icon: "Package",         section: "คลังสินค้า" },
+  { key: "other",      label: "อื่นๆ",               icon: "LayoutGrid",      section: "เอกสาร" },
   { key: "stockmove",  label: "เคลื่อนไหวสต็อก",   icon: "ArrowLeftRight",  section: "คลังสินค้า" },
-  { key: "customers",  label: "รายชื่อลูกค้า",      icon: "Users",           section: "ลูกค้า" },
+  { key: "hr",         label: "เอกสาร HR",          icon: "FileSearch",      section: "HR" },
   { key: "reports",    label: "รายงาน",             icon: "BarChart2",       section: "รายงาน" },
   { key: "settings",   label: "ตั้งค่า",             icon: "Settings",        section: "ระบบ" },
 ];
@@ -206,7 +164,7 @@ const SECTION_COLORS = {
   null:       { bg: "#E6F1FB", color: "#185FA5" },
   "เอกสาร":   { bg: "#E6F1FB", color: "#185FA5" },
   "คลังสินค้า":{ bg: "#EAF3DE", color: "#3B6D11" },
-  "ลูกค้า":   { bg: "#EEEDFE", color: "#534AB7" },
+  "HR":       { bg: "#E5F5F0", color: "#1A6B50" },
   "รายงาน":   { bg: "#FAEEDA", color: "#854F0B" },
   "ระบบ":     { bg: "#F1EFE8", color: "#5F5E5A" },
 };
@@ -256,6 +214,20 @@ const ErrorBox = ({ msg, onRetry }) => (
     {onRetry && <Btn small danger onClick={onRetry}>ลองใหม่</Btn>}
   </div>
 );
+
+const PAGE_SIZE = 50;
+const Paginator = ({ total, page, onChange }) => {
+  const pages = Math.ceil(total / PAGE_SIZE);
+  if (pages <= 1) return null;
+  const btnS = { background: "white", border: `0.5px solid ${C.border}`, borderRadius: 4, padding: "4px 10px", fontSize: 11, cursor: "pointer", color: C.muted };
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, padding: "10px 14px", borderTop: `0.5px solid ${C.border}`, fontSize: 12 }}>
+      <button onClick={() => onChange(page - 1)} disabled={page === 1} style={{ ...btnS, opacity: page === 1 ? 0.4 : 1, cursor: page === 1 ? "default" : "pointer" }}>‹ ก่อนหน้า</button>
+      <span style={{ color: C.muted }}>หน้า {page} / {pages}</span>
+      <button onClick={() => onChange(page + 1)} disabled={page === pages} style={{ ...btnS, opacity: page === pages ? 0.4 : 1, cursor: page === pages ? "default" : "pointer" }}>ถัดไป ›</button>
+    </div>
+  );
+};
 
 // ── Invoice Components ─────────────────────────────────────
 
@@ -648,7 +620,7 @@ function ProductAutocomplete({ value, onChange, onBlur, onEnter, products, style
         placeholder="— เลือกหรือพิมพ์สินค้า —"
         style={{ width: "100%", border: "none", background: "transparent", fontSize: 12, padding: "3px 4px", ...style }}
       />
-      {open && filtered.length > 0 && rect && createPortal(
+      {open && filtered.length > 0 && rect && (
         <div ref={dropdownRef} style={{ position: "fixed", top: rect.bottom + 2, left: rect.left, width: rect.width, zIndex: 9000, background: "white", border: `1px solid ${C.border}`, borderRadius: 4, boxShadow: "0 4px 12px rgba(0,0,0,0.12)", maxHeight: 180, overflowY: "auto" }}>
           {filtered.map((p, i) => (
             <div key={i}
@@ -658,8 +630,7 @@ function ProductAutocomplete({ value, onChange, onBlur, onEnter, products, style
               style={{ padding: "6px 10px", fontSize: 12, cursor: "pointer", borderBottom: `0.5px solid ${C.borderLight}`, background: highlightedIndex === i ? "#C7D7FF" : "white" }}
             >{p}</div>
           ))}
-        </div>,
-        document.body
+        </div>
       )}
     </div>
   );
@@ -858,10 +829,18 @@ function DeliveryNoteDetail({ invoice, onBack, onSaved, products, setProducts, s
   const [data, setData]               = useState(invoice);
   const [lsLoading, setLsLoading]     = useState(false);
   const [ptLoading, setPtLoading]     = useState(false);
+  const [ptMode, setPtMode]           = useState("original"); // "original" | "withCopy"
+  const [ptDropOpen, setPtDropOpen]   = useState(false);
+  const [portraitCopyUrl, setPortraitCopyUrl] = useState(""); // 2-page cache, session-only (not persisted)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelLoading, setCancelLoading]         = useState(false);
+  const [showQr, setShowQr]                       = useState(false);
+  const [qrLoading, setQrLoading]                 = useState(false);
+  const [qrUrl, setQrUrl]                         = useState("");
+  const [qrDataUrl, setQrDataUrl]                 = useState("");
   const handleSave = (updated) => {
     setData({ ...data, ...updated, pdfUrl: "", portraitUrl: "" }); // clear so both PDFs regenerate after edit
+    setPortraitCopyUrl(""); // clear 2-page cache too
     setEditing(false);
     onSaved?.(); // invalidate list cache + reload
   };
@@ -887,24 +866,50 @@ function DeliveryNoteDetail({ invoice, onBack, onSaved, products, setProducts, s
     finally { setLsLoading(false); }
   };
 
-  const generatePortrait = async () => {
-    if (data.portraitUrl) {
+  const generatePortrait = async (mode) => {
+    const withCopy = (mode || ptMode) === "withCopy";
+    const cached = withCopy ? portraitCopyUrl : data.portraitUrl;
+    if (cached) {
       const a = document.createElement("a");
-      a.href = data.portraitUrl; a.target = "_blank"; a.rel = "noopener noreferrer";
+      a.href = cached; a.target = "_blank"; a.rel = "noopener noreferrer";
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       return;
     }
     setPtLoading(true);
     try {
-      const result = await api.generateDeliveryNotePortraitPDF(data.id);
+      const result = await api.generateDeliveryNotePortraitPDF(data.id, withCopy);
       if (result.pdfUrl) {
-        setData(d => ({ ...d, portraitUrl: result.pdfUrl }));
+        if (withCopy) setPortraitCopyUrl(result.pdfUrl);
+        else setData(d => ({ ...d, portraitUrl: result.pdfUrl }));
         const a = document.createElement("a");
         a.href = result.pdfUrl; a.target = "_blank"; a.rel = "noopener noreferrer";
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
       }
     } catch (err) { alert("เกิดข้อผิดพลาด: " + err.message); }
     finally { setPtLoading(false); }
+  };
+
+  const toDownloadUrl = (driveUrl) => {
+    const m = driveUrl.match(/\/file\/d\/([^/]+)/);
+    return m ? `https://drive.google.com/uc?export=download&id=${m[1]}` : driveUrl;
+  };
+  const handleQr = async () => {
+    const url = data.portraitUrl || null;
+    const generate = async (pdfUrl) => {
+      const dlUrl = toDownloadUrl(pdfUrl);
+      const dataUrl = await QRCode.toDataURL(dlUrl, { width: 280, margin: 2 });
+      setQrUrl(dlUrl); setQrDataUrl(dataUrl); setShowQr(true);
+    };
+    if (url) { await generate(url); return; }
+    setQrLoading(true);
+    try {
+      const result = await api.generateDeliveryNotePortraitPDF(data.id, false);
+      if (result.pdfUrl) {
+        setData(d => ({ ...d, portraitUrl: result.pdfUrl }));
+        await generate(result.pdfUrl);
+      }
+    } catch (err) { alert("เกิดข้อผิดพลาด: " + err.message); }
+    finally { setQrLoading(false); }
   };
 
   const handleCancelInvoice = async () => {
@@ -923,7 +928,7 @@ function DeliveryNoteDetail({ invoice, onBack, onSaved, products, setProducts, s
   if (editing) return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-        <button onClick={() => setEditing(false)} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 13 }}>← กลับ</button>
+        <button onClick={() => setEditing(false)} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 3 }}><ChevronLeft size={14}/> กลับ</button>
         <span style={{ color: C.muted }}>›</span>
         <span style={{ fontSize: 14, fontWeight: 500 }}>แก้ไข {data.id}</span>
       </div>
@@ -935,9 +940,19 @@ function DeliveryNoteDetail({ invoice, onBack, onSaved, products, setProducts, s
   return (
     <div>
       {showCancelConfirm && <ConfirmModal message={`ยืนยันยกเลิก ${data.id}?`} confirmLabel="ยืนยันยกเลิก" onConfirm={handleCancelInvoice} onCancel={() => setShowCancelConfirm(false)} loading={cancelLoading} enterConfirm />}
+      {showQr && qrUrl && (
+        <div onClick={() => setShowQr(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "white", borderRadius: 12, padding: 28, textAlign: "center", boxShadow: "0 8px 32px rgba(0,0,0,0.2)", maxWidth: 340 }}>
+            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>สแกนด้วย LINE บนมือถือ</div>
+            <img src={qrDataUrl} alt="QR" style={{ width: 280, height: 280, display: "block", margin: "0 auto", borderRadius: 8 }} />
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 12, marginBottom: 18 }}>สแกน → เปิด PDF บนมือถือ → forward ให้ลูกค้าใน LINE</div>
+            <button onClick={() => setShowQr(false)} style={{ background: C.accent, color: "white", border: "none", borderRadius: 6, padding: "8px 28px", fontSize: 13, cursor: "pointer" }}>ปิด</button>
+          </div>
+        </div>
+      )}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button onClick={onBack} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 13 }}>← รายการ</button>
+          <button onClick={onBack} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 3 }}><ChevronLeft size={14}/> รายการ</button>
           <span style={{ color: C.muted }}>›</span>
           <span style={{ fontSize: 14, fontWeight: 500 }}>{data.id}</span>
           <Badge success={data.billed}>{data.billed ? "วางบิลแล้ว" : "รอวางบิล"}</Badge>
@@ -948,7 +963,23 @@ function DeliveryNoteDetail({ invoice, onBack, onSaved, products, setProducts, s
           ) : (
             <>
               <Btn onClick={generateLandscape} disabled={lsLoading}>{lsLoading ? <Loader size={13}/> : <Printer size={14}/>} พิมพ์</Btn>
-              <Btn onClick={generatePortrait} disabled={ptLoading}>{ptLoading ? <Loader size={13}/> : <FileText size={13}/>} PDF</Btn>
+              <div style={{ position: "relative", display: "inline-flex" }}>
+                {ptDropOpen && <div onClick={() => setPtDropOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 99 }} />}
+                <button onClick={() => generatePortrait()} disabled={ptLoading} style={{ background: "white", color: C.accent, border: `1px solid ${C.accent}`, borderRight: "none", padding: "6px 10px", borderRadius: "4px 0 0 4px", fontSize: 12, cursor: ptLoading ? "not-allowed" : "pointer", opacity: ptLoading ? 0.6 : 1, display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  {ptLoading ? <Loader size={13}/> : <FileText size={13}/>} PDF{ptMode === "withCopy" ? " +สำเนา" : ""}
+                </button>
+                <button onClick={() => setPtDropOpen(o => !o)} disabled={ptLoading} style={{ background: "white", color: C.accent, border: `1px solid ${C.accent}`, padding: "6px 7px", borderRadius: "0 4px 4px 0", fontSize: 11, cursor: ptLoading ? "not-allowed" : "pointer", opacity: ptLoading ? 0.6 : 1, lineHeight: 1 }}>▾</button>
+                {ptDropOpen && (
+                  <div style={{ position: "absolute", top: "100%", right: 0, zIndex: 100, background: "white", border: `1px solid ${C.border}`, borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.12)", overflow: "hidden", minWidth: 160, marginTop: 3 }}>
+                    {[{ value: "original", label: "ต้นฉบับ" }, { value: "withCopy", label: "ต้นฉบับ + สำเนา" }].map(opt => (
+                      <div key={opt.value} onClick={() => { setPtMode(opt.value); setPtDropOpen(false); generatePortrait(opt.value); }} style={{ padding: "9px 14px", fontSize: 13, cursor: "pointer", background: ptMode === opt.value ? "#e8f3fc" : "white", color: ptMode === opt.value ? C.accent : C.text, display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ width: 12, color: C.accent }}>{ptMode === opt.value ? "✓" : ""}</span>{opt.label}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <Btn onClick={handleQr} disabled={qrLoading}>{qrLoading ? <Loader size={13}/> : <QrCode size={14}/>} QR</Btn>
               <Btn primary onClick={() => setEditing(true)}><Pencil size={14}/> แก้ไข</Btn>
               <Btn danger onClick={() => setShowCancelConfirm(true)} disabled={cancelLoading}>ยกเลิกใบนี้</Btn>
             </>
@@ -1107,6 +1138,8 @@ function DeliveryNotePage({ products, setProducts, sizes, cache, updateCache, on
   const [cancelSearch,      setCancelSearch]      = useState("");
   const [cancelLoading,     setCancelLoading]     = useState(false);
   const [cancelledList,     setCancelledList]     = useState([]);
+  const [page,              setPage]              = useState(1);
+  useEffect(() => setPage(1), [search, startDate, endDate]);
 
   const cacheKey = "invoices_" + startDate + "_" + endDate;
   const invoices = cache[cacheKey] || [];
@@ -1155,6 +1188,7 @@ function DeliveryNotePage({ products, setProducts, sizes, cache, updateCache, on
     const q = search.toLowerCase();
     return !q || (inv.id || "").toLowerCase().includes(q) || (inv.name || "").toLowerCase().includes(q);
   });
+  const pagedDN = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div>
@@ -1162,22 +1196,24 @@ function DeliveryNotePage({ products, setProducts, sizes, cache, updateCache, on
 
       {view === "list" && (
         <div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-            <div style={{ fontSize: 16, fontWeight: 500 }}><FileText size={15}/> ใบส่งของ</div>
-            <Btn primary onClick={handleCreateNew}>+ สร้างใบส่งของใหม่</Btn>
-          </div>
-          <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>
-            <div style={{ padding: "10px 14px", display: "flex", gap: 8, alignItems: "flex-start", borderBottom: `0.5px solid ${C.border}`, background: "#fafafa", flexWrap: "wrap" }}>
+          <div style={{ position: "sticky", top: 0, zIndex: 10, background: C.pageBg }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 10 }}>
+              <div style={{ fontSize: 16, fontWeight: 500 }}><FileText size={15}/> ใบส่งของ</div>
+              <Btn primary onClick={handleCreateNew}>+ สร้างใบส่งของใหม่</Btn>
+            </div>
+            <div style={{ padding: "10px 14px", display: "flex", gap: 8, alignItems: "flex-start", border: `0.5px solid ${C.border}`, borderBottom: `0.5px solid ${C.border}`, background: "#fafafa", flexWrap: "wrap", borderRadius: "8px 8px 0 0" }}>
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="ค้นหาลูกค้า / เลขที่..."
-                style={{ padding: "6px 10px", border: `0.5px solid rgba(0,0,0,0.2)`, borderRadius: 4, fontSize: 12, width: 200, height: 30 }} />
+                style={{ padding: "6px 10px", border: `0.5px solid rgba(0,0,0,0.2)`, borderRadius: 4, fontSize: 12, width: 200, height: 30, boxSizing: "border-box" }} />
               <DateRangePicker startDate={startDate} endDate={endDate} onApply={(s, e) => { setStartDate(s); setEndDate(e); }} />
               {loading && <Loader size={14}/>}
               <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted }}>พบ {filtered.length} รายการ</span>
             </div>
-
+          </div>
+          <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderTop: "none", borderRadius: "0 0 8px 8px", overflow: "hidden", marginBottom: 14 }}>
             {error && <div style={{ padding: 14 }}><ErrorBox msg={error} onRetry={loadInvoices} /></div>}
             {loading && <Spinner />}
             {!loading && !error && (
+              <>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
                   <tr>{["เลขที่ใบส่งของ", "วันที่", "ชื่อลูกค้า", "รายการ", "ยอดรวม", "สถานะ"].map((h, i) => (
@@ -1187,7 +1223,7 @@ function DeliveryNotePage({ products, setProducts, sizes, cache, updateCache, on
                 <tbody>
                   {filtered.length === 0 ? (
                     <tr><td colSpan={7} style={{ padding: 32, textAlign: "center", color: C.muted, fontSize: 13 }}>ไม่พบข้อมูล</td></tr>
-                  ) : filtered.map(inv => (
+                  ) : pagedDN.map(inv => (
                     <tr key={inv.id} onMouseEnter={() => setHovered(inv.id)} onMouseLeave={() => setHovered(null)}
                       style={{ background: hovered === inv.id ? C.rowHover : "white", borderBottom: `0.5px solid ${C.borderLight}` }}>
                       <td style={{ padding: "9px 14px" }}>
@@ -1206,6 +1242,8 @@ function DeliveryNotePage({ products, setProducts, sizes, cache, updateCache, on
                   ))}
                 </tbody>
               </table>
+              <Paginator total={filtered.length} page={page} onChange={setPage} />
+              </>
             )}
           </div>
 
@@ -1213,7 +1251,7 @@ function DeliveryNotePage({ products, setProducts, sizes, cache, updateCache, on
           <div style={{ marginTop: 14 }}>
             <button onClick={() => setCancelSectionOpen(o => !o)}
               style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center", gap: 5, padding: 0 }}>
-              {cancelSectionOpen ? "▼" : "▶"} ใบที่ยกเลิก
+              {cancelSectionOpen ? <ChevronDown size={13}/> : <ChevronRight size={13}/>} ใบที่ยกเลิก
             </button>
             {cancelSectionOpen && (
               <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "hidden", marginTop: 8 }}>
@@ -1271,7 +1309,7 @@ function DeliveryNotePage({ products, setProducts, sizes, cache, updateCache, on
       {view === "create" && (
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-            <button onClick={() => setView("list", null)} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 13 }}>← รายการใบส่งของ</button>
+            <button onClick={() => setView("list", null)} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 3 }}><ChevronLeft size={14}/> รายการใบส่งของ</button>
             <span style={{ color: C.muted }}>›</span>
             <span style={{ fontSize: 14, fontWeight: 500 }}>สร้างใบส่งของใหม่</span>
           </div>
@@ -1358,6 +1396,8 @@ function QuotationPage({ products, sizes, onViewChange, cache, updateCache }) {
   const [company,    setCompany]    = useState(null);
   const [successUrl, setSuccessUrl] = useState(null); // triggers success dialog
   const [alertMsg,   setAlertMsg]   = useState("");   // validation/error alert
+  const [page,       setPage]       = useState(1);
+  useEffect(() => setPage(1), [search]);
 
   const updateItem = (idx, field, val) =>
     setItems(prev => prev.map((it, i) => i === idx ? { ...it, [field]: val } : it));
@@ -1427,55 +1467,60 @@ function QuotationPage({ products, sizes, onViewChange, cache, updateCache }) {
   const filtered = q
     ? history.filter(h => h.to?.toLowerCase().includes(q) || h.subject?.toLowerCase().includes(q) || qtNo(h.id).toLowerCase().includes(q))
     : history;
+  const pagedQT = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   // ── LIST VIEW ──────────────────────────────────────────────
   if (view === "list") return (
-    <div style={{ padding: "20px 24px" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-        <div style={{ fontSize: 17, fontWeight: 600 }}>ใบเสนอราคา</div>
-        <Btn primary onClick={openCreate}><Plus size={14} style={{ marginRight: 5 }} />สร้างใบเสนอราคาใหม่</Btn>
+    <div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+        <div style={{ fontSize: 16, fontWeight: 500 }}><FileSearch size={15}/> ใบเสนอราคา</div>
+        <Btn primary onClick={openCreate}>+ สร้างใบเสนอราคาใหม่</Btn>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-        <input value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="ค้นหาลูกค้า / เลขที่ / เรื่อง..."
-          style={{ border: `1px solid ${C.border}`, borderRadius: 4, padding: "5px 10px", fontSize: 13, width: 260, fontFamily: "inherit" }} />
-        <span style={{ fontSize: 12, color: C.muted, marginLeft: "auto" }}>
-          {histLoad ? "กำลังโหลด..." : `พบ ${filtered.length} รายการ`}
-        </span>
-      </div>
-      {!histLoad && history.length === 0 && (
-        <div style={{ textAlign: "center", padding: "60px 0", color: C.muted, fontSize: 13 }}>
-          ยังไม่มีรายการ — กด "สร้างใบเสนอราคาใหม่" เพื่อเริ่มต้น
+      <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>
+        <div style={{ padding: "10px 14px", display: "flex", gap: 8, alignItems: "center", borderBottom: `0.5px solid ${C.border}`, background: "#fafafa", flexWrap: "wrap" }}>
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="ค้นหาลูกค้า / เลขที่..."
+            style={{ padding: "6px 10px", border: `0.5px solid rgba(0,0,0,0.2)`, borderRadius: 4, fontSize: 12, width: 200, height: 30, fontFamily: "inherit", boxSizing: "border-box" }} />
+          {histLoad && <Loader size={14}/>}
+          <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted }}>
+            {histLoad ? "กำลังโหลด..." : `พบ ${filtered.length} รายการ`}
+          </span>
         </div>
-      )}
-      {!histLoad && history.length > 0 && (
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-          <thead>
-            <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
-              <th style={{ padding: "6px 10px", textAlign: "left", color: C.muted, fontWeight: 500, width: 120 }}>เลขที่ใบเสนอราคา</th>
-              <th style={{ padding: "6px 10px", textAlign: "left", color: C.muted, fontWeight: 500, width: 104 }}>วันที่</th>
-              <th style={{ padding: "6px 10px", textAlign: "left", color: C.muted, fontWeight: 500 }}>เรียน</th>
-              <th style={{ padding: "6px 10px", textAlign: "left", color: C.muted, fontWeight: 500 }}>เรื่อง</th>
-              <th style={{ padding: "6px 10px", width: 60 }}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(h => (
-              <tr key={h.id} style={{ borderBottom: `1px solid ${C.borderLight}` }}>
-                <td style={{ padding: "8px 10px" }}>
-                  <span onClick={() => openEdit(h.id)} style={{ color: C.accent, cursor: "pointer", fontWeight: 500 }}>{qtNo(h.id)}</span>
-                </td>
-                <td style={{ padding: "8px 10px" }}>{fmtHistDate(h.date)}</td>
-                <td style={{ padding: "8px 10px", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.to}</td>
-                <td style={{ padding: "8px 10px", maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.subject}</td>
-                <td style={{ padding: "8px 10px", textAlign: "right" }}>
-                  {h.pdfUrl && <a href={h.pdfUrl} target="_blank" rel="noopener noreferrer" style={{ color: C.muted, fontSize: 12 }}>PDF</a>}
-                </td>
+        {!histLoad && history.length === 0 && (
+          <div style={{ textAlign: "center", padding: "40px 0", color: C.muted, fontSize: 13 }}>
+            ยังไม่มีรายการ — กด "สร้างใบเสนอราคาใหม่" เพื่อเริ่มต้น
+          </div>
+        )}
+        {!histLoad && history.length > 0 && (
+          <>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead>
+              <tr>
+                {["เลขที่ใบเสนอราคา", "วันที่", "เรียน", "เรื่อง", ""].map((h, i) => (
+                  <th key={i} style={{ padding: "8px 14px", textAlign: "left", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, background: "#fafafa" }}>{h}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+            </thead>
+            <tbody>
+              {pagedQT.map(h => (
+                <tr key={h.id} style={{ borderBottom: `0.5px solid ${C.borderLight}` }}>
+                  <td style={{ padding: "9px 14px" }}>
+                    <span onClick={() => openEdit(h.id)} style={{ color: C.accent, cursor: "pointer", fontWeight: 500 }}>{qtNo(h.id)}</span>
+                  </td>
+                  <td style={{ padding: "9px 14px", color: C.muted }}>{fmtHistDate(h.date)}</td>
+                  <td style={{ padding: "9px 14px", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.to}</td>
+                  <td style={{ padding: "9px 14px", maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.subject}</td>
+                  <td style={{ padding: "9px 14px", textAlign: "right" }}>
+                    {h.pdfUrl && <a href={h.pdfUrl} target="_blank" rel="noopener noreferrer" style={{ color: C.muted, fontSize: 12 }}>PDF</a>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <Paginator total={filtered.length} page={page} onChange={setPage} />
+          </>
+        )}
+      </div>
     </div>
   );
 
@@ -1484,12 +1529,12 @@ function QuotationPage({ products, sizes, onViewChange, cache, updateCache }) {
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {/* Top nav */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-        <button onClick={() => setView("list", null)} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 13, padding: 0 }}>← รายการใบเสนอราคา</button>
+        <button onClick={() => setView("list", null)} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 13, padding: 0, display: "inline-flex", alignItems: "center", gap: 3 }}><ChevronLeft size={14}/> รายการใบเสนอราคา</button>
         <span style={{ color: C.muted }}>›</span>
         <span style={{ fontSize: 13, fontWeight: 500 }}>{editRowId ? `แก้ไข ${qtNo(editRowId)}` : "สร้างใบเสนอราคาใหม่"}</span>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
           {error && <span style={{ color: C.danger, fontSize: 12 }}>{error}</span>}
-          {pdfUrl && <a href={pdfUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: C.accent }}>📄 เปิด PDF</a>}
+          {pdfUrl && <a href={pdfUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: C.accent }}><FileText size={12} style={{ verticalAlign: "middle", marginRight: 3 }}/> เปิด PDF</a>}
           <Btn onClick={() => setView("list", null)}>ยกเลิก</Btn>
           <Btn primary onClick={handleGenerate} disabled={loading}>
             {loading ? <><Loader size={12} style={{ animation: "spin 1s linear infinite", marginRight: 5 }} />กำลังสร้าง...</> : editRowId ? "อัพเดท PDF" : "สร้าง PDF"}
@@ -1580,7 +1625,7 @@ function QuotationPage({ products, sizes, onViewChange, cache, updateCache }) {
       </div>
 
       {/* Alert dialog (validation / API errors) */}
-      {alertMsg && createPortal(
+      {alertMsg && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
           <div style={{ background: "white", borderRadius: 10, padding: "24px 28px", minWidth: 260, boxShadow: "0 8px 32px rgba(0,0,0,0.18)", textAlign: "center" }}>
             <div style={{ fontSize: 14, color: C.text, marginBottom: 20 }}>{alertMsg}</div>
@@ -1589,12 +1634,11 @@ function QuotationPage({ products, sizes, onViewChange, cache, updateCache }) {
               ตกลง
             </button>
           </div>
-        </div>,
-        document.body
+        </div>
       )}
 
       {/* Success dialog */}
-      {successUrl && createPortal(
+      {successUrl && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
           <div style={{ background: "white", borderRadius: 10, padding: "28px 32px", minWidth: 280, boxShadow: "0 8px 32px rgba(0,0,0,0.18)", textAlign: "center" }}>
             <div style={{ fontSize: 22, marginBottom: 8 }}>✅</div>
@@ -1607,12 +1651,11 @@ function QuotationPage({ products, sizes, onViewChange, cache, updateCache }) {
               </button>
               <button onClick={() => { window.open(successUrl, "_blank"); setSuccessUrl(null); setView("list", null); }}
                 style={{ padding: "8px 20px", borderRadius: 6, border: "none", background: C.accent, cursor: "pointer", fontSize: 13, color: "white", fontWeight: 500 }}>
-                📄 เปิด PDF
+                <FileText size={12} style={{ verticalAlign: "middle", marginRight: 3 }}/> เปิด PDF
               </button>
             </div>
           </div>
-        </div>,
-        document.body
+        </div>
       )}
 
     </div>
@@ -1728,7 +1771,48 @@ function QuotationPreview({ date, to, subject, items, remarks, signerName, compa
   );
 }
 
-function SettingsPage({ onConfigSaved }) {
+function OtherPage({ products, sizes, cache, updateCache, onViewChange, goListRequest }) {
+  const [oView, setOView] = useState("hub"); // hub | quotation
+
+  const HubCard = ({ icon, label, desc, color, bg, onClick }) => (
+    <div onClick={onClick} style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, padding: "20px 16px", cursor: "pointer", textAlign: "center" }}
+      onMouseEnter={e => e.currentTarget.style.borderColor = C.accent}
+      onMouseLeave={e => e.currentTarget.style.borderColor = C.border}>
+      <div style={{ width: 44, height: 44, borderRadius: 8, background: bg, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 10px", color }}>
+        {icon}
+      </div>
+      <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: 11, color: C.muted }}>{desc}</div>
+    </div>
+  );
+
+  if (oView === "hub") return (
+    <div>
+      <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 16 }}>อื่นๆ</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+        <HubCard icon={<FileSearch size={20}/>} label="ใบเสนอราคา" desc="สร้างและจัดการ QT" bg="#F3E8FF" color="#6B21A8" onClick={() => { setOView("quotation"); if (onViewChange) onViewChange(""); }} />
+      </div>
+    </div>
+  );
+
+  if (oView === "quotation") return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+        <button onClick={() => { setOView("hub"); if (onViewChange) onViewChange(""); }} style={{ fontSize: 12, padding: "4px 10px", border: `0.5px solid ${C.border}`, borderRadius: 5, background: C.pageBg, color: C.muted, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+          <ChevronLeft size={14}/> อื่นๆ
+        </button>
+        <span style={{ color: C.muted, fontSize: 12 }}>/</span>
+        <span style={{ fontSize: 14, fontWeight: 500 }}>ใบเสนอราคา</span>
+      </div>
+      <QuotationPage products={products} sizes={sizes} onViewChange={onViewChange} cache={cache} updateCache={updateCache} />
+    </div>
+  );
+
+  return null;
+}
+
+function SettingsPage({ onConfigSaved, cache, updateCache }) {
+  const [sView, setSView]       = useState("hub"); // hub | company | folders | products | customers
   const [company, setCompany]   = useState("หจก. โรงงานกิมเชียง");
   const [nameEN,  setNameEN]    = useState("KIMCHIANG LIMITED PARTNERSHIP");
   const [address, setAddress]   = useState("25/9 หมู่ 10 ต.ลอมแม่นาง อ.บางใหญ่ จ.นนทบุรี 11140");
@@ -1742,33 +1826,45 @@ function SettingsPage({ onConfigSaved }) {
   const [saving, setSaving]     = useState(false);
   const [saved, setSaved]       = useState(false);
   const [error, setError]       = useState("");
-  const [loading, setLoading]   = useState(true);
+  const [loading, setLoading]   = useState(false); // hub loads nothing; only load when entering company/folders
   const [locked, setLocked]     = useState(true);
   const origFolders = useRef({ dn: "", ti: "", bn: "", bnCombined: "", qt: "" });
+  const configFetched = useRef(false);
+
+  const applyConfig = (cfg) => {
+    const toUrl = id => id && !id.startsWith("http") ? `https://drive.google.com/drive/folders/${id}` : (id || "");
+    if (cfg.company?.name)    setCompany(cfg.company.name);
+    if (cfg.company?.nameEN)  setNameEN(cfg.company.nameEN);
+    if (cfg.company?.address) setAddress(cfg.company.address);
+    if (cfg.company?.tel)     setTel(cfg.company.tel);
+    if (cfg.company?.taxId)   setTaxId(cfg.company.taxId);
+    const dn = toUrl(cfg.folders?.dn); setFolderDN(dn);
+    const ti = toUrl(cfg.folders?.ti); setFolderTI(ti);
+    const bn = toUrl(cfg.folders?.bn); setFolderBN(bn);
+    const bnCombined = toUrl(cfg.folders?.bnCombined); setFolderBNCombined(bnCombined);
+    const qt = toUrl(cfg.folders?.qt); setFolderQT(qt);
+    origFolders.current = { dn, ti, bn, bnCombined, qt };
+  };
 
   useEffect(() => {
+    if (sView !== "company" && sView !== "folders") return;
+    if (configFetched.current) return;
+    if (cache?.["settingsConfig"]) { applyConfig(cache["settingsConfig"]); configFetched.current = true; return; }
+    setLoading(true);
+    setError("");
     (async () => {
       try {
         const cfg = await api.getConfig();
-        if (cfg.company?.name)    setCompany(cfg.company.name);
-        if (cfg.company?.nameEN)  setNameEN(cfg.company.nameEN);
-        if (cfg.company?.address) setAddress(cfg.company.address);
-        if (cfg.company?.tel)     setTel(cfg.company.tel);
-        if (cfg.company?.taxId)   setTaxId(cfg.company.taxId);
-        const toUrl = id => id && !id.startsWith("http") ? `https://drive.google.com/drive/folders/${id}` : (id || "");
-        const dn = toUrl(cfg.folders?.dn); setFolderDN(dn);
-        const ti = toUrl(cfg.folders?.ti); setFolderTI(ti);
-        const bn = toUrl(cfg.folders?.bn); setFolderBN(bn);
-        const bnCombined = toUrl(cfg.folders?.bnCombined); setFolderBNCombined(bnCombined);
-        const qt = toUrl(cfg.folders?.qt); setFolderQT(qt);
-        origFolders.current = { dn, ti, bn, bnCombined, qt };
+        applyConfig(cfg);
+        if (updateCache) updateCache("settingsConfig", cfg);
+        configFetched.current = true;
       } catch (err) {
         setError("โหลดการตั้งค่าไม่สำเร็จ: " + err.message);
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [sView]);
 
   const handleFolderBlur = async (key, value, label) => {
     if (locked) return;
@@ -1800,6 +1896,7 @@ function SettingsPage({ onConfigSaved }) {
         company: { name: company, nameEN, address, tel, taxId },
         folders: { dn: folderDN, ti: folderTI, bn: folderBN, bnCombined: folderBNCombined, qt: folderQT },
       });
+      if (updateCache) updateCache("settingsConfig", { company: { name: company, nameEN, address, tel, taxId }, folders: { dn: folderDN, ti: folderTI, bn: folderBN, bnCombined: folderBNCombined, qt: folderQT } });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
       setLocked(true);
@@ -1817,49 +1914,103 @@ function SettingsPage({ onConfigSaved }) {
   const taS   = { ...inputStyle, width: "100%",   resize: "vertical", ...(locked ? { opacity: 0.65, cursor: "not-allowed" } : {}) };
   const monoS = { ...inputStyle, width: "100%",   fontFamily: "monospace", fontSize: 11, ...(locked ? { opacity: 0.65, cursor: "not-allowed" } : {}) };
 
-  return (
+  const HubCard = ({ icon, label, desc, color, bg, onClick }) => (
+    <div onClick={onClick} style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, padding: "20px 16px", cursor: "pointer", textAlign: "center" }}
+      onMouseEnter={e => e.currentTarget.style.borderColor = C.accent}
+      onMouseLeave={e => e.currentTarget.style.borderColor = C.border}>
+      <div style={{ width: 44, height: 44, borderRadius: 8, background: bg, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 10px", fontSize: 20, color }}>
+        {icon}
+      </div>
+      <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: 11, color: C.muted }}>{desc}</div>
+    </div>
+  );
+
+  const BackHeader = ({ title }) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+      <button onClick={() => setSView("hub")} style={{ fontSize: 12, padding: "4px 10px", border: `0.5px solid ${C.border}`, borderRadius: 5, background: C.pageBg, color: C.muted, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+        <ChevronLeft size={14}/> ระบบ
+      </button>
+      <span style={{ color: C.muted, fontSize: 12 }}>/</span>
+      <span style={{ fontSize: 14, fontWeight: 500 }}>{title}</span>
+    </div>
+  );
+
+  if (sView === "hub") return (
     <div>
-      <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span>⚙ ตั้งค่า</span>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button onClick={() => setLocked(l => !l)} style={{ background: locked ? C.pageBg : "#fff9e6", border: `0.5px solid ${locked ? C.border : "#f0a500"}`, borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontSize: 12, color: locked ? C.muted : "#b87800", display: "flex", alignItems: "center", gap: 5 }}>
-            {locked ? "🔒 ล็อค" : "🔓 กำลังแก้ไข"}
-          </button>
-          {!locked && (
-            <Btn primary onClick={handleSaveAll} disabled={saving}>
-              {saving ? <><Loader size={13}/> กำลังบันทึก...</> : saved ? <><CheckCircle size={13}/> บันทึกแล้ว</> : <><Save size={13}/> บันทึกทั้งหมด</>}
-            </Btn>
-          )}
-        </div>
+      <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 16 }}>⚙ ระบบ</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+        <HubCard icon={<Building size={20}/>} label="ข้อมูลบริษัท" desc="ชื่อ ที่อยู่ เลขภาษี" bg="#E6F1FB" color="#185FA5" onClick={() => setSView("company")} />
+        <HubCard icon={<Folder size={20}/>} label="Google Drive" desc="folder URLs ทุก doc type" bg="#FAEEDA" color="#854F0B" onClick={() => setSView("folders")} />
+        <HubCard icon={<Package size={20}/>} label="สินค้า" desc="จัดการรายการสินค้า / ขนาด" bg="#EAF3DE" color="#3B6D11" onClick={() => setSView("products")} />
+        <HubCard icon={<Users size={20}/>} label="ลูกค้า" desc="รายชื่อและข้อมูลลูกค้า" bg="#EEEDFE" color="#534AB7" onClick={() => setSView("customers")} />
+      </div>
+    </div>
+  );
+
+  if (sView === "company") return (
+    <div>
+      <BackHeader title="ข้อมูลบริษัท" />
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 14 }}>
+        <button onClick={() => setLocked(l => !l)} style={{ background: locked ? C.pageBg : "#fff9e6", border: `0.5px solid ${locked ? C.border : "#f0a500"}`, borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontSize: 12, color: locked ? C.muted : "#b87800", display: "flex", alignItems: "center", gap: 5 }}>
+          {locked ? <><Lock size={12}/> ล็อค</> : <><Unlock size={12}/> กำลังแก้ไข</>}
+        </button>
+        {!locked && <Btn primary onClick={handleSaveAll} disabled={saving}>{saving ? <><Loader size={13}/> กำลังบันทึก...</> : saved ? <><CheckCircle size={13}/> บันทึกแล้ว</> : <><Save size={13}/> บันทึกทั้งหมด</>}</Btn>}
       </div>
       {error && <div style={{ marginBottom: 14 }}><ErrorBox msg={error} /></div>}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-        <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, padding: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 14 }}>🏢 ข้อมูลบริษัท</div>
-          <div style={{ display: "grid", gap: 10 }}>
-            <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ชื่อบริษัท</div><input value={company} onChange={e => setCompany(e.target.value)} disabled={locked} style={inpS} /></div>
-            <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ชื่อภาษาอังกฤษ</div><input value={nameEN} onChange={e => setNameEN(e.target.value)} disabled={locked} placeholder="COMPANY NAME IN ENGLISH" style={inpS} /></div>
-            <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>เลขประจำตัวผู้เสียภาษี</div><input value={taxId} onChange={e => setTaxId(e.target.value)} disabled={locked} placeholder="0000000000000" maxLength={13} style={{ ...inpS, fontFamily: "monospace", letterSpacing: "0.06em" }} /></div>
-            <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ที่อยู่</div><textarea value={address} onChange={e => setAddress(e.target.value)} disabled={locked} rows={2} style={taS} /></div>
-            <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>โทรศัพท์ / แฟกซ์</div><input value={tel} onChange={e => setTel(e.target.value)} disabled={locked} style={inpS} /></div>
-          </div>
-        </div>
-        <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, padding: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 14 }}><Folder size={13}/> Google Drive Folder URLs</div>
-          <div style={{ display: "grid", gap: 10 }}>
-            <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ใบส่งของ (DN) Folder URL</div><input value={folderDN} onChange={e => setFolderDN(e.target.value)} onBlur={e => handleFolderBlur("dn", e.target.value, "DN")} disabled={locked} placeholder="https://drive.google.com/drive/folders/..." style={monoS} /></div>
-            <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ใบกำกับภาษี (TI) Folder URL</div><input value={folderTI} onChange={e => setFolderTI(e.target.value)} onBlur={e => handleFolderBlur("ti", e.target.value, "TI")} disabled={locked} placeholder="https://drive.google.com/drive/folders/..." style={monoS} /></div>
-            <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ใบวางบิล (BN) Folder URL</div><input value={folderBN} onChange={e => setFolderBN(e.target.value)} onBlur={e => handleFolderBlur("bn", e.target.value, "BN")} disabled={locked} placeholder="https://drive.google.com/drive/folders/..." style={monoS} /></div>
-            <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ใบวางบิลรวมพิมพ์ (BN Combined) Folder URL <span style={{ color: C.muted, opacity: 0.7 }}>— เว้นว่าง = ใช้โฟลเดอร์ย่อย "Combined" อัตโนมัติ</span></div><input value={folderBNCombined} onChange={e => setFolderBNCombined(e.target.value)} onBlur={e => handleFolderBlur("bnCombined", e.target.value, "BN Combined")} disabled={locked} placeholder="(เว้นว่างได้)" style={monoS} /></div>
-            <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ใบเสนอราคา (QT) Folder URL <span style={{ color: C.muted, opacity: 0.7 }}>— เว้นว่าง = บันทึกใน My Drive root</span></div><input value={folderQT} onChange={e => setFolderQT(e.target.value)} onBlur={e => handleFolderBlur("qt", e.target.value, "QT")} disabled={locked} placeholder="(เว้นว่างได้)" style={monoS} /></div>
-          </div>
-          <div style={{ marginTop: 10, padding: "8px 12px", background: "#f0f4ff", borderRadius: 6, fontSize: 11, color: C.muted }}>
-            💡 วาง URL จาก Google Drive ได้เลย — ระบบจะดึง Folder ID ให้อัตโนมัติ
-          </div>
+      <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, padding: 16, maxWidth: 480 }}>
+        <div style={{ display: "grid", gap: 10 }}>
+          <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ชื่อบริษัท</div><input value={company} onChange={e => setCompany(e.target.value)} disabled={locked} style={inpS} /></div>
+          <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ชื่อภาษาอังกฤษ</div><input value={nameEN} onChange={e => setNameEN(e.target.value)} disabled={locked} placeholder="COMPANY NAME IN ENGLISH" style={inpS} /></div>
+          <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>เลขประจำตัวผู้เสียภาษี</div><input value={taxId} onChange={e => setTaxId(e.target.value)} disabled={locked} placeholder="0000000000000" maxLength={13} style={{ ...inpS, fontFamily: "monospace", letterSpacing: "0.06em" }} /></div>
+          <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ที่อยู่</div><textarea value={address} onChange={e => setAddress(e.target.value)} disabled={locked} rows={2} style={taS} /></div>
+          <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>โทรศัพท์ / แฟกซ์</div><input value={tel} onChange={e => setTel(e.target.value)} disabled={locked} style={inpS} /></div>
         </div>
       </div>
     </div>
   );
+
+  if (sView === "folders") return (
+    <div>
+      <BackHeader title="Google Drive folders" />
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 14 }}>
+        <button onClick={() => setLocked(l => !l)} style={{ background: locked ? C.pageBg : "#fff9e6", border: `0.5px solid ${locked ? C.border : "#f0a500"}`, borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontSize: 12, color: locked ? C.muted : "#b87800", display: "flex", alignItems: "center", gap: 5 }}>
+          {locked ? <><Lock size={12}/> ล็อค</> : <><Unlock size={12}/> กำลังแก้ไข</>}
+        </button>
+        {!locked && <Btn primary onClick={handleSaveAll} disabled={saving}>{saving ? <><Loader size={13}/> กำลังบันทึก...</> : saved ? <><CheckCircle size={13}/> บันทึกแล้ว</> : <><Save size={13}/> บันทึกทั้งหมด</>}</Btn>}
+      </div>
+      {error && <div style={{ marginBottom: 14 }}><ErrorBox msg={error} /></div>}
+      <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, padding: 16, maxWidth: 520 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 14 }}><Folder size={13}/> Google Drive Folder URLs</div>
+        <div style={{ display: "grid", gap: 10 }}>
+          <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ใบส่งของ (DN)</div><input value={folderDN} onChange={e => setFolderDN(e.target.value)} onBlur={e => handleFolderBlur("dn", e.target.value, "DN")} disabled={locked} placeholder="https://drive.google.com/drive/folders/..." style={monoS} /></div>
+          <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ใบกำกับภาษี (TI)</div><input value={folderTI} onChange={e => setFolderTI(e.target.value)} onBlur={e => handleFolderBlur("ti", e.target.value, "TI")} disabled={locked} placeholder="https://drive.google.com/drive/folders/..." style={monoS} /></div>
+          <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ใบวางบิล (BN)</div><input value={folderBN} onChange={e => setFolderBN(e.target.value)} onBlur={e => handleFolderBlur("bn", e.target.value, "BN")} disabled={locked} placeholder="https://drive.google.com/drive/folders/..." style={monoS} /></div>
+          <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>BN รวมพิมพ์ <span style={{ color: C.muted, opacity: 0.7 }}>— เว้นว่าง = subfolder อัตโนมัติ</span></div><input value={folderBNCombined} onChange={e => setFolderBNCombined(e.target.value)} onBlur={e => handleFolderBlur("bnCombined", e.target.value, "BN Combined")} disabled={locked} placeholder="(เว้นว่างได้)" style={monoS} /></div>
+          <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ใบเสนอราคา (QT) <span style={{ color: C.muted, opacity: 0.7 }}>— เว้นว่าง = My Drive root</span></div><input value={folderQT} onChange={e => setFolderQT(e.target.value)} onBlur={e => handleFolderBlur("qt", e.target.value, "QT")} disabled={locked} placeholder="(เว้นว่างได้)" style={monoS} /></div>
+        </div>
+        <div style={{ marginTop: 10, padding: "8px 12px", background: "#f0f4ff", borderRadius: 6, fontSize: 11, color: C.muted }}>
+          💡 วาง URL จาก Google Drive ได้เลย — ระบบจะดึง Folder ID ให้อัตโนมัติ
+        </div>
+      </div>
+    </div>
+  );
+
+  if (sView === "products") return (
+    <div>
+      <BackHeader title="สินค้า" />
+      <ProductPage cache={cache} updateCache={updateCache} />
+    </div>
+  );
+
+  if (sView === "customers") return (
+    <div>
+      <BackHeader title="ลูกค้า" />
+      <CustomerPage />
+    </div>
+  );
+
+  return null;
 }
 
 // ── Customer List ──────────────────────────────────────────
@@ -2114,11 +2265,11 @@ function ProductPage({ cache, updateCache }) {
   return (
     <div>
       <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span>📦 จัดการสินค้า</span>
+        <span style={{ display: "flex", alignItems: "center", gap: 6 }}><Package size={16}/> จัดการสินค้า</span>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <button onClick={() => { setLocked(l => !l); if (!locked) setForm(null); }}
             style={{ background: locked ? C.pageBg : "#fff9e6", border: `0.5px solid ${locked ? C.border : "#f0a500"}`, borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontSize: 12, color: locked ? C.muted : "#b87800", display: "flex", alignItems: "center", gap: 5 }}>
-            {locked ? "🔒 ล็อค" : "🔓 กำลังแก้ไข"}
+            {locked ? <><Lock size={12}/> ล็อค</> : <><Unlock size={12}/> กำลังแก้ไข</>}
           </button>
           {!locked && <Btn primary onClick={() => setForm({ mode: "add", value: "" })}>+ เพิ่ม{tabLabel}ใหม่</Btn>}
         </div>
@@ -2303,7 +2454,7 @@ function BNPreviewModal({ customer, onClose, onConfirm, nextBnNo }) {
             {["portrait", "landscape"].map(f => (
               <button key={f} onClick={() => setFormat(f)}
                 style={{ fontSize: 11, padding: "3px 10px", borderRadius: 4, cursor: "pointer", border: `1px solid ${format === f ? C.accent : C.border}`, background: format === f ? C.accent : "white", color: format === f ? "white" : C.text, fontWeight: format === f ? 500 : 400 }}>
-                {f === "portrait" ? "📄 PDF" : "🖨 แบบพิมพ์"}
+                {f === "portrait" ? <><FileText size={12}/> PDF</> : <><Printer size={12}/> แบบพิมพ์</>}
               </button>
             ))}
           </div>
@@ -2479,7 +2630,7 @@ function DNDetailPopup({ dnNo, onClose, cachedData, onCached }) {
                 <div style={{ marginTop: 14, textAlign: "right" }}>
                   <a href={data.pdfUrl} target="_blank" rel="noopener noreferrer"
                     style={{ fontSize: 12, color: C.accent, border: `0.5px solid ${C.accent}`, borderRadius: 4, padding: "5px 12px", textDecoration: "none" }}>
-                    📄 เปิด PDF
+                    <FileText size={12} style={{ verticalAlign: "middle", marginRight: 3 }}/> เปิด PDF
                   </a>
                 </div>
               )}
@@ -2698,7 +2849,7 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
   if (editing) return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-        <button onClick={() => setEditing(false)} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 13 }}>← กลับ</button>
+        <button onClick={() => setEditing(false)} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 3 }}><ChevronLeft size={14}/> กลับ</button>
         <span style={{ color: C.muted }}>›</span>
         <span style={{ fontSize: 14, fontWeight: 500 }}>แก้ไข {bnNo}</span>
       </div>
@@ -2714,7 +2865,7 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
       {/* breadcrumb + actions */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button onClick={onBack} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 13 }}>← รายการ</button>
+          <button onClick={onBack} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 3 }}><ChevronLeft size={14}/> รายการ</button>
           <span style={{ color: C.muted }}>›</span>
           <span style={{ fontSize: 14, fontWeight: 500 }}>{bnNo}</span>
           {detail && <Badge type={detail.cancelled ? "warning" : "success"}>{detail.cancelled ? "ยกเลิก" : "ปกติ"}</Badge>}
@@ -2805,13 +2956,18 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
 // ── BN List View ───────────────────────────────────────────
 
 function BNListView({ bnList, loading, error, onRefresh, onRowClick }) {
-  const [search, setSearch]   = useState("");
-  const [hovered, setHovered] = useState(null);
-  const [dStart, setDStart]   = useState(""); // #122 BN history date filter (client-side)
-  const [dEnd, setDEnd]       = useState("");
+  const [search, setSearch]           = useState("");
+  const [hovered, setHovered]         = useState(null);
+  const [dStart, setDStart]           = useState(""); // #122 BN history date filter (client-side)
+  const [dEnd, setDEnd]               = useState("");
+  const [cancelOpen, setCancelOpen]   = useState(false);
+  const [cancelHovered, setCancelHovered] = useState(null);
+  const [page, setPage]               = useState(1);
+  useEffect(() => setPage(1), [search, dStart, dEnd]);
 
   const parseThai = d => { if (!d) return null; const p = String(d).split("/"); return p.length === 3 ? new Date(+p[2], +p[1]-1, +p[0]) : new Date(d); };
-  const filtered = bnList.filter(bn => {
+
+  const applyFilters = (list) => list.filter(bn => {
     const q = search.toLowerCase();
     if (q && !((bn.bnNo || "").toLowerCase().includes(q) || (bn.customer || "").toLowerCase().includes(q))) return false;
     if (dStart || dEnd) {
@@ -2824,56 +2980,88 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick }) {
     return true;
   });
 
+  const active    = applyFilters(bnList.filter(bn => !bn.cancelled));
+  const cancelled = bnList.filter(bn => bn.cancelled);
+  const pagedBN   = active.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const BNRow = ({ bn, i, isHov, setHov }) => (
+    <tr onClick={() => onRowClick(bn)} onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)}
+      style={{ background: isHov ? C.rowHover : "white", borderBottom: `0.5px solid ${C.borderLight}`, cursor: "pointer" }}>
+      <td style={{ padding: "9px 14px", color: C.accent, fontWeight: 500 }}>{bn.bnNo}</td>
+      <td style={{ padding: "9px 14px", color: C.muted }}>{bn.date}</td>
+      <td style={{ padding: "9px 14px" }}>{bn.customer}</td>
+      <td style={{ padding: "9px 14px" }}>{bn.count} ฉบับ</td>
+      <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{(bn.total || 0).toLocaleString()}</td>
+      <td style={{ padding: "9px 14px", textAlign: "center" }}>
+        {bn.pdfUrl ? (
+          <a href={bn.pdfUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+            style={{ fontSize: 11, color: C.accent, textDecoration: "none", border: `0.5px solid ${C.accent}`, borderRadius: 4, padding: "3px 8px", whiteSpace: "nowrap" }}>
+            <FileText size={11} style={{ verticalAlign: "middle", marginRight: 3 }}/> PDF
+          </a>
+        ) : <span style={{ fontSize: 11, color: C.muted }}>—</span>}
+      </td>
+    </tr>
+  );
+
+  const thead = (
+    <thead>
+      <tr>
+        {["เลขที่ BN", "วันที่ออก", "ชื่อลูกค้า", "จำนวนบิล", "รวมเงิน", ""].map((h, i) => (
+          <th key={i} style={{ padding: "8px 14px", textAlign: i === 4 ? "right" : "left", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, background: "#fafafa" }}>{h}</th>
+        ))}
+      </tr>
+    </thead>
+  );
+
   return (
-    <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>
-      <div style={{ padding: "10px 14px", display: "flex", gap: 8, alignItems: "center", borderBottom: `0.5px solid ${C.border}`, background: "#fafafa", flexWrap: "wrap" }}>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="ค้นหาเลขที่ / ลูกค้า..."
-          style={{ ...inputStyle, width: 200, height: 30 }} />
-        <DateRangePicker startDate={dStart} endDate={dEnd} onApply={(s, e) => { setDStart(s); setDEnd(e); }} />
-        <Btn small onClick={onRefresh}><RefreshCw size={14}/> รีเฟรช</Btn>
-        <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted }}>พบ {filtered.length} รายการ</span>
+    <div>
+      <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>
+        <div style={{ padding: "10px 14px", display: "flex", gap: 8, alignItems: "center", borderBottom: `0.5px solid ${C.border}`, background: "#fafafa", flexWrap: "wrap" }}>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="ค้นหาเลขที่ / ลูกค้า..."
+            style={{ ...inputStyle, width: 200, height: 30 }} />
+          <DateRangePicker startDate={dStart} endDate={dEnd} onApply={(s, e) => { setDStart(s); setDEnd(e); }} />
+          <Btn small onClick={onRefresh}><RefreshCw size={14}/> รีเฟรช</Btn>
+          <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted }}>พบ {active.length} รายการ</span>
+        </div>
+        {error && <div style={{ padding: 14 }}><ErrorBox msg={error} onRetry={onRefresh} /></div>}
+        {loading && <Spinner />}
+        {!loading && !error && (
+          <>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              {thead}
+              <tbody>
+                {active.length === 0 ? (
+                  <tr><td colSpan={6} style={{ padding: 32, textAlign: "center", color: C.muted, fontSize: 13 }}>ไม่พบข้อมูล</td></tr>
+                ) : pagedBN.map((bn, i) => (
+                  <BNRow key={i} bn={bn} i={i} isHov={hovered === i} setHov={setHovered} />
+                ))}
+              </tbody>
+            </table>
+            <Paginator total={active.length} page={page} onChange={setPage} />
+          </>
+        )}
       </div>
 
-      {error && <div style={{ padding: 14 }}><ErrorBox msg={error} onRetry={onRefresh} /></div>}
-      {loading && <Spinner />}
-      {!loading && !error && (
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-          <thead>
-            <tr>
-              {["เลขที่ BN", "วันที่ออก", "ชื่อลูกค้า", "จำนวนบิล", "รวมเงิน", ""].map((h, i) => (
-                <th key={i} style={{ padding: "8px 14px", textAlign: i === 4 ? "right" : "left", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, background: "#fafafa" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 ? (
-              <tr><td colSpan={6} style={{ padding: 32, textAlign: "center", color: C.muted, fontSize: 13 }}>ไม่พบข้อมูล</td></tr>
-            ) : filtered.map((bn, i) => (
-              <tr key={i}
-                onClick={() => onRowClick(bn)}
-                onMouseEnter={() => setHovered(i)} onMouseLeave={() => setHovered(null)}
-                style={{ background: hovered === i ? C.rowHover : bn.cancelled ? "#fafafa" : "white", borderBottom: `0.5px solid ${C.borderLight}`, cursor: "pointer", opacity: bn.cancelled ? 0.65 : 1 }}>
-                <td style={{ padding: "9px 14px", color: C.accent, fontWeight: 500 }}>
-                  {bn.bnNo}
-                  {bn.cancelled && <span style={{ marginLeft: 6, fontSize: 9, background: C.warningBg, color: C.warning, borderRadius: 8, padding: "1px 6px", fontWeight: 500 }}>ยกเลิก</span>}
-                </td>
-                <td style={{ padding: "9px 14px", color: C.muted }}>{bn.date}</td>
-                <td style={{ padding: "9px 14px" }}>{bn.customer}</td>
-                <td style={{ padding: "9px 14px" }}>{bn.count} ฉบับ</td>
-                <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{(bn.total || 0).toLocaleString()}</td>
-                <td style={{ padding: "9px 14px", textAlign: "center" }}>
-                  {bn.pdfUrl ? (
-                    <a href={bn.pdfUrl} target="_blank" rel="noopener noreferrer"
-                      onClick={e => e.stopPropagation()}
-                      style={{ fontSize: 11, color: C.accent, textDecoration: "none", border: `0.5px solid ${C.accent}`, borderRadius: 4, padding: "3px 8px", whiteSpace: "nowrap" }}>
-                      📄 PDF
-                    </a>
-                  ) : <span style={{ fontSize: 11, color: C.muted }}>—</span>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* Cancelled BN section */}
+      {!loading && cancelled.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <button onClick={() => setCancelOpen(o => !o)}
+            style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center", gap: 5, padding: 0 }}>
+            {cancelOpen ? <ChevronDown size={13}/> : <ChevronRight size={13}/>} ใบที่ยกเลิก ({cancelled.length})
+          </button>
+          {cancelOpen && (
+            <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "hidden", marginTop: 8 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                {thead}
+                <tbody>
+                  {cancelled.map((bn, i) => (
+                    <BNRow key={i} bn={bn} i={i} isHov={cancelHovered === i} setHov={setCancelHovered} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
@@ -3295,13 +3483,12 @@ function BNCreateView({ onBack }) {
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                       <span style={{ fontSize: 11, color: C.muted }}>รูปแบบ</span>
-                      {[["portrait","📄 PDF"],["landscape","🖨 แบบพิมพ์"]].map(([v,l]) => (
+                      {[["portrait", null, "PDF"],["landscape", null, "แบบพิมพ์"]].map(([v,,l]) => (
                         <button key={v} onClick={() => setPrintFormat(v)} disabled={printing}
-                          style={{ fontSize: 11, padding: "3px 9px", borderRadius: 4, cursor: printing ? "default" : "pointer",
+                          style={{ fontSize: 11, padding: "3px 9px", borderRadius: 4, cursor: printing ? "default" : "pointer", display: "inline-flex", alignItems: "center", gap: 3,
                             border: `0.5px solid ${printFormat===v ? C.accent : C.border}`,
                             background: printFormat===v ? "#e3f0ff" : "white",
-                            color: printFormat===v ? C.accent : C.muted, fontWeight: printFormat===v ? 600 : 400 }}>
-                          {l}
+                            color: printFormat===v ? C.accent : C.muted, fontWeight: printFormat===v ? 600 : 400 }}>{v === "portrait" ? <FileText size={11}/> : <Printer size={11}/>} {l}
                         </button>
                       ))}
                     </div>
@@ -3390,9 +3577,11 @@ function BillingNotePage({ cache, updateCache, goListRequest, onViewChange }) {
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-        <div style={{ fontSize: 16, fontWeight: 500 }}><ClipboardList size={15}/> ใบวางบิล</div>
-        <Btn primary small onClick={() => setView("create", "สร้างใบวางบิล")}><Plus size={13}/> สร้างใบวางบิล</Btn>
+      <div style={{ position: "sticky", top: 0, zIndex: 10, background: C.pageBg, paddingBottom: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ fontSize: 16, fontWeight: 500 }}><ClipboardList size={15}/> ใบวางบิล</div>
+          <Btn primary onClick={() => setView("create", "สร้างใบวางบิล")}>+ สร้างใบวางบิล</Btn>
+        </div>
       </div>
       <BNListView
         bnList={bnList}
@@ -3734,7 +3923,7 @@ function TaxInvoiceDetail({ invoice, onBack, onSaved, products, setProducts, siz
   if (editing) return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-        <button onClick={() => setEditing(false)} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 13 }}>← กลับ</button>
+        <button onClick={() => setEditing(false)} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 3 }}><ChevronLeft size={14}/> กลับ</button>
         <span style={{ color: C.muted }}>›</span>
         <span style={{ fontSize: 14, fontWeight: 500 }}>แก้ไข {data.id}</span>
       </div>
@@ -3752,7 +3941,7 @@ function TaxInvoiceDetail({ invoice, onBack, onSaved, products, setProducts, siz
       {showCancelConfirm && <ConfirmModal message={`ยืนยันยกเลิก ${data.id}?`} confirmLabel="ยืนยันยกเลิก" onConfirm={handleCancelTaxInvoice} onCancel={() => setShowCancelConfirm(false)} loading={cancelLoading} enterConfirm />}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button onClick={onBack} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 13 }}>← รายการ</button>
+          <button onClick={onBack} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 3 }}><ChevronLeft size={14}/> รายการ</button>
           <span style={{ color: C.muted }}>›</span>
           <span style={{ fontSize: 14, fontWeight: 500 }}>{data.id}</span>
         </div>
@@ -3876,6 +4065,8 @@ function TaxInvoicePage({ products, setProducts, sizes, vatRate = 0.07, cache, u
     now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" +
     String(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()).padStart(2, "0")
   );
+  const [page, setPage] = useState(1);
+  useEffect(() => setPage(1), [search, startDate, endDate]);
 
   const cacheKey = "taxinvoices_" + startDate + "_" + endDate;
   const invoices = cache[cacheKey] || [];
@@ -3921,7 +4112,7 @@ function TaxInvoicePage({ products, setProducts, sizes, vatRate = 0.07, cache, u
     const q = search.toLowerCase();
     return !q || (inv.id || "").toLowerCase().includes(q) || (inv.name || "").toLowerCase().includes(q);
   });
-
+  const pagedTI = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div>
@@ -3931,25 +4122,27 @@ function TaxInvoicePage({ products, setProducts, sizes, vatRate = 0.07, cache, u
       {/* List */}
       {view === "list" && (
         <div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-            <div style={{ fontSize: 16, fontWeight: 500 }}><Receipt size={15}/> ใบกำกับภาษี</div>
-            <Btn primary onClick={() => setView("create", "สร้างใหม่")}>+ สร้างใบกำกับภาษีใหม่</Btn>
-          </div>
-          <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>
+          <div style={{ position: "sticky", top: 0, zIndex: 10, background: C.pageBg }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 10 }}>
+              <div style={{ fontSize: 16, fontWeight: 500 }}><Receipt size={15}/> ใบกำกับภาษี</div>
+              <Btn primary onClick={() => setView("create", "สร้างใหม่")}>+ สร้างใบกำกับภาษีใหม่</Btn>
+            </div>
             {/* Filters */}
-            <div style={{ padding: "10px 14px", display: "flex", gap: 8, alignItems: "flex-start", borderBottom: `0.5px solid ${C.border}`, background: "#fafafa", flexWrap: "wrap" }}>
+            <div style={{ padding: "10px 14px", display: "flex", gap: 8, alignItems: "flex-start", border: `0.5px solid ${C.border}`, borderBottom: `0.5px solid ${C.border}`, background: "#fafafa", flexWrap: "wrap", borderRadius: "8px 8px 0 0" }}>
               <input value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === "Enter" && load()}
-                placeholder="ค้นหา..." style={{ padding: "6px 10px", border: `0.5px solid rgba(0,0,0,0.2)`, borderRadius: 4, fontSize: 12, width: 200, height: 30 }} />
+                placeholder="ค้นหาลูกค้า / เลขที่..." style={{ padding: "6px 10px", border: `0.5px solid rgba(0,0,0,0.2)`, borderRadius: 4, fontSize: 12, width: 200, height: 30, boxSizing: "border-box" }} />
               <DateRangePicker startDate={startDate} endDate={endDate} onApply={(s, e) => { setStartDate(s); setEndDate(e); }} />
               {loading && <Loader size={14}/>}
               <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted }}>พบ {filtered.length} รายการ</span>
             </div>
-
+          </div>
+          <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderTop: "none", borderRadius: "0 0 8px 8px", overflow: "hidden", marginBottom: 14 }}>
             {loading && <Spinner />}
             {!loading && filtered.length === 0 && (
               <div style={{ padding: "40px 0", textAlign: "center", color: C.muted, fontSize: 13 }}>ไม่พบรายการ</div>
             )}
             {!loading && filtered.length > 0 && (
+              <>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed" }}>
                 <colgroup>
                   <col style={{ width: 150 }} /><col style={{ width: 95 }} /><col />
@@ -3961,7 +4154,7 @@ function TaxInvoicePage({ products, setProducts, sizes, vatRate = 0.07, cache, u
                   ))}</tr>
                 </thead>
                 <tbody>
-                  {filtered.map(inv => {
+                  {pagedTI.map(inv => {
                     const s = inv.subtotal ?? (inv.items || []).reduce((a, it) => a + (parseFloat(it.amount) || 0), 0);
                     const g = inv.grandTotal ?? parseFloat((s * 1.07).toFixed(2));
                     return (
@@ -3983,6 +4176,8 @@ function TaxInvoicePage({ products, setProducts, sizes, vatRate = 0.07, cache, u
                   })}
                 </tbody>
               </table>
+              <Paginator total={filtered.length} page={page} onChange={setPage} />
+              </>
             )}
 
             <div style={{ padding: "8px 12px", background: "#fafafa", borderTop: `0.5px solid ${C.border}`, display: "flex", justifyContent: "flex-end", fontSize: 12 }}>
@@ -3994,7 +4189,7 @@ function TaxInvoicePage({ products, setProducts, sizes, vatRate = 0.07, cache, u
           <div style={{ marginTop: 14 }}>
             <button onClick={() => setCancelSectionOpen(o => !o)}
               style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center", gap: 5, padding: 0 }}>
-              {cancelSectionOpen ? "▼" : "▶"} ใบที่ยกเลิก
+              {cancelSectionOpen ? <ChevronDown size={13}/> : <ChevronRight size={13}/>} ใบที่ยกเลิก
             </button>
             {cancelSectionOpen && (
               <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "hidden", marginTop: 8 }}>
@@ -4058,7 +4253,7 @@ function TaxInvoicePage({ products, setProducts, sizes, vatRate = 0.07, cache, u
       {view === "create" && (
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-            <button onClick={() => setView("list", null)} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 13 }}>← รายการ</button>
+            <button onClick={() => setView("list", null)} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 3 }}><ChevronLeft size={14}/> รายการ</button>
             <span style={{ color: C.muted }}>›</span>
             <span style={{ fontSize: 14, fontWeight: 500 }}>สร้างใหม่</span>
           </div>
@@ -4071,14 +4266,15 @@ function TaxInvoicePage({ products, setProducts, sizes, vatRate = 0.07, cache, u
 }
 
 // ── Home Page ─────────────────────────────────────────────
+const NAV_ICONS = { FileText, ClipboardList, Receipt, FileSearch, Package, BarChart2, Users, Settings, ArrowLeftRight, LayoutDashboard, LayoutGrid };
+
 function HomePage({ onNavigate }) {
-  const ICON_MAP = { FileText, ClipboardList, Receipt, FileSearch, Package, BarChart2, LayoutDashboard, ArrowLeftRight, Users, Settings };
   const sections = [...new Set(NAV.filter(n => n.key !== "dashboard" && n.section).map(n => n.section))];
   const dashboard = NAV.find(n => n.key === "dashboard");
 
   const IconBox = ({ item }) => {
     const col = SECTION_COLORS[item.section] || SECTION_COLORS[null];
-    const Ic = ICON_MAP[item.icon];
+    const Ic = NAV_ICONS[item.icon];
     return (
       <div style={{ width: 44, height: 44, borderRadius: 8, background: col.bg, color: col.color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 20 }}>
         {Ic ? <Ic size={22} /> : item.icon}
@@ -4147,7 +4343,11 @@ export default function App({ userEmail, userName, onLogout }) {
   const [breadcrumbSuffix, setBreadcrumbSuffix] = useState(null);
   const [goListRequest, setGoListRequest] = useState(0);
   const [active, setActive_]      = useState("home");
-  const setActive = (key) => { setActive_(key); setBreadcrumbSuffix(null); };
+  const contentRef = useRef(null);
+  const scrollToTop = () => { if (contentRef.current) contentRef.current.scrollTop = 0; };
+  const setActive = (key) => { setActive_(key); setBreadcrumbSuffix(null); scrollToTop(); };
+  // handleViewChange: used as onViewChange for page components — scrolls to top when entering detail view
+  const handleViewChange = (label) => { setBreadcrumbSuffix(label ?? null); if (label) scrollToTop(); };
   const [products, setProducts]   = useState([]);
   const [sizes, setSizes]         = useState([]);
   const [vatRate, setVatRate]     = useState(0.07);
@@ -4198,18 +4398,14 @@ export default function App({ userEmail, userName, onLogout }) {
     if (!configLoaded) return <Spinner text="กำลังเริ่มต้นระบบ..." />;
     switch (active) {
       case "home":       return <HomePage onNavigate={setActive} />;
-      case "invoice":    return <DeliveryNotePage products={products} setProducts={setProducts} sizes={sizes} cache={cache} updateCache={updateCache} onViewChange={setBreadcrumbSuffix} goListRequest={goListRequest} />;
-      case "billing":    return <BillingNotePage cache={cache} updateCache={updateCache} goListRequest={goListRequest} onViewChange={setBreadcrumbSuffix} />;
-      case "taxinvoice": return <TaxInvoicePage products={products} setProducts={setProducts} sizes={sizes} vatRate={vatRate} cache={cache} updateCache={updateCache} onViewChange={setBreadcrumbSuffix} goListRequest={goListRequest} />;
-      case "quotation":  return <QuotationPage products={products} sizes={sizes} onViewChange={setBreadcrumbSuffix} cache={cache} updateCache={updateCache} />;
-      case "settings":   return <SettingsPage />;
-      case "customers":  return <CustomerPage />;
-      case "stock":      return <ProductPage cache={cache} updateCache={updateCache} />;
+      case "invoice":    return <DeliveryNotePage products={products} setProducts={setProducts} sizes={sizes} cache={cache} updateCache={updateCache} onViewChange={handleViewChange} goListRequest={goListRequest} />;
+      case "billing":    return <BillingNotePage cache={cache} updateCache={updateCache} goListRequest={goListRequest} onViewChange={handleViewChange} />;
+      case "taxinvoice": return <TaxInvoicePage products={products} setProducts={setProducts} sizes={sizes} vatRate={vatRate} cache={cache} updateCache={updateCache} onViewChange={handleViewChange} goListRequest={goListRequest} />;
+      case "other":      return <OtherPage products={products} sizes={sizes} cache={cache} updateCache={updateCache} onViewChange={handleViewChange} goListRequest={goListRequest} />;
+      case "settings":   return <SettingsPage cache={cache} updateCache={updateCache} />;
       default:           return <PlaceholderPage title={NAV.find(n => n.key === active)?.label} icon={NAV.find(n => n.key === active)?.icon} />;
     }
   };
-
-  const NAV_ICONS = { FileText, ClipboardList, Receipt, FileSearch, Package, BarChart2, Users, Settings, ArrowLeftRight, LayoutDashboard };
 
   const NavItem = ({ item }) => (
     <div onClick={() => { if (item.key === active) setGoListRequest(n => n + 1); else setActive(item.key); }} style={{
@@ -4232,7 +4428,7 @@ export default function App({ userEmail, userName, onLogout }) {
 
   return (
     <div style={{ display: "flex", height: "100vh", fontFamily: "Sarabun, sans-serif" }}>
-      <style>{`body { zoom: ${fontScale}; }`}</style>
+      <style>{`html, body { margin: 0; padding: 0; overflow: hidden; } body { zoom: ${fontScale}; }`}</style>
 
       {/* Sidebar */}
       <div style={{ width: 220, background: C.sidebar, display: "flex", flexDirection: "column", flexShrink: 0 }}>
@@ -4251,14 +4447,14 @@ export default function App({ userEmail, userName, onLogout }) {
           ))}
         </div>
         <div style={{ padding: "10px 16px", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)" }}>app v1.4.116{gsVersion ? <span>  ·  gs v{gsVersion}</span> : null}</span>
+          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)" }}>app v1.4.133{gsVersion ? <span>  ·  gs v{gsVersion}</span> : null}</span>
         </div>
       </div>
 
       {/* Main */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", background: C.pageBg, minWidth: 0 }}>
         {/* Topbar */}
-        <div style={{ background: "white", borderBottom: `0.5px solid ${C.border}`, padding: "0 20px", height: 48, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+        <div style={{ background: "white", borderBottom: `0.5px solid ${C.border}`, padding: "0 20px", height: 48, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, zoom: 1/fontScale }}>
           <div style={{ fontSize: 12, color: C.muted, display: "flex", alignItems: "center", gap: 6 }}>
             <Home size={14}/>
             <span style={{ color: active === "home" ? C.text : C.accent, cursor: active === "home" ? "default" : "pointer" }}
@@ -4291,7 +4487,7 @@ export default function App({ userEmail, userName, onLogout }) {
         </div>
 
         {/* Content */}
-        <div style={{ flex: 1, padding: "18px 22px", overflowY: "auto" }}>
+        <div ref={contentRef} style={{ flex: 1, padding: "18px 22px", overflowY: "auto" }}>
           {renderPage()}
         </div>
       </div>
