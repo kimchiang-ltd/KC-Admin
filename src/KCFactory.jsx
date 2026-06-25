@@ -2,6 +2,8 @@
 // KC Factory System — Web App
 // ============================================================
 // Version History — full detail in KC_Daily_Progress_YYYY-MM-DD.md
+// v1.4.158 (2026-06-25) — #160 customer onBlur: checkNameOnBlur runs similar→unknown checks in sequence; newCustCheckedRef prevents duplicate check on save
+// v1.4.157 (2026-06-25) — #183 BNListView cancelled section: add plainThead (no sticky), overflow:hidden→clip on cancelled card
 // v1.4.156 (2026-06-25) — #182 BN Create: disabled rows for billed DNs + always-visible warning + "BN ที่สร้างแล้ว" section + BNDetailMiniPopup to cancel existing BN inline; badge สร้าง X/Y
 // v1.4.155 (2026-06-25) — #170 DN cancel: block if billed (check data.bnNo, show alert before modal)
 // v1.4.154 (2026-06-25) — #162 tweak: DN/TI th top:90→70 (correct direction — lower top moves th up)
@@ -299,6 +301,7 @@ function useInvoiceForm({ initial, isEdit, products, detailAttr, maxRows = ITEMS
   const custConfirmedRef        = useRef(false);
   const skipCustomerLogRef      = useRef(false); // #127 — set true when user picks "ไม่ ไม่ต้องเพิ่ม"
   const nameSelectedFromListRef = useRef(false);
+  const newCustCheckedRef       = useRef(false); // #160 — true when blur already ran unknown check (customer known, no modal needed)
 
   const checkProductName = (i, val) => {
     const trimmed = val.trim();
@@ -311,6 +314,16 @@ function useInvoiceForm({ initial, isEdit, products, detailAttr, maxRows = ITEMS
     if (isEdit || !nameVal.trim() || custConfirmedRef.current) return;
     const similar = findSimilarCustomers(nameVal, allCustomers);
     if (similar.length > 0) setCustWarning(similar);
+  };
+
+  // #160 — onBlur: run similar check then unknown check in sequence
+  const checkNameOnBlur = (nameVal) => {
+    if (isEdit || !nameVal.trim() || custConfirmedRef.current) return;
+    const similar = findSimilarCustomers(nameVal, allCustomers);
+    if (similar.length > 0) { setCustWarning(similar); return; }
+    const isKnown = allCustomers.some(c => (c.name || "").trim().toLowerCase() === nameVal.trim().toLowerCase());
+    if (!isKnown && nameVal.trim()) { setNewCustWarning(nameVal.trim()); }
+    else { newCustCheckedRef.current = true; } // customer known — guardedSave can skip unknown check
   };
 
   const updateItem = (i, field, val) => {
@@ -369,10 +382,14 @@ function useInvoiceForm({ initial, isEdit, products, detailAttr, maxRows = ITEMS
         const similarFull = allCustomers.filter(c => similarNames.includes(c.name));
         setCustWarning(similarFull); return;
       }
-      const isKnown = allCustomers.some(c => (c.name||"").trim().toLowerCase() === name.trim().toLowerCase());
-      if (!isKnown && name.trim()) { setNewCustWarning(name.trim()); return; }
+      // #160 — skip unknown check if blur already confirmed customer is known
+      if (!newCustCheckedRef.current) {
+        const isKnown = allCustomers.some(c => (c.name||"").trim().toLowerCase() === name.trim().toLowerCase());
+        if (!isKnown && name.trim()) { setNewCustWarning(name.trim()); return; }
+      }
     }
     custConfirmedRef.current = false;
+    newCustCheckedRef.current = false;
     setCustWarning(null);
     setSaving(true);
     setError("");
@@ -394,8 +411,9 @@ function useInvoiceForm({ initial, isEdit, products, detailAttr, maxRows = ITEMS
     custWarning, setCustWarning, newCustWarning, setNewCustWarning,
     productWarning, setProductWarning, addingProduct, setAddingProduct,
     custConfirmedRef, skipCustomerLogRef, nameSelectedFromListRef,
-    checkProductName, checkNameSimilarity, updateItem, updateDetail,
+    checkProductName, checkNameSimilarity, checkNameOnBlur, updateItem, updateDetail,
     addRow, addContinuationRow, removeRow, cellInput, guardedSave,
+    newCustCheckedRef,
   };
 }
 
@@ -639,8 +657,9 @@ function DeliveryNoteForm({ initial, onSave, onCancel, isEdit, products, setProd
     custWarning, setCustWarning, newCustWarning, setNewCustWarning,
     productWarning, setProductWarning, addingProduct, setAddingProduct,
     custConfirmedRef, skipCustomerLogRef, nameSelectedFromListRef,
-    checkProductName, checkNameSimilarity, updateItem, updateDetail,
+    checkProductName, checkNameSimilarity, checkNameOnBlur, updateItem, updateDetail,
     addRow, addContinuationRow, removeRow, cellInput, guardedSave,
+    newCustCheckedRef,
   } = useInvoiceForm({ initial, isEdit, products, detailAttr: "data-detail-idx", maxRows: DN_MAX_ROWS });
 
   const total = items.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0);
@@ -664,15 +683,21 @@ function DeliveryNoteForm({ initial, onSave, onCancel, isEdit, products, setProd
       message={`พบชื่อที่คล้ายกันในระบบ:\n"${custWarning.map(c => c.name).join('", "')}"\n\nหมายถึงลูกค้านี้ใช่ไหม?`}
       onConfirm={() => { const m = custWarning[0]; setName(m.name); setAddress(m.address || ""); setPhone(m.phone || ""); custConfirmedRef.current = true; setCustWarning(null); }}
       secondaryLabel="ไม่ ใช้ชื่อที่พิมพ์"
-      onSecondary={() => { custConfirmedRef.current = true; setCustWarning(null); }}
+      onSecondary={() => {
+        custConfirmedRef.current = true; setCustWarning(null);
+        // #160 — user confirmed typed name; now check if it's unknown
+        const isKnown = allCustomers.some(c => (c.name || "").trim().toLowerCase() === name.trim().toLowerCase());
+        if (!isKnown && name.trim()) setNewCustWarning(name.trim());
+        else newCustCheckedRef.current = true;
+      }}
       onCancel={() => setCustWarning(null)}
       confirmLabel="ใช่ ใช้ชื่อนี้"
     />}
     {newCustWarning && <ConfirmModal
       message={`ลูกค้า "${newCustWarning}" ยังไม่มีในระบบ — บันทึกเป็นลูกค้าใหม่ด้วยหรือไม่?`}
-      onConfirm={() => { custConfirmedRef.current = true; setNewCustWarning(null); handleSave(); }}
+      onConfirm={() => { newCustCheckedRef.current = true; custConfirmedRef.current = true; setNewCustWarning(null); handleSave(); }}
       secondaryLabel="ไม่ ไม่ต้องเพิ่ม"
-      onSecondary={() => { custConfirmedRef.current = true; skipCustomerLogRef.current = true; setNewCustWarning(null); handleSave(); }}
+      onSecondary={() => { newCustCheckedRef.current = true; custConfirmedRef.current = true; skipCustomerLogRef.current = true; setNewCustWarning(null); handleSave(); }}
       onCancel={() => setNewCustWarning(null)}
       confirmLabel="ใช่ เพิ่มลูกค้าใหม่"
     />}
@@ -713,10 +738,10 @@ function DeliveryNoteForm({ initial, onSave, onCancel, isEdit, products, setProd
             <div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ชื่อลูกค้า</div>
             <CustomerAutocomplete
               value={name}
-              onChange={v => { setName(v); nameSelectedFromListRef.current = false; custConfirmedRef.current = false; }}
+              onChange={v => { setName(v); nameSelectedFromListRef.current = false; custConfirmedRef.current = false; newCustCheckedRef.current = false; }}
               onSelect={c => { setName(c.name); setAddress(c.address); setPhone(c.phone); nameSelectedFromListRef.current = true; custConfirmedRef.current = true; }}
               onCustomersLoaded={setAllCustomers}
-              onBlur={() => { if (!nameSelectedFromListRef.current) checkNameSimilarity(name); }}
+              onBlur={() => { if (!nameSelectedFromListRef.current) checkNameOnBlur(name); }}
               style={{ ...inputStyle, width: "100%" }}
             />
           </div>
@@ -3404,6 +3429,15 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick }) {
       </tr>
     </thead>
   );
+  const plainThead = (
+    <thead>
+      <tr>
+        {["เลขที่ BN", "วันที่ออก", "ชื่อลูกค้า", "จำนวนบิล", "รวมเงิน", ""].map((h, i) => (
+          <th key={i} style={{ padding: "8px 14px", textAlign: i === 4 ? "right" : "left", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, background: "#fafafa" }}>{h}</th>
+        ))}
+      </tr>
+    </thead>
+  );
 
   return (
     <div>
@@ -3444,9 +3478,9 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick }) {
             {cancelOpen ? <ChevronDown size={13}/> : <ChevronRight size={13}/>} ใบที่ยกเลิก ({cancelled.length})
           </button>
           {cancelOpen && (
-            <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "hidden", marginTop: 8 }}>
+            <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "clip", marginTop: 8 }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                {thead}
+                {plainThead}
                 <tbody>
                   {cancelled.map((bn, i) => (
                     <BNRow key={i} bn={bn} i={i} isHov={cancelHovered === i} setHov={setCancelHovered} />
@@ -4182,8 +4216,9 @@ function TaxInvoiceForm({ initial, onSave, onCancel, isEdit, products, setProduc
     custWarning, setCustWarning, newCustWarning, setNewCustWarning,
     productWarning, setProductWarning, addingProduct, setAddingProduct,
     custConfirmedRef, skipCustomerLogRef, nameSelectedFromListRef,
-    checkProductName, checkNameSimilarity, updateItem, updateDetail,
+    checkProductName, checkNameSimilarity, checkNameOnBlur, updateItem, updateDetail,
     addRow, addContinuationRow, removeRow, cellInput, guardedSave,
+    newCustCheckedRef,
   } = useInvoiceForm({ initial, isEdit, products, detailAttr: "data-ti-detail-idx" });
 
   const sub = items.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0);
@@ -4209,15 +4244,21 @@ function TaxInvoiceForm({ initial, onSave, onCancel, isEdit, products, setProduc
       message={`พบชื่อที่คล้ายกันในระบบ:\n"${custWarning.map(c => c.name).join('", "')}"\n\nหมายถึงลูกค้านี้ใช่ไหม?`}
       onConfirm={() => { const m = custWarning[0]; setName(m.name); setAddress(m.address || ""); setPhone(m.phone || ""); custConfirmedRef.current = true; setCustWarning(null); }}
       secondaryLabel="ไม่ ใช้ชื่อที่พิมพ์"
-      onSecondary={() => { custConfirmedRef.current = true; setCustWarning(null); }}
+      onSecondary={() => {
+        custConfirmedRef.current = true; setCustWarning(null);
+        // #160 — user confirmed typed name; now check if it's unknown
+        const isKnown = allCustomers.some(c => (c.name || "").trim().toLowerCase() === name.trim().toLowerCase());
+        if (!isKnown && name.trim()) setNewCustWarning(name.trim());
+        else newCustCheckedRef.current = true;
+      }}
       onCancel={() => setCustWarning(null)}
       confirmLabel="ใช่ ใช้ชื่อนี้"
     />}
     {newCustWarning && <ConfirmModal
       message={`ลูกค้า "${newCustWarning}" ยังไม่มีในระบบ — บันทึกเป็นลูกค้าใหม่ด้วยหรือไม่?`}
-      onConfirm={() => { custConfirmedRef.current = true; setNewCustWarning(null); handleSave(); }}
+      onConfirm={() => { newCustCheckedRef.current = true; custConfirmedRef.current = true; setNewCustWarning(null); handleSave(); }}
       secondaryLabel="ไม่ ไม่ต้องเพิ่ม"
-      onSecondary={() => { custConfirmedRef.current = true; skipCustomerLogRef.current = true; setNewCustWarning(null); handleSave(); }}
+      onSecondary={() => { newCustCheckedRef.current = true; custConfirmedRef.current = true; skipCustomerLogRef.current = true; setNewCustWarning(null); handleSave(); }}
       onCancel={() => setNewCustWarning(null)}
       confirmLabel="ใช่ เพิ่มลูกค้าใหม่"
     />}
@@ -4260,10 +4301,10 @@ function TaxInvoiceForm({ initial, onSave, onCancel, isEdit, products, setProduc
             <div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ชื่อลูกค้า / บริษัท</div>
             <CustomerAutocomplete
               value={name}
-              onChange={v => { setName(v); nameSelectedFromListRef.current = false; custConfirmedRef.current = false; }}
+              onChange={v => { setName(v); nameSelectedFromListRef.current = false; custConfirmedRef.current = false; newCustCheckedRef.current = false; }}
               onSelect={c => { setName(c.name); setAddress(c.address); setPhone(c.phone); setTaxId(c.taxId); nameSelectedFromListRef.current = true; custConfirmedRef.current = true; }}
               onCustomersLoaded={setAllCustomers}
-              onBlur={() => { if (!nameSelectedFromListRef.current) checkNameSimilarity(name); }}
+              onBlur={() => { if (!nameSelectedFromListRef.current) checkNameOnBlur(name); }}
               style={{ ...inputStyle, width: "100%" }}
             />
           </div>
@@ -5066,7 +5107,7 @@ export default function App({ userEmail, userName, onLogout }) {
           ))}
         </div>
         <div style={{ padding: "10px 16px", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)" }}>app v1.4.156{gsVersion ? <span>  ·  gs v{gsVersion}</span> : null}</span>
+          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)" }}>app v1.4.158{gsVersion ? <span>  ·  gs v{gsVersion}</span> : null}</span>
         </div>
       </div>
 
