@@ -2,6 +2,16 @@
 // KC Factory System — Web App
 // ============================================================
 // Version History — full detail in KC_Daily_Progress_YYYY-MM-DD.md
+// v1.4.156 (2026-06-25) — #182 BN Create: disabled rows for billed DNs + always-visible warning + "BN ที่สร้างแล้ว" section + BNDetailMiniPopup to cancel existing BN inline; badge สร้าง X/Y
+// v1.4.155 (2026-06-25) — #170 DN cancel: block if billed (check data.bnNo, show alert before modal)
+// v1.4.154 (2026-06-25) — #162 tweak: DN/TI th top:90→70 (correct direction — lower top moves th up)
+// v1.4.153 (2026-06-25) — #162 tweak: DN/TI th top:72→90 (header taller than estimated)
+// v1.4.152 (2026-06-25) — #162 sticky thead: overflow:hidden→clip on DN/TI/BN card divs; position:sticky top:72 on DN/TI th, top:88 on BN th
+// v1.4.151 (2026-06-25) — #181 sticky header regression fix: remove marginTop/paddingTop:-18/18 hack; top:-18 on DN/TI/BN title stickies; top:32 on BN search sticky — fixes bleed + restores v1.4.149 header layout
+// v1.4.150 (2026-06-25) — #158 scroll bleed fix (marginTop/paddingTop:-18/18 on DN/TI/BN sticky headers); #159 topbar fonts →13px; #163 sticky customer card DN+TI; #164 sticky add-row button DN+TI; #165 BN list search bar extracted outside card; #173 outer div height accounts for zoom
+// v1.4.149 (2026-06-24) — #161 DN+TI detail view: revert ↳ expansion; 1 row per item, detail shows full " | " joined string; keep filter fix (desc2+detail)
+// v1.4.148 (2026-06-24) — #161 DN+TI detail view: show continuation rows (split " | " detail into ↳ rows, #f5f7ff bg); fix DN filledItems filter to include desc2+detail
+// v1.4.147 (2026-06-24) — #179 BN Create handleConfirm: fix generated:true set too broadly — mark only confirmed dnNos with bnNo, recompute generated=allBilled; partial BN keeps customer open
 // v1.4.146 (2026-06-24) — #177 QR rollout: extract toDownloadUrl+renderPhoneScreen to module-level; add QR button+modal+instruction panel to TaxInvoiceDetail, BNDetailView, QuotationPage
 // v1.4.140–145 (2026-06-24) — #166 #175 phone mockup polish: emoji→lucide, white camera bg, Send a copy split into 2 steps — normal dropdown (top-right, fontSize 6) then zoomed dropdown (top-right, fontSize 8, "Send a copy" highlighted blue)
 // v1.4.130–143 (2026-06-24) — #155 #172 LINE QR send: QR button on DN, qrcode npm, download URL, 8-step phone mockup guide (home→camera→QR detect→Drive→menu normal→menu zoom→share→LINE), auto-opens on generate
@@ -17,7 +27,7 @@
 
 import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import QRCode from "qrcode";
-import { FileText, ClipboardList, Receipt, FileSearch, Package, BarChart2, Printer, Pencil, Save, Search, RefreshCw, Loader, CheckCircle, Square, Eye, Folder, Home, Check, LayoutDashboard, LayoutGrid, ArrowLeftRight, Users, Settings, Plus, ChevronLeft, ChevronRight, ChevronDown, Calendar, Building, Lock, Unlock, QrCode, Mic, Camera, Phone, Smartphone } from "lucide-react";
+import { FileText, ClipboardList, Receipt, FileSearch, Package, BarChart2, Printer, Pencil, Save, Search, RefreshCw, Loader, CheckCircle, Square, Eye, Folder, Home, Check, LayoutDashboard, LayoutGrid, ArrowLeftRight, Users, Settings, Plus, ChevronLeft, ChevronRight, ChevronDown, Calendar, Building, Lock, Unlock, QrCode, Mic, Camera, Phone, Smartphone, AlertCircle } from "lucide-react";
 // ============================================================
 // CONFIG — ใส่ Apps Script URL ที่นี่หลัง Deploy
 // ============================================================
@@ -694,7 +704,7 @@ function DeliveryNoteForm({ initial, onSave, onCancel, isEdit, products, setProd
         </div>
       </div>
     )}
-    <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>
+    <div style={{ position: "sticky", top: 0, zIndex: 10, background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>
       <div style={{ padding: 16, borderBottom: `0.5px solid ${C.border}` }}>
         <SectionTitle>ข้อมูลลูกค้า</SectionTitle>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr 1fr", gap: 10, marginBottom: 10 }}>
@@ -790,7 +800,9 @@ function DeliveryNoteForm({ initial, onSave, onCancel, isEdit, products, setProd
             </tbody>
           </table>
         </div>
-        <button onClick={addRow} disabled={items.length >= DN_MAX_ROWS} style={{ fontSize: 11, color: items.length >= DN_MAX_ROWS ? C.muted : C.accent, background: "none", border: `0.5px dashed ${items.length >= DN_MAX_ROWS ? C.muted : C.accent}`, borderRadius: 4, padding: "4px 12px", cursor: items.length >= DN_MAX_ROWS ? "not-allowed" : "pointer", marginTop: 8, width: "100%", opacity: items.length >= DN_MAX_ROWS ? 0.5 : 1 }}>+ เพิ่มแถว (สินค้าใหม่) {items.length >= DN_MAX_ROWS ? `— เต็ม ${DN_MAX_ROWS} แถวแล้ว` : ""}</button>
+        <div style={{ position: "sticky", bottom: 0, background: C.pageBg, paddingTop: 6, paddingBottom: 6 }}>
+          <button onClick={addRow} disabled={items.length >= DN_MAX_ROWS} style={{ fontSize: 11, color: items.length >= DN_MAX_ROWS ? C.muted : C.accent, background: "none", border: `0.5px dashed ${items.length >= DN_MAX_ROWS ? C.muted : C.accent}`, borderRadius: 4, padding: "4px 12px", cursor: items.length >= DN_MAX_ROWS ? "not-allowed" : "pointer", width: "100%", opacity: items.length >= DN_MAX_ROWS ? 0.5 : 1 }}>+ เพิ่มแถว (สินค้าใหม่) {items.length >= DN_MAX_ROWS ? `— เต็ม ${DN_MAX_ROWS} แถวแล้ว` : ""}</button>
+        </div>
       </div>
 
       {error && <div style={{ margin: "0 16px 8px", padding: "8px 12px", background: C.dangerBg, color: C.danger, borderRadius: 6, fontSize: 12 }}>⚠️ {error}</div>}
@@ -1121,7 +1133,7 @@ function DeliveryNoteDetail({ invoice, onBack, onSaved, products, setProducts, s
     </div>
   );
 
-  const filledItems = (data.items || []).filter(it => it.desc || it.qty || it.amount);
+  const filledItems = (data.items || []).filter(it => it.desc || it.desc2 || it.detail || it.qty || it.amount);
   return (
     <div>
       {showCancelConfirm && <ConfirmModal message={`ยืนยันยกเลิก ${data.id}?`} confirmLabel="ยืนยันยกเลิก" onConfirm={handleCancelInvoice} onCancel={() => setShowCancelConfirm(false)} loading={cancelLoading} enterConfirm />}
@@ -1215,7 +1227,7 @@ function DeliveryNoteDetail({ invoice, onBack, onSaved, products, setProducts, s
               </div>
               <Btn onClick={handleQr} disabled={qrLoading}>{qrLoading ? <Loader size={13}/> : <QrCode size={14}/>} QR</Btn>
               <Btn primary onClick={() => setEditing(true)}><Pencil size={14}/> แก้ไข</Btn>
-              <Btn danger onClick={() => setShowCancelConfirm(true)} disabled={cancelLoading}>ยกเลิกใบนี้</Btn>
+              <Btn danger onClick={() => { if (data.billed) { alert(`ใบส่งของนี้อยู่ใน ${data.bnNo || "BN"} แล้ว\nกรุณายกเลิก BN นั้นก่อน`); return; } setShowCancelConfirm(true); }} disabled={cancelLoading}>ยกเลิกใบนี้</Btn>
             </>
           )}
         </div>
@@ -1430,7 +1442,7 @@ function DeliveryNotePage({ products, setProducts, sizes, cache, updateCache, on
 
       {view === "list" && (
         <div>
-          <div style={{ position: "sticky", top: 0, zIndex: 10, background: C.pageBg }}>
+          <div style={{ position: "sticky", top: -18, zIndex: 10, background: C.pageBg }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 10 }}>
               <div style={{ fontSize: 16, fontWeight: 500 }}><FileText size={15}/> ใบส่งของ</div>
               <Btn primary onClick={handleCreateNew}>+ สร้างใบส่งของใหม่</Btn>
@@ -1443,7 +1455,7 @@ function DeliveryNotePage({ products, setProducts, sizes, cache, updateCache, on
               <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted }}>พบ {filtered.length} รายการ</span>
             </div>
           </div>
-          <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderTop: "none", borderRadius: "0 0 8px 8px", overflow: "hidden", marginBottom: 14 }}>
+          <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderTop: "none", borderRadius: "0 0 8px 8px", overflow: "clip", marginBottom: 14 }}>
             {error && <div style={{ padding: 14 }}><ErrorBox msg={error} onRetry={loadInvoices} /></div>}
             {loading && <Spinner />}
             {!loading && !error && (
@@ -1451,7 +1463,7 @@ function DeliveryNotePage({ products, setProducts, sizes, cache, updateCache, on
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
                   <tr>{["เลขที่ใบส่งของ", "วันที่", "ชื่อลูกค้า", "รายการ", "ยอดรวม", "สถานะ"].map((h, i) => (
-                    <th key={i} style={{ padding: "8px 14px", textAlign: i === 4 ? "right" : "left", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, background: "#fafafa" }}>{h}</th>
+                    <th key={i} style={{ padding: "8px 14px", textAlign: i === 4 ? "right" : "left", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, background: "#fafafa", position: "sticky", top: 70, zIndex: 1 }}>{h}</th>
                   ))}</tr>
                 </thead>
                 <tbody>
@@ -3387,7 +3399,7 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick }) {
     <thead>
       <tr>
         {["เลขที่ BN", "วันที่ออก", "ชื่อลูกค้า", "จำนวนบิล", "รวมเงิน", ""].map((h, i) => (
-          <th key={i} style={{ padding: "8px 14px", textAlign: i === 4 ? "right" : "left", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, background: "#fafafa" }}>{h}</th>
+          <th key={i} style={{ padding: "8px 14px", textAlign: i === 4 ? "right" : "left", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, background: "#fafafa", position: "sticky", top: 88, zIndex: 1 }}>{h}</th>
         ))}
       </tr>
     </thead>
@@ -3395,14 +3407,16 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick }) {
 
   return (
     <div>
-      <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>
-        <div style={{ padding: "10px 14px", display: "flex", gap: 8, alignItems: "center", borderBottom: `0.5px solid ${C.border}`, background: "#fafafa", flexWrap: "wrap" }}>
+      <div style={{ position: "sticky", top: 32, zIndex: 9, background: C.pageBg, paddingBottom: 6 }}>
+        <div style={{ padding: "10px 14px", display: "flex", gap: 8, alignItems: "center", background: "#fafafa", border: `0.5px solid ${C.border}`, borderRadius: "8px 8px 0 0", flexWrap: "wrap" }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="ค้นหาเลขที่ / ลูกค้า..."
             style={{ ...inputStyle, width: 200, height: 30 }} />
           <DateRangePicker startDate={dStart} endDate={dEnd} onApply={(s, e) => { setDStart(s); setDEnd(e); }} />
           <Btn small onClick={onRefresh}><RefreshCw size={14}/> รีเฟรช</Btn>
           <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted }}>พบ {active.length} รายการ</span>
         </div>
+      </div>
+      <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: "0 0 8px 8px", overflow: "clip", borderTop: "none" }}>
         {error && <div style={{ padding: 14 }}><ErrorBox msg={error} onRetry={onRefresh} /></div>}
         {loading && <Spinner />}
         {!loading && !error && (
@@ -3449,30 +3463,122 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick }) {
 
 // ── BN Customer Panel (right pane) ─────────────────────────
 
+// #182 — BN detail mini-popup: load detail + cancel BN inline, used from BNCustomerPanel
+function BNDetailMiniPopup({ bnNo, onClose, onCancelled }) {
+  const [data, setData]         = useState(null);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState("");
+  const [confirming, setConf]   = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+
+  useEffect(() => {
+    api.getBillingNoteDetail(bnNo)
+      .then(d => setData(d))
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false));
+  }, [bnNo]);
+
+  const handleCancel = async () => {
+    setCancelling(true);
+    try {
+      await api.cancelBillingNote(bnNo);
+      onCancelled(bnNo);
+    } catch (e) {
+      setError(e.message); setCancelling(false); setConf(false);
+    }
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ background: "white", borderRadius: 10, width: 480, maxWidth: "92vw", maxHeight: "80vh", overflow: "auto", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: `0.5px solid ${C.border}`, position: "sticky", top: 0, background: "white", zIndex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: C.accent }}>{bnNo}</span>
+            {data && !data.cancelled && <span style={{ fontSize: 10, background: "#eaf3de", color: "#3b6d11", padding: "1px 6px", borderRadius: 7, fontWeight: 500 }}>ปกติ</span>}
+            {data?.cancelled && <span style={{ fontSize: 10, background: "#fdf0ef", color: "#c0392b", padding: "1px 6px", borderRadius: 7, fontWeight: 500 }}>ยกเลิกแล้ว</span>}
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: C.muted, fontSize: 22, lineHeight: 1, padding: "0 4px" }}>×</button>
+        </div>
+        <div style={{ padding: "14px 16px" }}>
+          {loading && <Spinner />}
+          {error && <ErrorBox msg={error} />}
+          {data && (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 10, marginBottom: 12 }}>
+                {[["ลูกค้า", data.customer], ["วันที่", data.date], ["จำนวน", `${data.count} ฉบับ`], ["รวมเงิน", `฿${(data.total||0).toLocaleString()}`]].map(([l, v]) => (
+                  <div key={l}><div style={{ fontSize: 10, color: C.muted, marginBottom: 1 }}>{l}</div><div style={{ fontSize: 12, fontWeight: 500 }}>{v}</div></div>
+                ))}
+              </div>
+              <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>รายการใบส่งของ</div>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, marginBottom: 14 }}>
+                <thead>
+                  <tr style={{ background: "#fafafa" }}>
+                    {["เลขที่ DN", "วันที่", "รวมเงิน"].map((h, i) => (
+                      <th key={i} style={{ padding: "6px 10px", textAlign: i===2?"right":"left", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}` }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(data.invoices || []).map((inv, i) => (
+                    <tr key={i} style={{ borderBottom: `0.5px solid ${C.borderLight}` }}>
+                      <td style={{ padding: "7px 10px", color: C.accent, fontWeight: 500 }}>{inv.no}</td>
+                      <td style={{ padding: "7px 10px", color: C.muted }}>{inv.date}</td>
+                      <td style={{ padding: "7px 10px", textAlign: "right", fontWeight: 500 }}>฿{(parseFloat(inv.total)||0).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!data.cancelled && !confirming && (
+                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  <Btn danger small onClick={() => setConf(true)}>ยกเลิก BN นี้</Btn>
+                </div>
+              )}
+              {!data.cancelled && confirming && (
+                <div style={{ background: "#fdf7f7", border: `0.5px solid ${C.danger}`, borderRadius: 7, padding: "12px 14px" }}>
+                  <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4, color: C.danger }}>ยืนยันยกเลิก {bnNo}?</div>
+                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 10, lineHeight: 1.5 }}>{bnNo} จะถูกยกเลิก และ DN ทั้งหมดในใบนี้จะถูกปลดออก — สามารถรวมใน BN ใหม่ได้ทันที</div>
+                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                    <Btn small onClick={() => setConf(false)} disabled={cancelling}>ยกเลิก</Btn>
+                    <Btn danger small onClick={handleCancel} disabled={cancelling}>
+                      {cancelling ? <><Loader size={11}/> กำลังยกเลิก...</> : "ยืนยันยกเลิก BN"}
+                    </Btn>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BNCustomerPanel({ cust, nextBnNo, onConfirm }) {
   const today = new Date().toISOString().slice(0, 10);
   const [bnDate, setBnDate]   = useState(today);
   const [confirming, setConf] = useState(false);
   const [error, setError]     = useState("");
   const [rows, setRows]       = useState(
-    (cust.invoices || []).map((inv, i) => ({ ...inv, idx: i, checked: true }))
+    (cust.invoices || []).map((inv, i) => ({ ...inv, idx: i, checked: !inv.bnNo }))
   );
   const [dnPopup, setDnPopup] = useState(null);
   const [dnCache, setDnCache] = useState({});
+  const [bnPopup, setBnPopup] = useState(null); // #182
   const [address, setAddress] = useState(cust.address || "");
   const [phone, setPhone]     = useState(cust.phone || "");
 
   // reset on customer switch (key prop handles unmount, but keep for safety)
   useEffect(() => {
     setBnDate(today); setError("");
-    setRows((cust.invoices || []).map((inv, i) => ({ ...inv, idx: i, checked: true })));
+    setRows((cust.invoices || []).map((inv, i) => ({ ...inv, idx: i, checked: !inv.bnNo })));
     setAddress(cust.address || ""); setPhone(cust.phone || "");
   }, [cust.customer]);
 
-  const toggleRow = (idx) => setRows(prev => prev.map(r => r.idx === idx ? { ...r, checked: !r.checked } : r));
+  const toggleRow = (idx) => setRows(prev => prev.map(r => r.idx === idx && !r.bnNo ? { ...r, checked: !r.checked } : r));
   const toggleAll = () => {
-    const allChecked = rows.every(r => r.checked);
-    setRows(prev => prev.map(r => ({ ...r, checked: !allChecked })));
+    const unbilled = rows.filter(r => !r.bnNo);
+    const allChecked = unbilled.length > 0 && unbilled.every(r => r.checked);
+    setRows(prev => prev.map(r => r.bnNo ? r : { ...r, checked: !allChecked }));
   };
 
   const selectedRows = rows.filter(r => r.checked);
@@ -3497,6 +3603,25 @@ function BNCustomerPanel({ cust, nextBnNo, onConfirm }) {
         <span style={{ fontSize: 13, fontWeight: 500 }}>{cust.customer}</span>
         <span style={{ fontSize: 11, color: C.accent, background: "#e3f0ff", padding: "1px 8px", borderRadius: 10, fontWeight: 500 }}>{nextBnNo}</span>
       </div>
+      {/* #182 — BN ที่สร้างแล้วในเดือนนี้ */}
+      {(cust.invoices || []).some(inv => inv.bnNo) && (() => {
+        const bnGroups = {};
+        (cust.invoices || []).forEach(inv => { if (inv.bnNo) { if (!bnGroups[inv.bnNo]) bnGroups[inv.bnNo] = []; bnGroups[inv.bnNo].push(inv.no); } });
+        return (
+          <div style={{ background: "#f8faff", borderBottom: `0.5px solid ${C.borderLight}` }}>
+            <div style={{ padding: "5px 14px 3px", fontSize: 10, color: C.muted, display: "flex", alignItems: "center", gap: 4 }}>
+              <FileText size={11}/> BN ที่สร้างแล้วในเดือนนี้
+            </div>
+            {Object.entries(bnGroups).map(([bNo, dnNos]) => (
+              <div key={bNo} style={{ padding: "3px 14px 6px", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", borderTop: `0.5px solid ${C.borderLight}` }}>
+                <span onClick={() => setBnPopup(bNo)} style={{ fontSize: 11, fontWeight: 500, color: C.accent, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" }}>{bNo} →</span>
+                <span style={{ fontSize: 10, color: C.muted }}>{dnNos.length} ฉบับ</span>
+                {dnNos.map(no => <span key={no} style={{ fontSize: 9, background: "#eaf3de", color: "#3b6d11", padding: "1px 5px", borderRadius: 3 }}>{no}</span>)}
+              </div>
+            ))}
+          </div>
+        );
+      })()}
       {/* customer info — per-BN override for address/phone (#115) */}
       <div style={{ padding: "8px 14px", borderBottom: `0.5px solid ${C.borderLight}`, display: "grid", gridTemplateColumns: "60px 1fr", gap: "6px 10px", alignItems: "center" }}>
         <span style={{ fontSize: 11, color: C.muted }}>ที่อยู่</span>
@@ -3523,14 +3648,29 @@ function BNCustomerPanel({ cust, nextBnNo, onConfirm }) {
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.idx} style={{ borderBottom: `0.5px solid ${C.borderLight}`, background: row.checked ? "white" : "#fafafa", opacity: row.checked ? 1 : 0.55 }}>
-              <td style={{ padding: "8px 14px" }}><input type="checkbox" checked={row.checked} onChange={() => toggleRow(row.idx)} /></td>
-              <td style={{ padding: "8px 14px" }}>
-                <span onClick={() => setDnPopup(row.no)} style={{ color: C.accent, fontWeight: 500, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" }}>{row.no}</span>
-              </td>
-              <td style={{ padding: "8px 14px", color: C.muted }}>{row.date}</td>
-              <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{(parseFloat(row.total)||0).toLocaleString()}</td>
-            </tr>
+            <React.Fragment key={row.idx}>
+              <tr style={{ borderBottom: row.bnNo ? "none" : `0.5px solid ${C.borderLight}`, background: row.bnNo ? "#fafafa" : (row.checked ? "white" : "#fafafa"), opacity: row.bnNo ? 0.5 : (row.checked ? 1 : 0.55) }}>
+                <td style={{ padding: "8px 14px", opacity: row.bnNo ? 1 : undefined }}>
+                  <input type="checkbox" checked={row.checked} disabled={!!row.bnNo} onChange={() => toggleRow(row.idx)} style={{ cursor: row.bnNo ? "not-allowed" : "pointer" }} />
+                </td>
+                <td style={{ padding: "8px 14px" }}>
+                  <span onClick={() => setDnPopup(row.no)} style={{ color: row.bnNo ? C.muted : C.accent, fontWeight: 500, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" }}>{row.no}</span>
+                </td>
+                <td style={{ padding: "8px 14px", color: C.muted }}>{row.date}</td>
+                <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{(parseFloat(row.total)||0).toLocaleString()}</td>
+              </tr>
+              {row.bnNo && (
+                <tr style={{ borderBottom: `0.5px solid ${C.borderLight}` }}>
+                  <td colSpan={4} style={{ padding: 0 }}>
+                    <div style={{ background: "#fff8e1", borderTop: `0.5px solid #fac775`, padding: "5px 10px 5px 36px", fontSize: 10, color: "#633806", display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+                      <AlertCircle size={11} style={{ color: "#854f0b", flexShrink: 0, marginLeft: -20 }}/>
+                      {row.no} อยู่ใน {row.bnNo} แล้ว — ถ้าต้องการรวม DN นี้ ให้
+                      <span onClick={() => setBnPopup(row.bnNo)} style={{ color: C.accent, fontWeight: 500, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" }}>ยกเลิก {row.bnNo} →</span>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </React.Fragment>
           ))}
         </tbody>
         <tfoot>
@@ -3553,6 +3693,17 @@ function BNCustomerPanel({ cust, nextBnNo, onConfirm }) {
           cachedData={dnCache[dnPopup]}
           onCached={(no, d) => setDnCache(prev => ({ ...prev, [no]: d }))}
           onClose={() => setDnPopup(null)}
+        />
+      )}
+      {/* #182 — BN detail mini-popup (cancel existing BN to unlock DN) */}
+      {bnPopup && (
+        <BNDetailMiniPopup
+          bnNo={bnPopup}
+          onClose={() => setBnPopup(null)}
+          onCancelled={(cancelledBnNo) => {
+            setRows(prev => prev.map(r => r.bnNo === cancelledBnNo ? { ...r, bnNo: "", checked: true } : r));
+            setBnPopup(null);
+          }}
         />
       )}
     </div>
@@ -3653,10 +3804,15 @@ function BNCreateView({ onBack }) {
   useEffect(() => { handleSearch(); }, []);
 
   const handleConfirm = (result) => {
-    setCustomers(prev => prev.map((c, i) => i === selectedIdx
-      ? { ...c, generated: true, createdBnNo: result.bnNo, createdPdfUrl: result.pdfUrl, createdCount: result.count, createdTotal: result.total, createdDate: result.date }
-      : c
-    ));
+    setCustomers(prev => prev.map((c, i) => {
+      if (i !== selectedIdx) return c;
+      const confirmedSet = new Set(result.dnNos || []);
+      const updatedInvoices = (c.invoices || []).map(inv =>
+        confirmedSet.has(inv.no) ? { ...inv, bnNo: result.bnNo } : inv
+      );
+      const allBilled = updatedInvoices.length > 0 && updatedInvoices.every(inv => inv.bnNo);
+      return { ...c, generated: allBilled, invoices: updatedInvoices, createdBnNo: result.bnNo, createdPdfUrl: result.pdfUrl, createdCount: result.count, createdTotal: result.total, createdDate: result.date };
+    }));
     const parts = result.bnNo.split("-");
     const n = parseInt(parts[parts.length-1], 10) + 1;
     const yy = new Date().getFullYear().toString().slice(-2);
@@ -3767,9 +3923,13 @@ function BNCreateView({ onBack }) {
                   style={{ background: C.cardBg, border: `0.5px solid ${isSelected ? C.accent : C.border}`, borderLeft: `3px solid ${isSelected ? C.accent : cust.generated ? C.success : C.borderLight}`, borderRadius: "0 6px 6px 0", padding: "9px 10px", cursor: "pointer", flexShrink: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
                     <span style={{ fontSize: 12, fontWeight: 500 }}>{cust.customer}</span>
-                    {cust.generated
-                      ? <Badge type="success" style={{ fontSize: 9 }}><CheckCircle size={8}/> สร้างแล้ว</Badge>
-                      : <Badge type="warning" style={{ fontSize: 9 }}>ยังไม่สร้าง</Badge>}
+                    {(() => {
+                      const billedCnt = (cust.invoices || []).filter(inv => inv.bnNo).length;
+                      const totalCnt  = (cust.invoices || []).length;
+                      if (cust.generated) return <Badge type="success" style={{ fontSize: 9 }}><CheckCircle size={8}/> สร้างแล้ว</Badge>;
+                      if (billedCnt > 0) return <Badge type="info" style={{ fontSize: 9 }}>สร้าง {billedCnt}/{totalCnt}</Badge>;
+                      return <Badge type="warning" style={{ fontSize: 9 }}>ยังไม่สร้าง</Badge>;
+                    })()}
                   </div>
                   {cust.generated && cust.createdBnNo
                     ? <div style={{ fontSize: 10, color: C.accent }}>{cust.createdBnNo}</div>
@@ -3957,7 +4117,7 @@ function BillingNotePage({ cache, updateCache, goListRequest, onViewChange }) {
 
   return (
     <div>
-      <div style={{ position: "sticky", top: 0, zIndex: 10, background: C.pageBg, paddingBottom: 10 }}>
+      <div style={{ position: "sticky", top: -18, zIndex: 10, background: C.pageBg, paddingBottom: 10 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ fontSize: 16, fontWeight: 500 }}><ClipboardList size={15}/> ใบวางบิล</div>
           <Btn primary onClick={() => setView("create", "สร้างใบวางบิล")}>+ สร้างใบวางบิล</Btn>
@@ -4089,7 +4249,7 @@ function TaxInvoiceForm({ initial, onSave, onCancel, isEdit, products, setProduc
         </div>
       </div>
     )}
-    <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>
+    <div style={{ position: "sticky", top: 0, zIndex: 10, background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>
 
       {/* Customer info */}
       <div style={{ padding: 16, borderBottom: `0.5px solid ${C.border}` }}>
@@ -4187,7 +4347,9 @@ function TaxInvoiceForm({ initial, onSave, onCancel, isEdit, products, setProduc
             </tbody>
           </table>
         </div>
-        <button onClick={addRow} disabled={items.length >= ITEMS_COUNT} style={{ fontSize: 11, color: items.length >= ITEMS_COUNT ? C.muted : C.accent, background: "none", border: `0.5px dashed ${items.length >= ITEMS_COUNT ? C.muted : C.accent}`, borderRadius: 4, padding: "4px 12px", cursor: items.length >= ITEMS_COUNT ? "not-allowed" : "pointer", marginTop: 8, width: "100%", opacity: items.length >= ITEMS_COUNT ? 0.5 : 1 }}>+ เพิ่มแถว (สินค้าใหม่) {items.length >= ITEMS_COUNT ? "— เต็ม 10 แถวแล้ว" : ""}</button>
+        <div style={{ position: "sticky", bottom: 0, background: C.pageBg, paddingTop: 6, paddingBottom: 6 }}>
+          <button onClick={addRow} disabled={items.length >= ITEMS_COUNT} style={{ fontSize: 11, color: items.length >= ITEMS_COUNT ? C.muted : C.accent, background: "none", border: `0.5px dashed ${items.length >= ITEMS_COUNT ? C.muted : C.accent}`, borderRadius: 4, padding: "4px 12px", cursor: items.length >= ITEMS_COUNT ? "not-allowed" : "pointer", width: "100%", opacity: items.length >= ITEMS_COUNT ? 0.5 : 1 }}>+ เพิ่มแถว (สินค้าใหม่) {items.length >= ITEMS_COUNT ? "— เต็ม 10 แถวแล้ว" : ""}</button>
+        </div>
       </div>
 
       {/* VAT Summary */}
@@ -4579,7 +4741,7 @@ function TaxInvoicePage({ products, setProducts, sizes, vatRate = 0.07, cache, u
       {/* List */}
       {view === "list" && (
         <div>
-          <div style={{ position: "sticky", top: 0, zIndex: 10, background: C.pageBg }}>
+          <div style={{ position: "sticky", top: -18, zIndex: 10, background: C.pageBg }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 10 }}>
               <div style={{ fontSize: 16, fontWeight: 500 }}><Receipt size={15}/> ใบกำกับภาษี</div>
               <Btn primary onClick={() => setView("create", "สร้างใหม่")}>+ สร้างใบกำกับภาษีใหม่</Btn>
@@ -4593,7 +4755,7 @@ function TaxInvoicePage({ products, setProducts, sizes, vatRate = 0.07, cache, u
               <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted }}>พบ {filtered.length} รายการ</span>
             </div>
           </div>
-          <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderTop: "none", borderRadius: "0 0 8px 8px", overflow: "hidden", marginBottom: 14 }}>
+          <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderTop: "none", borderRadius: "0 0 8px 8px", overflow: "clip", marginBottom: 14 }}>
             {loading && <Spinner />}
             {!loading && filtered.length === 0 && (
               <div style={{ padding: "40px 0", textAlign: "center", color: C.muted, fontSize: 13 }}>ไม่พบรายการ</div>
@@ -4607,7 +4769,7 @@ function TaxInvoicePage({ products, setProducts, sizes, vatRate = 0.07, cache, u
                 </colgroup>
                 <thead>
                   <tr>{["เลขที่", "วันที่", "ชื่อลูกค้า", "เลขภาษี", "ยอดสุทธิ"].map((h, i) => (
-                    <th key={i} style={{ padding: "8px 10px", textAlign: i === 4 ? "right" : "left", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, background: "#fafafa" }}>{h}</th>
+                    <th key={i} style={{ padding: "8px 10px", textAlign: i === 4 ? "right" : "left", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, background: "#fafafa", position: "sticky", top: 70, zIndex: 1 }}>{h}</th>
                   ))}</tr>
                 </thead>
                 <tbody>
@@ -4884,7 +5046,7 @@ export default function App({ userEmail, userName, onLogout }) {
   const isDevMode = SCRIPT_URL === "YOUR_APPS_SCRIPT_URL_HERE";
 
   return (
-    <div style={{ display: "flex", height: "100vh", fontFamily: "Sarabun, sans-serif" }}>
+    <div style={{ display: "flex", height: `${100/fontScale}vh`, fontFamily: "Sarabun, sans-serif" }}>
       <style>{`html, body { margin: 0; padding: 0; overflow: hidden; } body { zoom: ${fontScale}; }`}</style>
 
       {/* Sidebar */}
@@ -4904,7 +5066,7 @@ export default function App({ userEmail, userName, onLogout }) {
           ))}
         </div>
         <div style={{ padding: "10px 16px", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)" }}>app v1.4.145{gsVersion ? <span>  ·  gs v{gsVersion}</span> : null}</span>
+          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)" }}>app v1.4.156{gsVersion ? <span>  ·  gs v{gsVersion}</span> : null}</span>
         </div>
       </div>
 
@@ -4912,7 +5074,7 @@ export default function App({ userEmail, userName, onLogout }) {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", background: C.pageBg, minWidth: 0 }}>
         {/* Topbar */}
         <div style={{ background: "white", borderBottom: `0.5px solid ${C.border}`, padding: "0 20px", height: 48, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, zoom: 1/fontScale }}>
-          <div style={{ fontSize: 12, color: C.muted, display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ fontSize: 13, color: C.muted, display: "flex", alignItems: "center", gap: 6 }}>
             <Home size={14}/>
             <span style={{ color: active === "home" ? C.text : C.accent, cursor: active === "home" ? "default" : "pointer" }}
               onClick={() => active !== "home" && setActive("home")}>หน้าหลัก</span>
@@ -4934,9 +5096,9 @@ export default function App({ userEmail, userName, onLogout }) {
                 ⚠️ Dev Mode — ยังไม่ได้ตั้งค่า SCRIPT_URL
               </div>
             )}
-            {userName && <span style={{ fontSize: 12, color: C.muted }}>{userName}</span>}
+            {userName && <span style={{ fontSize: 13, color: C.muted }}>{userName}</span>}
             {onLogout && (
-              <button onClick={onLogout} style={{ background: "none", border: `0.5px solid ${C.border}`, borderRadius: 4, padding: "4px 10px", fontSize: 11, cursor: "pointer", color: C.muted }}>
+              <button onClick={onLogout} style={{ background: "none", border: `0.5px solid ${C.border}`, borderRadius: 4, padding: "4px 10px", fontSize: 13, cursor: "pointer", color: C.muted }}>
                 ออกจากระบบ
               </button>
             )}
