@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useGoogleLogin } from '@react-oauth/google'
-import KCFactory from './KCFactory.jsx'
+import InvoiceAdmin from './InvoiceAdmin.jsx'
 
 const ALLOWED_EMAILS = [
   'kimchiang.ltd@gmail.com',
@@ -9,7 +9,7 @@ const ALLOWED_EMAILS = [
 
 export default function App() {
   const [user, setUser] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('kc_user')) || null } catch { return null }
+    try { return JSON.parse(localStorage.getItem('ia_user')) || null } catch { return null }
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -24,7 +24,7 @@ export default function App() {
         const profile = await res.json()
         if (ALLOWED_EMAILS.includes(profile.email)) {
           setUser(profile)
-          localStorage.setItem('kc_user', JSON.stringify(profile))
+          localStorage.setItem('ia_user', JSON.stringify(profile))
           setError('')
         } else {
           setError(profile.email + ' ไม่มีสิทธิ์เข้าใช้งาน')
@@ -39,18 +39,18 @@ export default function App() {
   })
 
   const logout = () => {
-    localStorage.removeItem('kc_user')
+    localStorage.removeItem('ia_user')
     setUser(null)
   }
 
-  if (user) return <KCFactory userEmail={user.email} userName={user.name} onLogout={logout} />
+  if (user) return <InvoiceAdmin userEmail={user.email} userName={user.name} onLogout={logout} />
 
   return (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', background:'#f3f3f3', fontFamily:'Sarabun, sans-serif' }}>
       <div style={{ background:'white', borderRadius:12, padding:40, width:360, textAlign:'center', boxShadow:'0 4px 24px rgba(0,0,0,0.08)' }}>
-        <div style={{ width:48, height:48, background:'#032d60', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:18, color:'white', margin:'0 auto 16px' }}>KC</div>
-        <div style={{ fontSize:20, fontWeight:600, marginBottom:4 }}>KC Factory</div>
-        <div style={{ fontSize:13, color:'#6b6b6b', marginBottom:32 }}>ระบบจัดการโรงงานกิมเชียง</div>
+        <div style={{ width:48, height:48, background:'#0891b2', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:18, color:'white', margin:'0 auto 16px' }}>IA</div>
+        <div style={{ fontSize:20, fontWeight:600, marginBottom:4 }}>Invoice Admin</div>
+        <div style={{ fontSize:13, color:'#6b6b6b', marginBottom:32 }}>ระบบออกใบกำกับภาษี</div>
         {error && (
           <div style={{ background:'#fdecea', color:'#c23934', padding:'10px 14px', borderRadius:6, fontSize:12, marginBottom:16 }}>
             {error}

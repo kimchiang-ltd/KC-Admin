@@ -1,12 +1,13 @@
 import React, { useState } from 'react'
-import ReactDOM from 'react-dom/client'
-import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google'
-import App from './InvoiceAdmin.jsx'
+import { useGoogleLogin } from '@react-oauth/google'
+import InvoiceAdmin from './InvoiceAdmin.jsx'
 
-const CLIENT_ID = "525212845492-jrkm4drtekb8fccnkgbfitlrqkqv3p0n.apps.googleusercontent.com"
-const ALLOWED_EMAILS = ['kimchiang.ltd@gmail.com', 'chanavi.pp@gmail.com']
+const ALLOWED_EMAILS = [
+  'kimchiang.ltd@gmail.com',
+  'chanavi.pp@gmail.com',
+]
 
-function AuthWrapper() {
+export default function App() {
   const [user, setUser] = useState(() => {
     try { return JSON.parse(localStorage.getItem('ia_user')) || null } catch { return null }
   })
@@ -28,8 +29,11 @@ function AuthWrapper() {
         } else {
           setError(profile.email + ' ไม่มีสิทธิ์เข้าใช้งาน')
         }
-      } catch { setError('เกิดข้อผิดพลาด กรุณาลองใหม่') }
-      finally { setLoading(false) }
+      } catch(e) {
+        setError('เกิดข้อผิดพลาด กรุณาลองใหม่')
+      } finally {
+        setLoading(false)
+      }
     },
     onError: () => setError('เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่')
   })
@@ -39,7 +43,7 @@ function AuthWrapper() {
     setUser(null)
   }
 
-  if (user) return <App userName={user.name} onLogout={logout} />
+  if (user) return <InvoiceAdmin userEmail={user.email} userName={user.name} onLogout={logout} />
 
   return (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', background:'#f3f3f3', fontFamily:'Sarabun, sans-serif' }}>
@@ -47,9 +51,16 @@ function AuthWrapper() {
         <div style={{ width:48, height:48, background:'#0891b2', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:18, color:'white', margin:'0 auto 16px' }}>IA</div>
         <div style={{ fontSize:20, fontWeight:600, marginBottom:4 }}>Invoice Admin</div>
         <div style={{ fontSize:13, color:'#6b6b6b', marginBottom:32 }}>ระบบออกใบกำกับภาษี</div>
-        {error && <div style={{ background:'#fdecea', color:'#c23934', padding:'10px 14px', borderRadius:6, fontSize:12, marginBottom:16 }}>{error}</div>}
-        <button onClick={() => login()} disabled={loading}
-          style={{ width:'100%', padding:'10px 0', background:'white', border:'1px solid rgba(0,0,0,0.2)', borderRadius:6, fontSize:13, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:10, fontFamily:'Sarabun, sans-serif' }}>
+        {error && (
+          <div style={{ background:'#fdecea', color:'#c23934', padding:'10px 14px', borderRadius:6, fontSize:12, marginBottom:16 }}>
+            {error}
+          </div>
+        )}
+        <button
+          onClick={() => login()}
+          disabled={loading}
+          style={{ width:'100%', padding:'10px 0', background:'white', border:'1px solid rgba(0,0,0,0.2)', borderRadius:6, fontSize:13, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:10, fontFamily:'Sarabun, sans-serif' }}
+        >
           <img src="https://www.google.com/favicon.ico" width={16} height={16} alt="" />
           {loading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบด้วย Google'}
         </button>
@@ -58,11 +69,3 @@ function AuthWrapper() {
     </div>
   )
 }
-
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <GoogleOAuthProvider clientId={CLIENT_ID}>
-      <AuthWrapper />
-    </GoogleOAuthProvider>
-  </React.StrictMode>
-)
