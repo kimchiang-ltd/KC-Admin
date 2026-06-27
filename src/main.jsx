@@ -1,14 +1,14 @@
 import React, { useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google'
-import App from './InvoiceAdmin.jsx'
+import App from './App.jsx'
 
 const CLIENT_ID = "525212845492-jrkm4drtekb8fccnkgbfitlrqkqv3p0n.apps.googleusercontent.com"
 const ALLOWED_EMAILS = ['kimchiang.ltd@gmail.com', 'chanavi.pp@gmail.com']
 
 function AuthWrapper() {
   const [user, setUser] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('ia_user')) || null } catch { return null }
+    try { return JSON.parse(localStorage.getItem('kc_user')) || null } catch { return null }
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -23,7 +23,7 @@ function AuthWrapper() {
         const profile = await res.json()
         if (ALLOWED_EMAILS.includes(profile.email)) {
           setUser(profile)
-          localStorage.setItem('ia_user', JSON.stringify(profile))
+          localStorage.setItem('kc_user', JSON.stringify(profile))
           setError('')
         } else {
           setError(profile.email + ' ไม่มีสิทธิ์เข้าใช้งาน')
@@ -35,7 +35,7 @@ function AuthWrapper() {
   })
 
   const logout = () => {
-    localStorage.removeItem('ia_user')
+    localStorage.removeItem('kc_user')
     setUser(null)
   }
 
@@ -44,9 +44,9 @@ function AuthWrapper() {
   return (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', background:'#f3f3f3', fontFamily:'Sarabun, sans-serif' }}>
       <div style={{ background:'white', borderRadius:12, padding:40, width:360, textAlign:'center', boxShadow:'0 4px 24px rgba(0,0,0,0.08)' }}>
-        <div style={{ width:48, height:48, background:'#0891b2', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:18, color:'white', margin:'0 auto 16px' }}>IA</div>
-        <div style={{ fontSize:20, fontWeight:600, marginBottom:4 }}>Invoice Admin</div>
-        <div style={{ fontSize:13, color:'#6b6b6b', marginBottom:32 }}>ระบบออกใบกำกับภาษี</div>
+        <div style={{ width:48, height:48, background:'#032d60', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:18, color:'white', margin:'0 auto 16px' }}>KC</div>
+        <div style={{ fontSize:20, fontWeight:600, marginBottom:4 }}>KC Admin</div>
+        <div style={{ fontSize:13, color:'#6b6b6b', marginBottom:32 }}>ระบบจัดการเอกสาร</div>
         {error && <div style={{ background:'#fdecea', color:'#c23934', padding:'10px 14px', borderRadius:6, fontSize:12, marginBottom:16 }}>{error}</div>}
         <button onClick={() => login()} disabled={loading}
           style={{ width:'100%', padding:'10px 0', background:'white', border:'1px solid rgba(0,0,0,0.2)', borderRadius:6, fontSize:13, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:10, fontFamily:'Sarabun, sans-serif' }}>

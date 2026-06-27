@@ -3,6 +3,9 @@
 // Colors, limits, thresholds shared across apps
 // ============================================================
 
+// ── App Version ──────────────────────────────────────────
+export const APP_VERSION = "1.4.167";
+
 // ── Colors ────────────────────────────────────────────────
 export const C = {
   sidebar: "#032d60",
