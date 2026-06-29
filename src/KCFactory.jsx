@@ -2,6 +2,15 @@
 // KC Factory System — Web App
 // ============================================================
 // Version History — full detail in docs/daily-progress/KC_Daily_Progress_YYYY-MM-DD.md
+// v1.4.177 (2026-06-29) — #214 refactor to on-blur per-field pattern (iii-soft cache): replaced on-save CustomerSyncConfirmModal with per-field CustomerFieldSyncModal. Field blur → if differs from customer record AND not cached "yes" → popup "เพิ่ม/อัพเดท X?". "ใช่" cached for session (no re-prompt for same field); "ไม่" doesn't cache (re-prompt if user edits to new value). Save applies cached "yes" decisions only. Deleted diffCustomerFields helper (per-field diff now inline). 4 forms refactored (DN/TI/BN-DN/BN-TI). BN forms lazy-fetch customer record on first blur.
+// v1.4.176 (2026-06-29) — #214 customer DB sync-back: DN/TI/BN-DN/BN-TI forms compare form values vs customer record on save → silent additive (fill empty fields) OR modal CustomerSyncConfirmModal on conflict (all-or-nothing overwrite). Shared helpers added: diffCustomerFields (utils.jsx), CustomerSyncConfirmModal (ui.jsx). BN forms lazy-fetch customer via api/tiApi.getCustomers since no allCustomers state. Per-field selection deferred to #220.
+// v1.4.175 (2026-06-29) — #215 TaxInvoicePage loads own TI products/sizes via tiApi.getProducts (cache key tiProductList); decoupled from KC Admin Config_Products which is DN's; KCFactory tax-invoice case no longer passes products/setProducts/sizes
+// v1.4.174 (2026-06-29) — #217 SettingsPage: wire onViewChange + goListRequest props → breadcrumb shows sub-view label (ลูกค้า/สินค้า/etc.); clicking active "ตั้งค่า" in sidebar resets to hub
+// v1.4.173 (2026-06-29) — #218 add `pdfHeader: "#0f2942"` to C in shared/constants.jsx — fixes TIDetailPopup table header rendering with undefined background (drift from Invoice Admin's local C, identified in #211f audit)
+// v1.4.172 (2026-06-29) — #216 hotfix: BNTIPage.jsx PAGE_SIZE missing from shared/constants.jsx import (regression from #211d) → BNListView pagination crashed
+// v1.4.171 (2026-06-29) — #211e Phase 7e complete: wire BN-TI as nested NAV sub-item under TI (indented + smaller font); add BillingNoteTIPage import + renderPage case; HomePage hides child items from dashboard cards; breadcrumb shows parent path (เอกสาร › ใบกำกับภาษี › ใบวางบิล TI)
+// v1.4.170 (2026-06-29) — #211d Phase 7d Extract BN-TI module: TIDetailPopup + 7 BN-TI components (BNEditForm, BNDetailView, BNListView, BNDetailMiniPopup, BNCustomerPanel, BNCreateView, BillingNoteTIPage) → src/modules/ti/BNTIPage.jsx (~1,227 lines). NAV wiring deferred to #211e.
+// v1.4.169 (2026-06-29) — #211a/b/c Phase 7 chunks 1-3: scaffold modules/ti/ (tiApi 104L + TISettingsPage 354L + TIPage 648L); wire NAV "ใบกำกับภาษี" + renderPage case (partial #211e — TI only, BN-TI deferred to 7d/7e)
 // v1.4.167 (2026-06-27) — Move APP_VERSION to shared/constants.jsx; footer reads from constant instead of hardcoded string. Future version bumps go in constants.jsx only.
 // v1.4.166 (2026-06-27) — #208 Phase 5 Extract DN+BN module: DeliveryNotePage + BillingNotePage + 11 components → src/modules/invoice/InvoicePage.jsx (~2,232 lines); KCFactory.jsx 2,519 → ~285 lines (app shell only)
 // v1.4.165 (2026-06-27) — #199 fix customer modal false positive: skip checkNameOnBlur when allCustomers not loaded yet (race condition with API)
@@ -37,13 +46,15 @@
 // ============================================================
 
 import React, { useState, useEffect, useRef } from "react";
-import { FileText, ClipboardList, FileSearch, Package, BarChart2, Home, LayoutDashboard, LayoutGrid, ArrowLeftRight, Users, Settings } from "lucide-react";
+import { FileText, ClipboardList, FileSearch, Package, BarChart2, Home, LayoutDashboard, LayoutGrid, ArrowLeftRight, Users, Settings, Receipt } from "lucide-react";
 import { api, SCRIPT_URL } from './shared/api.jsx';
 import { C, SECTION_COLORS, APP_VERSION } from './shared/constants.jsx';
 import { Spinner } from './shared/ui.jsx';
 import { QuotationPage } from './modules/qt/QTPage.jsx';
 import { SettingsPage, OtherPage, PlaceholderPage } from './modules/settings/SettingsPage.jsx';
 import { DeliveryNotePage, BillingNotePage } from './modules/invoice/InvoicePage.jsx';
+import { TaxInvoicePage } from './modules/ti/TIPage.jsx';
+import { BillingNoteTIPage } from './modules/ti/BNTIPage.jsx';
 
 // ── Constants (app-specific) ──────────────────────────────
 
@@ -51,6 +62,8 @@ const NAV = [
   { key: "dashboard",  label: "แดชบอร์ด",         icon: "LayoutDashboard", section: null },
   { key: "invoice",    label: "ใบส่งของ",           icon: "FileText",        section: "เอกสาร" },
   { key: "billing",    label: "ใบวางบิล",           icon: "ClipboardList",   section: "เอกสาร" },
+  { key: "tax-invoice",label: "ใบกำกับภาษี",        icon: "Receipt",         section: "เอกสาร" },
+  { key: "bn-ti",      label: "ใบวางบิล TI",         icon: "ClipboardList",   section: "เอกสาร", parent: "tax-invoice" },
   { key: "other",      label: "อื่นๆ",               icon: "LayoutGrid",      section: "เอกสาร" },
   { key: "stockmove",  label: "เคลื่อนไหวสต็อก",   icon: "ArrowLeftRight",  section: "คลังสินค้า" },
   { key: "hr",         label: "เอกสาร HR",          icon: "FileSearch",      section: "HR" },
@@ -63,7 +76,7 @@ const NAV = [
 
 
 // ── Home Page ─────────────────────────────────────────────
-const NAV_ICONS = { FileText, ClipboardList, FileSearch, Package, BarChart2, Users, Settings, ArrowLeftRight, LayoutDashboard, LayoutGrid };
+const NAV_ICONS = { FileText, ClipboardList, FileSearch, Package, BarChart2, Users, Settings, ArrowLeftRight, LayoutDashboard, LayoutGrid, Receipt };
 
 function HomePage({ onNavigate }) {
   const sections = [...new Set(NAV.filter(n => n.key !== "dashboard" && n.section).map(n => n.section))];
@@ -100,7 +113,7 @@ function HomePage({ onNavigate }) {
         <div key={section} style={{ marginBottom: 24 }}>
           <div style={{ fontSize: 11, color: C.muted, fontWeight: 500, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 10 }}>{section}</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-            {NAV.filter(n => n.section === section).map(item => (
+            {NAV.filter(n => n.section === section && !n.parent).map(item => (
               <div key={item.key} onClick={() => onNavigate(item.key)}
                 style={{ ...cardBase, width: 140, padding: "20px 12px 16px", display: "flex", flexDirection: "column", alignItems: "center", gap: 10, textAlign: "center" }}
                 onMouseEnter={e => e.currentTarget.style.background = C.rowHover}
@@ -195,8 +208,10 @@ export default function App({ userEmail, userName, onLogout }) {
       case "home":       return <HomePage onNavigate={setActive} />;
       case "invoice":    return <DeliveryNotePage products={products} setProducts={setProducts} sizes={sizes} cache={cache} updateCache={updateCache} onViewChange={handleViewChange} goListRequest={goListRequest} />;
       case "billing":    return <BillingNotePage cache={cache} updateCache={updateCache} goListRequest={goListRequest} onViewChange={handleViewChange} />;
+      case "tax-invoice":return <TaxInvoicePage cache={cache} updateCache={updateCache} onViewChange={handleViewChange} goListRequest={goListRequest} />;
+      case "bn-ti":      return <BillingNoteTIPage cache={cache} updateCache={updateCache} goListRequest={goListRequest} onViewChange={handleViewChange} />;
       case "other":      return <OtherPage products={products} sizes={sizes} cache={cache} updateCache={updateCache} onViewChange={handleViewChange} goListRequest={goListRequest} />;
-      case "settings":   return <SettingsPage cache={cache} updateCache={updateCache} />;
+      case "settings":   return <SettingsPage cache={cache} updateCache={updateCache} onViewChange={handleViewChange} goListRequest={goListRequest} />;
       default:           return <PlaceholderPage title={NAV.find(n => n.key === active)?.label} icon={NAV.find(n => n.key === active)?.icon} />;
     }
   };
@@ -204,15 +219,15 @@ export default function App({ userEmail, userName, onLogout }) {
   const NavItem = ({ item }) => (
     <div onClick={() => { if (item.key === active) setGoListRequest(n => n + 1); else setActive(item.key); }} style={{
       display: "flex", alignItems: "center", gap: 10,
-      padding: "9px 16px",
+      padding: item.parent ? "7px 16px 7px 32px" : "9px 16px",
       cursor: "pointer",
       color: active === item.key ? "white" : "rgba(255,255,255,0.7)",
       background: active === item.key ? C.sidebarActive : "transparent",
       borderLeft: active === item.key ? `3px solid ${C.sidebarActiveBorder}` : "3px solid transparent",
-      fontSize: 13, transition: "background 0.15s",
+      fontSize: item.parent ? 12 : 13, transition: "background 0.15s",
     }}>
       <span style={{ flexShrink: 0, display: "flex", alignItems: "center" }}>
-        {NAV_ICONS[item.icon] ? React.createElement(NAV_ICONS[item.icon], { size: 16 }) : item.icon}
+        {NAV_ICONS[item.icon] ? React.createElement(NAV_ICONS[item.icon], { size: item.parent ? 14 : 16 }) : item.icon}
       </span>
       {item.label}
     </div>
@@ -253,13 +268,23 @@ export default function App({ userEmail, userName, onLogout }) {
             <Home size={14}/>
             <span style={{ color: active === "home" ? C.text : C.accent, cursor: active === "home" ? "default" : "pointer" }}
               onClick={() => active !== "home" && setActive("home")}>หน้าหลัก</span>
-            {NAV.find(n => n.key === active)?.section && <><span>›</span><span>{NAV.find(n => n.key === active)?.section}</span></>}
-            {NAV.find(n => n.key === active)?.label && <><span>›</span>
-              <span style={{ color: breadcrumbSuffix ? C.accent : C.text, cursor: breadcrumbSuffix ? "pointer" : "default" }}
-                onClick={() => { if (breadcrumbSuffix) { setBreadcrumbSuffix(null); setGoListRequest(n => n + 1); } }}>
-                {NAV.find(n => n.key === active)?.label}
-              </span></>}
-            {breadcrumbSuffix && <><span>›</span><span style={{ color: C.text }}>{breadcrumbSuffix}</span></>}
+            {(() => {
+              const activeItem = NAV.find(n => n.key === active);
+              const parentItem = activeItem?.parent ? NAV.find(n => n.key === activeItem.parent) : null;
+              return <>
+                {activeItem?.section && <><span>›</span><span>{activeItem.section}</span></>}
+                {parentItem && <><span>›</span>
+                  <span style={{ color: C.accent, cursor: "pointer" }} onClick={() => setActive(parentItem.key)}>
+                    {parentItem.label}
+                  </span></>}
+                {activeItem?.label && <><span>›</span>
+                  <span style={{ color: breadcrumbSuffix ? C.accent : C.text, cursor: breadcrumbSuffix ? "pointer" : "default" }}
+                    onClick={() => { if (breadcrumbSuffix) { setBreadcrumbSuffix(null); setGoListRequest(n => n + 1); } }}>
+                    {activeItem.label}
+                  </span></>}
+                {breadcrumbSuffix && <><span>›</span><span style={{ color: C.text }}>{breadcrumbSuffix}</span></>}
+              </>;
+            })()}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 3 }}>

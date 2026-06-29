@@ -4,7 +4,7 @@
 // ============================================================
 
 // ── App Version ──────────────────────────────────────────
-export const APP_VERSION = "1.4.168";
+export const APP_VERSION = "1.4.177";
 
 // ── Colors ────────────────────────────────────────────────
 export const C = {
@@ -25,6 +25,7 @@ export const C = {
   rowHover: "#f8f9ff",
   danger: "#c23934",
   dangerBg: "#fdecea",
+  pdfHeader: "#0f2942",  // #218 — dark navy for TIDetailPopup table header
 };
 
 export const SECTION_COLORS = {

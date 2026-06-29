@@ -13,6 +13,7 @@ import { C } from '../../shared/constants.jsx';
 import { Btn, Spinner, ErrorBox, ConfirmModal, inputStyle } from '../../shared/ui.jsx';
 import { findSimilarCustomers } from '../../shared/utils.jsx';
 import { QuotationPage } from '../qt/QTPage.jsx';
+import { TICustomerPage, TIProductPage } from '../ti/TISettingsPage.jsx';
 
 
 // ── Settings Components ────────────────────────────────────
@@ -102,8 +103,22 @@ function OtherPage({ products, sizes, cache, updateCache, onViewChange, goListRe
   return null;
 }
 
-function SettingsPage({ onConfigSaved, cache, updateCache }) {
-  const [sView, setSView]       = useState("hub"); // hub | company | folders | products | customers
+const SETTINGS_VIEW_LABELS = {
+  hub: null,
+  company: "ข้อมูลบริษัท",
+  folders: "Google Drive folders",
+  products: "สินค้า",
+  customers: "ลูกค้า",
+  "ti-products": "สินค้า (ใบกำกับภาษี)",
+  "ti-customers": "ลูกค้า (ใบกำกับภาษี)",
+};
+
+function SettingsPage({ onConfigSaved, cache, updateCache, onViewChange, goListRequest }) {
+  const [sView, setSView]       = useState("hub"); // hub | company | folders | products | customers | ti-products | ti-customers
+  // #217 — call onViewChange when sView changes so breadcrumb shows the sub-view label
+  useEffect(() => { onViewChange?.(SETTINGS_VIEW_LABELS[sView] ?? null); }, [sView]);
+  // #217 — react to goListRequest: clicking active "ตั้งค่า" in sidebar resets to hub
+  useEffect(() => { if (goListRequest) setSView("hub"); }, [goListRequest]);
   const [company, setCompany]   = useState("หจก. โรงงานกิมเชียง");
   const [nameEN,  setNameEN]    = useState("KIMCHIANG LIMITED PARTNERSHIP");
   const [address, setAddress]   = useState("25/9 หมู่ 10 ต.ลอมแม่นาง อ.บางใหญ่ จ.นนทบุรี 11140");
@@ -233,6 +248,8 @@ function SettingsPage({ onConfigSaved, cache, updateCache }) {
         <HubCard icon={<Folder size={20}/>} label="Google Drive" desc="folder URLs ทุก doc type" bg="#FAEEDA" color="#854F0B" onClick={() => setSView("folders")} />
         <HubCard icon={<Package size={20}/>} label="สินค้า" desc="จัดการรายการสินค้า / ขนาด" bg="#EAF3DE" color="#3B6D11" onClick={() => setSView("products")} />
         <HubCard icon={<Users size={20}/>} label="ลูกค้า" desc="รายชื่อและข้อมูลลูกค้า" bg="#EEEDFE" color="#534AB7" onClick={() => setSView("customers")} />
+        <HubCard icon={<Package size={20}/>} label="สินค้า (TI)" desc="สินค้าสำหรับใบกำกับภาษี" bg="#E1F5EE" color="#0F6E56" onClick={() => setSView("ti-products")} />
+        <HubCard icon={<Users size={20}/>} label="ลูกค้า (TI)" desc="ลูกค้าสำหรับใบกำกับภาษี" bg="#FAECE7" color="#993C1D" onClick={() => setSView("ti-customers")} />
       </div>
     </div>
   );
@@ -295,6 +312,20 @@ function SettingsPage({ onConfigSaved, cache, updateCache }) {
     <div>
       <BackHeader title="ลูกค้า" />
       <CustomerPage />
+    </div>
+  );
+
+  if (sView === "ti-products") return (
+    <div>
+      <BackHeader title="สินค้า (ใบกำกับภาษี)" />
+      <TIProductPage cache={cache} updateCache={updateCache} />
+    </div>
+  );
+
+  if (sView === "ti-customers") return (
+    <div>
+      <BackHeader title="ลูกค้า (ใบกำกับภาษี)" />
+      <TICustomerPage />
     </div>
   );
 

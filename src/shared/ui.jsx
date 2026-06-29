@@ -292,4 +292,40 @@ const renderPhoneScreen = (step) => {
   return null;
 };
 
-export { Badge, Btn, inputStyle, SectionTitle, Spinner, ErrorBox, Paginator, ConfirmModal, INSTR_STEPS, renderPhoneScreen };
+// ── CustomerFieldSyncModal (#214) ────────────────────────
+// Fires on field blur when value differs from customer record.
+// Single-field decision; consumer caches "yes" so subsequent edits to same field don't re-prompt.
+// "no" doesn't cache (iii-soft mode) — user can change mind if they edit to a different value.
+const FIELD_LABELS = { address: "ที่อยู่", phone: "โทรศัพท์", taxId: "เลขภาษี" };
+function CustomerFieldSyncModal({ name, field, oldValue, newValue, onConfirm, onCancel }) {
+  const label = FIELD_LABELS[field] || field;
+  const isAdd = !oldValue;
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
+      <div style={{ background: "white", borderRadius: 10, padding: "20px 24px", minWidth: 320, maxWidth: 420, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 4 }}>{isAdd ? "เพิ่ม" : "อัพเดท"}ข้อมูลลูกค้า?</div>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>
+          ลูกค้า <span style={{ color: C.text, fontWeight: 500 }}>{name}</span> — {label}
+        </div>
+        <div style={{ marginBottom: 14, fontSize: 12, padding: "10px 12px", background: "#fafafa", borderRadius: 6 }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
+            <span style={{ color: C.muted, minWidth: 64 }}>ในระบบ:</span>
+            <span style={{ color: C.muted, textDecoration: oldValue ? "line-through" : "none" }}>{oldValue || "— ยังไม่มี —"}</span>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <span style={{ color: C.muted, minWidth: 64 }}>ในใบนี้:</span>
+            <span style={{ color: C.accent, fontWeight: 500 }}>{newValue}</span>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button onClick={onCancel} style={{ padding: "7px 16px", borderRadius: 6, border: `0.5px solid ${C.border}`, background: "white", cursor: "pointer", fontSize: 13, color: C.text }}>ไม่ ใช้เฉพาะใบนี้</button>
+          <button onClick={onConfirm} style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: C.accent, cursor: "pointer", fontSize: 13, color: "white", fontWeight: 500 }}>
+            ใช่ {isAdd ? "เพิ่ม" : "อัพเดท"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export { Badge, Btn, inputStyle, SectionTitle, Spinner, ErrorBox, Paginator, ConfirmModal, CustomerFieldSyncModal, INSTR_STEPS, renderPhoneScreen };

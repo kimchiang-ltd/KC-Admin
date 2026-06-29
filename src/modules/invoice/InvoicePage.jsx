@@ -13,7 +13,7 @@ import { api } from '../../shared/api.jsx';
 import { C, SECTION_COLORS, PAGE_SIZE, ITEMS_COUNT, DN_MAX_ROWS, emptyItem, DESC_MAX, DETAIL_WARN, DETAIL_MAX, SIMILARITY_THRESHOLD, DN_ZERO_WIDTH, DESC_MAX_DN_L, DETAIL_WARN_DN_L, DETAIL_MAX_DN_L } from '../../shared/constants.jsx';
 import { descWidth, descWidthV2, getDescText, customerSimilarity, findSimilarCustomers, collapseItems, toDownloadUrl } from '../../shared/utils.jsx';
 import { useInvoiceForm, initInvoiceItems } from '../../shared/hooks.jsx';
-import { Badge, Btn, inputStyle, SectionTitle, Spinner, ErrorBox, Paginator, ConfirmModal, INSTR_STEPS, renderPhoneScreen } from '../../shared/ui.jsx';
+import { Badge, Btn, inputStyle, SectionTitle, Spinner, ErrorBox, Paginator, ConfirmModal, CustomerFieldSyncModal, INSTR_STEPS, renderPhoneScreen } from '../../shared/ui.jsx';
 import { CustomerAutocomplete, ProductAutocomplete } from '../../shared/autocomplete.jsx';
 
 function DeliveryNoteForm({ initial, onSave, onCancel, isEdit, products, setProducts, sizes }) {
@@ -34,6 +34,28 @@ function DeliveryNoteForm({ initial, onSave, onCancel, isEdit, products, setProd
 
   const total = items.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0);
 
+  // #214 — per-field on-blur customer sync (iii-soft: cache "yes" only; "no" doesn't suppress re-prompt)
+  const [syncDecisions, setSyncDecisions] = useState({}); // { address: 'yes', phone: 'yes', ... }
+  const [pendingField, setPendingField]   = useState(null); // { field, oldValue, newValue } | null
+
+  const findCustomerRecord = () => allCustomers.find(c => (c.name||"").trim().toLowerCase() === (name||"").trim().toLowerCase());
+
+  const checkFieldOnBlur = (field, val) => {
+    if (syncDecisions[field] === 'yes') return; // already opted in
+    const record = findCustomerRecord();
+    if (!record) return; // new customer or not in DB — skip
+    const cur = (val || "").trim();
+    const old = (record[field] || "").trim();
+    if (!cur || cur === old) return;
+    setPendingField({ field, oldValue: old, newValue: cur });
+  };
+
+  const handleFieldConfirm = () => { setSyncDecisions(d => ({ ...d, [pendingField.field]: 'yes' })); setPendingField(null); };
+  const handleFieldSkip    = () => { setPendingField(null); }; // soft mode — don't cache "no"
+
+  // reset cached decisions when customer name changes (different customer = different record)
+  useEffect(() => { setSyncDecisions({}); }, [name]);
+
   const handleSave = () => guardedSave(name, async ({ filled, cleanItems, skipLog }) => {
     const payload = {
       date, name, address, phone, items: cleanItems, total,
@@ -42,11 +64,23 @@ function DeliveryNoteForm({ initial, onSave, onCancel, isEdit, products, setProd
     const result = isEdit
       ? await api.updateDeliveryNote(initial.id, payload)
       : await api.createDeliveryNote(payload);
+    // #214 — apply cached "yes" decisions to customer record (fire-and-forget)
+    const yesFields = Object.keys(syncDecisions).filter(f => syncDecisions[f] === 'yes');
+    if (yesFields.length > 0) {
+      const record = findCustomerRecord();
+      if (record) {
+        const update = { ...record };
+        const formValues = { address, phone };
+        for (const f of yesFields) update[f] = formValues[f];
+        api.updateCustomer(name, update).catch(() => {});
+      }
+    }
     onSave({ ...payload, id: result.invoiceNo || initial?.id, pdfUrl: result.pdfUrl || initial?.pdfUrl });
   });
 
   return (
     <>
+    {pendingField && <CustomerFieldSyncModal name={name} field={pendingField.field} oldValue={pendingField.oldValue} newValue={pendingField.newValue} onConfirm={handleFieldConfirm} onCancel={handleFieldSkip} />}
     {pendingDelete !== null && <ConfirmModal message="ยืนยันลบ?" onConfirm={() => { removeRow(pendingDelete); setPendingDelete(null); }} onCancel={() => setPendingDelete(null)} enterConfirm />}
     {/* #135 — "ใช่ ใช้ชื่อนี้" auto-fills name/address/phone from matched customer; "ไม่ ใช้ชื่อที่พิมพ์" proceeds with typed name */}
     {custWarning && <ConfirmModal
@@ -115,9 +149,9 @@ function DeliveryNoteForm({ initial, onSave, onCancel, isEdit, products, setProd
               style={{ ...inputStyle, width: "100%" }}
             />
           </div>
-          <div style={{ minWidth: 0 }}><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>โทรศัพท์</div><input value={phone} onChange={e => setPhone(e.target.value)} placeholder="เบอร์โทร" style={{ ...inputStyle, width: "100%" }} /></div>
+          <div style={{ minWidth: 0 }}><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>โทรศัพท์</div><input value={phone} onChange={e => setPhone(e.target.value)} onBlur={() => checkFieldOnBlur('phone', phone)} placeholder="เบอร์โทร" style={{ ...inputStyle, width: "100%" }} /></div>
         </div>
-        <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ที่อยู่</div><input value={address} onChange={e => setAddress(e.target.value)} placeholder="ที่อยู่" style={{ ...inputStyle, width: "100%" }} /></div>
+        <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ที่อยู่</div><input value={address} onChange={e => setAddress(e.target.value)} onBlur={() => checkFieldOnBlur('address', address)} placeholder="ที่อยู่" style={{ ...inputStyle, width: "100%" }} /></div>
       </div>
 
       <div style={{ padding: 16, borderBottom: `0.5px solid ${C.border}` }}>
@@ -1059,6 +1093,11 @@ function BNEditForm({ detail, onSave, onCancel }) {
   const [unbilled, setUnbilled]     = useState([]);
   const [unbilledLoading, setUBL]   = useState(false);
   const [saving, setSaving]         = useState(false);
+  // #214 — per-field on-blur sync (lazy fetch customer record on first blur)
+  const [syncDecisions, setSyncDecisions] = useState({});
+  const [pendingField, setPendingField]   = useState(null);
+  const [custRecord, setCustRecord]       = useState(null);
+  const custFetchedRef                    = useRef(false);
 
   useEffect(() => {
     setUBL(true);
@@ -1067,6 +1106,34 @@ function BNEditForm({ detail, onSave, onCancel }) {
       .catch(() => {})
       .finally(() => setUBL(false));
   }, []);
+
+  // reset cached decisions when customer name changes
+  useEffect(() => { setSyncDecisions({}); setCustRecord(null); custFetchedRef.current = false; }, [customer]);
+
+  const ensureCustRecord = async () => {
+    if (custRecord) return custRecord;
+    if (custFetchedRef.current) return null;
+    custFetchedRef.current = true;
+    try {
+      const list = await api.getCustomers(customer);
+      const found = (Array.isArray(list) ? list : []).find(c => (c.name||"").trim().toLowerCase() === customer.trim().toLowerCase());
+      if (found) setCustRecord(found);
+      return found || null;
+    } catch { return null; }
+  };
+
+  const checkFieldOnBlur = async (field, val) => {
+    if (syncDecisions[field] === 'yes') return;
+    const record = await ensureCustRecord();
+    if (!record) return;
+    const cur = (val || "").trim();
+    const old = (record[field] || "").trim();
+    if (!cur || cur === old) return;
+    setPendingField({ field, oldValue: old, newValue: cur });
+  };
+
+  const handleFieldConfirm = () => { setSyncDecisions(d => ({ ...d, [pendingField.field]: 'yes' })); setPendingField(null); };
+  const handleFieldSkip    = () => { setPendingField(null); };
 
   const removeDN = (no) => setInvoices(prev => prev.filter(inv => inv.no !== no));
   const addDN    = (dn) => {
@@ -1083,6 +1150,14 @@ function BNEditForm({ detail, onSave, onCancel }) {
       const addDnNos    = [...newNos].filter(n => !origNos.has(n));
       const removeDnNos = [...origNos].filter(n => !newNos.has(n));
       await api.editBillingNote(detail.bnNo, { date: dateInput, customer, address, phone, addDnNos, removeDnNos });
+      // #214 — apply cached "yes" decisions
+      const yesFields = Object.keys(syncDecisions).filter(f => syncDecisions[f] === 'yes');
+      if (yesFields.length > 0 && custRecord) {
+        const update = { ...custRecord };
+        const formValues = { address, phone };
+        for (const f of yesFields) update[f] = formValues[f];
+        api.updateCustomer(customer, update).catch(() => {});
+      }
       const displayDate = dateInput ? (() => { const p = dateInput.split("-"); return `${p[2]}/${p[1]}/${p[0]}`; })() : detail.date;
       onSave({ date: displayDate, customer, address, phone, invoices, count: invoices.length, total: invoices.reduce((s, inv) => s + (parseFloat(inv.total)||0), 0) });
     } catch (e) {
@@ -1094,6 +1169,7 @@ function BNEditForm({ detail, onSave, onCancel }) {
 
   return (
     <div>
+      {pendingField && <CustomerFieldSyncModal name={customer} field={pendingField.field} oldValue={pendingField.oldValue} newValue={pendingField.newValue} onConfirm={handleFieldConfirm} onCancel={handleFieldSkip} />}
       <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, padding: 16, marginBottom: 14 }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 10 }}>
           <div>
@@ -1109,11 +1185,11 @@ function BNEditForm({ detail, onSave, onCancel }) {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 10 }}>
           <div>
             <label style={{ fontSize: 11, color: C.muted, display: "block", marginBottom: 4 }}>ที่อยู่</label>
-            <input value={address} onChange={e => setAddress(e.target.value)} placeholder="—" style={{ ...inputStyle, width: "100%" }} />
+            <input value={address} onChange={e => setAddress(e.target.value)} onBlur={() => checkFieldOnBlur('address', address)} placeholder="—" style={{ ...inputStyle, width: "100%" }} />
           </div>
           <div>
             <label style={{ fontSize: 11, color: C.muted, display: "block", marginBottom: 4 }}>โทรศัพท์</label>
-            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="—" style={{ ...inputStyle, width: "100%" }} />
+            <input value={phone} onChange={e => setPhone(e.target.value)} onBlur={() => checkFieldOnBlur('phone', phone)} placeholder="—" style={{ ...inputStyle, width: "100%" }} />
           </div>
         </div>
         <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>* เปลี่ยนชื่อลูกค้าจะไม่กระทบบันทึกอื่น ใช้เฉพาะใบนี้</div>
@@ -2229,4 +2305,4 @@ function BillingNotePage({ cache, updateCache, goListRequest, onViewChange }) {
   );
 }
 
-export { DeliveryNotePage, BillingNotePage };
+export { DeliveryNotePage, BillingNotePage, DateRangePicker };
