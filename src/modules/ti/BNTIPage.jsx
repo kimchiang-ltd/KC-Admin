@@ -519,7 +519,7 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
 
 // ── BN List View ───────────────────────────────────────────
 
-function BNListView({ bnList, loading, error, onRefresh, onRowClick }) {
+function BNListView({ bnList, loading, error, onRefresh, onRowClick, onCreateSingle, onCreateBatch }) {
   const [search, setSearch]               = useState("");
   const [hovered, setHovered]             = useState(null);
   const [dStart, setDStart]               = useState("");
@@ -527,6 +527,9 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick }) {
   const [cancelOpen, setCancelOpen]       = useState(false);
   const [cancelHovered, setCancelHovered] = useState(null);
   const [page, setPage]                   = useState(1);
+  const [createDrop, setCreateDrop]       = useState(false);
+  const [sortCol, setSortCol]             = useState("bnNo"); // #233 sortable columns
+  const [sortDir, setSortDir]             = useState("desc");
   useEffect(() => setPage(1), [search, dStart, dEnd]);
 
   const parseThai = d => { if (!d) return null; const p = String(d).split("/"); return p.length === 3 ? new Date(+p[2], +p[1]-1, +p[0]) : new Date(d); };
@@ -544,7 +547,25 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick }) {
     return true;
   });
 
-  const active    = applyFilters(bnList.filter(bn => !bn.cancelled));
+  // #233 — sort helpers
+  const parseDateDMY = d => { if (!d) return 0; const p = String(d).split("/"); return p.length === 3 ? +p[2] * 10000 + +p[1] * 100 + +p[0] : 0; };
+  const sortFn = (a, b) => {
+    let va, vb;
+    switch (sortCol) {
+      case "bnNo":     va = a.bnNo || ""; vb = b.bnNo || ""; break;
+      case "date":     va = parseDateDMY(a.date); vb = parseDateDMY(b.date); break;
+      case "customer": va = (a.customer || "").toLowerCase(); vb = (b.customer || "").toLowerCase(); break;
+      case "count":    va = a.count || 0; vb = b.count || 0; break;
+      case "total":    va = a.total || 0; vb = b.total || 0; break;
+      default:         return 0;
+    }
+    const cmp = va < vb ? -1 : va > vb ? 1 : 0;
+    return sortDir === "asc" ? cmp : -cmp;
+  };
+  const handleSort = (col) => { if (col === sortCol) setSortDir(d => d === "asc" ? "desc" : "asc"); else { setSortCol(col); setSortDir("desc"); } };
+
+  const filtered = applyFilters(bnList.filter(bn => !bn.cancelled));
+  const active   = [...filtered].sort(sortFn);
   const cancelled = bnList.filter(bn => bn.cancelled);
   const pagedBN   = active.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
@@ -556,22 +577,22 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick }) {
       <td style={{ padding: "9px 14px" }}>{bn.customer}</td>
       <td style={{ padding: "9px 14px" }}>{bn.count} ฉบับ</td>
       <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{(bn.total || 0).toLocaleString()}</td>
-      <td style={{ padding: "9px 14px", textAlign: "center" }}>
-        {bn.pdfUrl ? (
-          <a href={bn.pdfUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-            style={{ fontSize: 11, color: C.accent, textDecoration: "none", border: `0.5px solid ${C.accent}`, borderRadius: 4, padding: "3px 8px", whiteSpace: "nowrap" }}>
-            PDF
-          </a>
-        ) : <span style={{ fontSize: 11, color: C.muted }}>—</span>}
-      </td>
     </tr>
   );
 
+  const cols = [
+    { key: "bnNo", label: "เลขที่ BN" }, { key: "date", label: "วันที่ออก" }, { key: "customer", label: "ชื่อลูกค้า" },
+    { key: "count", label: "จำนวนบิล" }, { key: "total", label: "รวมเงิน", align: "right" },
+  ];
+  const sortArrow = (col) => sortCol === col ? (sortDir === "asc" ? " ▲" : " ▼") : "";
   const thead = (
     <thead>
       <tr>
-        {["เลขที่ BN", "วันที่ออก", "ชื่อลูกค้า", "จำนวนบิล", "รวมเงิน", ""].map((h, i) => (
-          <th key={i} style={{ padding: "8px 14px", textAlign: i === 4 ? "right" : "left", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, background: "#fafafa", position: "sticky", top: 88, zIndex: 1 }}>{h}</th>
+        {cols.map((c, i) => (
+          <th key={i} onClick={c.key ? () => handleSort(c.key) : undefined}
+            style={{ padding: "8px 14px", textAlign: c.align || "left", color: sortCol === c.key ? C.accent : C.muted, fontWeight: sortCol === c.key ? 600 : 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, background: "#fafafa", position: "sticky", top: 70, zIndex: 1, cursor: c.key ? "pointer" : "default", userSelect: "none", whiteSpace: "nowrap" }}>
+            {c.label}{c.key ? sortArrow(c.key) : ""}
+          </th>
         ))}
       </tr>
     </thead>
@@ -579,8 +600,8 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick }) {
   const plainThead = (
     <thead>
       <tr>
-        {["เลขที่ BN", "วันที่ออก", "ชื่อลูกค้า", "จำนวนบิล", "รวมเงิน", ""].map((h, i) => (
-          <th key={i} style={{ padding: "8px 14px", textAlign: i === 4 ? "right" : "left", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, background: "#fafafa" }}>{h}</th>
+        {cols.map((c, i) => (
+          <th key={i} style={{ padding: "8px 14px", textAlign: c.align || "left", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, background: "#fafafa" }}>{c.label}</th>
         ))}
       </tr>
     </thead>
@@ -588,12 +609,37 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick }) {
 
   return (
     <div>
-      <div style={{ position: "sticky", top: 32, zIndex: 9, background: C.pageBg, paddingBottom: 6 }}>
+      <div style={{ position: "sticky", top: -18, zIndex: 10, background: C.pageBg }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 10 }}>
+          <div style={{ fontSize: 16, fontWeight: 500 }}><ClipboardList size={15}/> ใบวางบิล</div>
+          {onCreateSingle && (
+            <div style={{ position: "relative" }}>
+              <Btn primary onClick={() => setCreateDrop(p => !p)}>+ สร้างใบวางบิล <ChevronDown size={13} style={{ marginLeft: 2 }}/></Btn>
+              {createDrop && (
+                <>
+                  <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setCreateDrop(false)} />
+                  <div style={{ position: "absolute", right: 0, top: "100%", marginTop: 4, background: "white", border: `1px solid ${C.border}`, borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.12)", zIndex: 50, minWidth: 180, overflow: "hidden" }}>
+                    <div onClick={() => { setCreateDrop(false); onCreateSingle(); }} style={{ padding: "9px 14px", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+                      onMouseEnter={e => e.currentTarget.style.background = C.rowHover} onMouseLeave={e => e.currentTarget.style.background = "white"}>
+                      <Plus size={13}/> สร้างทีละราย
+                    </div>
+                    {onCreateBatch && (
+                      <div onClick={() => { setCreateDrop(false); onCreateBatch(); }} style={{ padding: "9px 14px", fontSize: 12, cursor: "pointer", borderTop: `0.5px solid ${C.borderLight}`, display: "flex", alignItems: "center", gap: 6 }}
+                        onMouseEnter={e => e.currentTarget.style.background = C.rowHover} onMouseLeave={e => e.currentTarget.style.background = "white"}>
+                        <ClipboardList size={13}/> สร้างแบบรวม
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
         <div style={{ padding: "10px 14px", display: "flex", gap: 8, alignItems: "center", background: "#fafafa", border: `0.5px solid ${C.border}`, borderRadius: "8px 8px 0 0", flexWrap: "wrap" }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="ค้นหาเลขที่ / ลูกค้า..."
             style={{ ...inputStyle, width: 200, height: 30 }} />
           <DateRangePicker startDate={dStart} endDate={dEnd} onApply={(s, e) => { setDStart(s); setDEnd(e); }} />
-          <Btn small onClick={onRefresh}><RefreshCw size={14}/> รีเฟรช</Btn>
+          <Btn small primary onClick={onRefresh}><RefreshCw size={14}/> รีเฟรช</Btn>
           <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted }}>พบ {active.length} รายการ</span>
         </div>
       </div>
@@ -606,7 +652,7 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick }) {
               {thead}
               <tbody>
                 {active.length === 0 ? (
-                  <tr><td colSpan={6} style={{ padding: 32, textAlign: "center", color: C.muted, fontSize: 13 }}>ไม่พบข้อมูล</td></tr>
+                  <tr><td colSpan={5} style={{ padding: 32, textAlign: "center", color: C.muted, fontSize: 13 }}>ไม่พบข้อมูล</td></tr>
                 ) : pagedBN.map((bn, i) => (
                   <BNRow key={i} bn={bn} i={i} isHov={hovered === i} setHov={setHovered} />
                 ))}
@@ -1050,8 +1096,8 @@ function BNCreateView({ onBack }) {
         <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", display: "flex", alignItems: "center", gap: 8 }}>
           <DateRangePicker monthOnly startDate={`${year}-${String(month).padStart(2,"0")}-01`} endDate=""
             onApply={(s) => { if (!s) return; const d = new Date(s); const m1 = d.getMonth()+1, y = d.getFullYear(); setMonth(m1); setYear(y); setSelectedIdx(null); handleSearch(m1, y); }} />
-          <Btn small onClick={() => handleSearch(month, year, true)} disabled={loading} title="โหลดใหม่">
-            {loading ? <Loader size={13}/> : <RefreshCw size={13}/>}
+          <Btn small primary onClick={() => handleSearch(month, year, true)} disabled={loading}>
+            {loading ? <Loader size={13}/> : <RefreshCw size={13}/>} รีเฟรช
           </Btn>
           {searched && customers.length > 0 && (
             <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted, display: "flex", gap: 12, alignItems: "center" }}>
@@ -1240,27 +1286,22 @@ function BillingNoteTIPage({ cache, updateCache, goListRequest, onViewChange }) 
   useEffect(() => { if (!cache?.["bnList"]) loadBnList(); }, []);
 
   if (view === "create") return <BNCreateView onBack={() => { updateCache("bnList", null); loadBnList(); setView("list"); }} />;
+  if (view === "batchCreate") return <div style={{ padding: 20, color: C.muted, fontSize: 13 }}>สร้างแบบรวม — coming soon (#234b)</div>;
   if (view === "detail") return <BNDetailView bnNo={selectedBnNo} onBack={() => setView("list")}
     cachedDetail={cache[detailKey(selectedBnNo)]}
     onDetailCached={(no, d) => updateCache(detailKey(no), d)}
     onSaved={() => { updateCache(detailKey(selectedBnNo), null); updateCache("bnList", null); loadBnList(); }} />;
 
   return (
-    <div>
-      <div style={{ position: "sticky", top: -18, zIndex: 10, background: C.pageBg, paddingBottom: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ fontSize: 16, fontWeight: 500 }}><ClipboardList size={15}/> ใบวางบิล</div>
-          <Btn primary onClick={() => setView("create", "สร้างใบวางบิล")}>+ สร้างใบวางบิล</Btn>
-        </div>
-      </div>
-      <BNListView
-        bnList={bnList}
-        loading={listLoading}
-        error={listError}
-        onRefresh={loadBnList}
-        onRowClick={bn => { updateCache(detailKey(bn.bnNo), bn); setSelectedBnNo(bn.bnNo); setView("detail", bn.bnNo); }}
-      />
-    </div>
+    <BNListView
+      bnList={bnList}
+      loading={listLoading}
+      error={listError}
+      onRefresh={loadBnList}
+      onCreateSingle={() => setView("create", "สร้างใบวางบิล")}
+      onCreateBatch={() => setView("batchCreate", "สร้างแบบรวม")}
+      onRowClick={bn => { updateCache(detailKey(bn.bnNo), bn); setSelectedBnNo(bn.bnNo); setView("detail", bn.bnNo); }}
+    />
   );
 }
 

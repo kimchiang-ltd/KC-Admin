@@ -2,6 +2,25 @@
 // KC Factory System — Web App
 // ============================================================
 // Version History — full detail in docs/daily-progress/KC_Daily_Progress_YYYY-MM-DD.md
+// v1.4.247 (2026-06-30) — #237 BN create: block customer switching while creation is in progress (isCreating state, disabled left panel + back button + month nav, "กำลังสร้าง..." indicator). #238 cancelBillingNote: remove break so ALL duplicate BN rows get cancelled (fixes cancel not working when race condition created duplicate BN numbers).
+// v1.4.246 (2026-06-30) — #236 BN batch create: click DN row to expand inline item details table (dark header, alternating rows, total footer, PDF link). Fetches via getDNDetail with client-side cache. Checkbox click remains independent (stopPropagation).
+// v1.4.245 (2026-06-30) — BNTIPage: remove PDF column from BN list (6→5 columns), matching InvoicePage BN list cleanup from #231.
+// v1.4.243 (2026-06-30) — #234c BN batch create: wire create button with sequential confirmBN calls, progress overlay (count + progress bar), results summary table (success/fail per customer with PDF links). "สร้างเพิ่ม" refreshes and returns to checklist.
+// v1.4.242 (2026-06-30) — #234b BN batch create review page: expandable checklist of all customers with unbilled DNs, customer + DN level checkboxes, select all, sticky footer with count/total. Create button disabled (wired in #234c).
+// v1.4.241 (2026-06-30) — #234a BN list: dropdown on "+ สร้างใบวางบิล" button with "สร้างทีละราย" / "สร้างแบบรวม" options. Structural bleed fix: merged title + filter into one sticky div (matches DN pattern). Both InvoicePage + BNTIPage.
+// v1.4.240 (2026-06-30) — BN list: fix table bleed (zIndex stacking), remove ปกติ badge, remove PDF column. Standardize all refresh buttons (blue primary + text) across DN list, BN list, BN create, SalesByCustomerReport, BNTIPage.
+// v1.4.239 (2026-06-30) — #230 BN detail: inline DN expand replaces popup (chevron + expand row with items table + PDF link). BN list: filter now uses DN month dates (not BN create date). Sticky thead box-shadow fix for bleeding.
+// v1.4.238 (2026-06-30) — #228 BN list: add "เดือน DN" column (computed from DN dates in invoices payload) before "วันที่ออก". #229 BN create: sticky footer — total + create button always visible when DN list is long (flex column + scrollable table area).
+// v1.4.237 (2026-06-30) — #226d revised: full customer detail page replaces entire view (KPI+table) on row click. Shows header (back, rank, name, total+MoM), bar chart, 4 stats cards, full DN list table with BN status badges. Removed inline row expansion (chevron + ExpandedDNRows). Back button returns to overview.
+// v1.4.236 (2026-06-30) — #226d Customer insight panel: clicking a customer row swaps KPI cards area to customer detail view with back button, rank badge, name, total + MoM delta, monthly bar chart (peak highlighted), 4 stats cards (DN count, avg per DN, billed %, top month). Click "← ภาพรวมทั้งหมด" returns to overview KPI. DN expansion still shows inline under row.
+// v1.4.235 (2026-06-30) — #226c Multi-month sparkline column: inline SVG area chart (area fill gradient + polyline + dot) per customer row in 3/6/12-month mode. Top 3 customers blue (#1d4ed8), rest lighter (#7c97c9). Grid columns updated to include 70px sparkline column with "แนวโน้ม" header.
+// v1.4.234 (2026-06-30) — #226b KPI cards row: 4 summary cards above table (ยอดขายรวม, จำนวนลูกค้า, ลูกค้าสูงสุด, ค่าเฉลี่ยต่อราย). Each shows value + delta badge (▲/▼ %) vs previous period. Fetches previous period data in parallel via Promise.all for comparison. Styles ported from Sales Report mockup.
+// v1.4.233 (2026-06-30) — #226a SalesByCustomerReport UI redesign Part A: pill-style period filter bar, CSS grid layout (replaces <table>, fixes #224 sticky bleeding), rank badges (top 3 blue), proportion bars + % share (single-month mode), customer search, rounded card container, restyled expandable DN rows, grand total footer. Multi-month mode also restyled with rank column + consistent typography. Styles ported from Sales Report mockup.
+// v1.4.182 (2026-06-29) — #225 SalesByCustomerReport period selector redesign: replaced "1/3/6/12/custom" model with 4 mode buttons + range navigation. anchor={y,m} state represents END month; mode picks duration (1/3/6/12). For mode=1: DateRangePicker monthOnly (month grid dropdown matching BN create style). For mode=3/6/12: ‹ label › arrows shift anchor by ±1 month. Drops "กำหนดเอง" — flexible enough that custom date inputs are unnecessary. Default state = current month, 3-month range.
+// v1.4.181 (2026-06-29) — #223 sticky header — fix v1.4.180 implementation: the inner overflowX:auto wrapper on SalesByCustomerReport was creating a scroll context that blocked sticky from attaching to the page (contentRef). Removed the wrapper + dropped minWidth so columns auto-size. Outer card keeps overflow:clip (which doesn't create scroll context). Sticky now attaches correctly to page scroll. 12-month mode columns get tight; revisit if it becomes a problem.
+// v1.4.180 (2026-06-29) — #222 SalesByCustomerReport dnMonthKey fix: backend returns "yyyy-MM-dd" not "dd/MM/yyyy" → month columns were all "—". Now handles both formats. #223 sticky table headers in both reports (Sales + Unbilled) — outer card overflow hidden→clip; each th has position:sticky top:0 with background fill.
+// v1.4.179 (2026-06-29) — #221b redesign per design review: SalesByCustomerReport refactored to multi-month pivot table (customer × month grid). Month-count selector (1/3/6/12/custom), custom mode falls back to DateRangePicker. Click row → inline expansion shows that customer's DN list with BN status. UnbilledDNReport: 🎉 emoji removed from empty state. Process note: this iteration was design-mockup-first per CLAUDE.md (after missing mockup-first for v1.4.178 initial build).
+// v1.4.178 (2026-06-29) — #221a/b/c Reports Phase A: new modules/reports/ folder with ReportsPage hub + SalesByCustomerReport + UnbilledDNReport. Hub uses SettingsPage-style HubCard grid. Reports use frontend aggregation via api.getDeliveryNotes (no backend changes). Wire NAV: "รายงาน" entry (existed) now renders ReportsPage instead of PlaceholderPage. onViewChange + goListRequest pattern matches SettingsPage. ~310 lines new (3 files).
 // v1.4.177 (2026-06-29) — #214 refactor to on-blur per-field pattern (iii-soft cache): replaced on-save CustomerSyncConfirmModal with per-field CustomerFieldSyncModal. Field blur → if differs from customer record AND not cached "yes" → popup "เพิ่ม/อัพเดท X?". "ใช่" cached for session (no re-prompt for same field); "ไม่" doesn't cache (re-prompt if user edits to new value). Save applies cached "yes" decisions only. Deleted diffCustomerFields helper (per-field diff now inline). 4 forms refactored (DN/TI/BN-DN/BN-TI). BN forms lazy-fetch customer record on first blur.
 // v1.4.176 (2026-06-29) — #214 customer DB sync-back: DN/TI/BN-DN/BN-TI forms compare form values vs customer record on save → silent additive (fill empty fields) OR modal CustomerSyncConfirmModal on conflict (all-or-nothing overwrite). Shared helpers added: diffCustomerFields (utils.jsx), CustomerSyncConfirmModal (ui.jsx). BN forms lazy-fetch customer via api/tiApi.getCustomers since no allCustomers state. Per-field selection deferred to #220.
 // v1.4.175 (2026-06-29) — #215 TaxInvoicePage loads own TI products/sizes via tiApi.getProducts (cache key tiProductList); decoupled from KC Admin Config_Products which is DN's; KCFactory tax-invoice case no longer passes products/setProducts/sizes
@@ -55,6 +74,7 @@ import { SettingsPage, OtherPage, PlaceholderPage } from './modules/settings/Set
 import { DeliveryNotePage, BillingNotePage } from './modules/invoice/InvoicePage.jsx';
 import { TaxInvoicePage } from './modules/ti/TIPage.jsx';
 import { BillingNoteTIPage } from './modules/ti/BNTIPage.jsx';
+import { ReportsPage } from './modules/reports/ReportsPage.jsx';
 
 // ── Constants (app-specific) ──────────────────────────────
 
@@ -211,6 +231,7 @@ export default function App({ userEmail, userName, onLogout }) {
       case "tax-invoice":return <TaxInvoicePage cache={cache} updateCache={updateCache} onViewChange={handleViewChange} goListRequest={goListRequest} />;
       case "bn-ti":      return <BillingNoteTIPage cache={cache} updateCache={updateCache} goListRequest={goListRequest} onViewChange={handleViewChange} />;
       case "other":      return <OtherPage products={products} sizes={sizes} cache={cache} updateCache={updateCache} onViewChange={handleViewChange} goListRequest={goListRequest} />;
+      case "reports":    return <ReportsPage cache={cache} updateCache={updateCache} onViewChange={handleViewChange} goListRequest={goListRequest} />;
       case "settings":   return <SettingsPage cache={cache} updateCache={updateCache} onViewChange={handleViewChange} goListRequest={goListRequest} />;
       default:           return <PlaceholderPage title={NAV.find(n => n.key === active)?.label} icon={NAV.find(n => n.key === active)?.icon} />;
     }
@@ -272,7 +293,7 @@ export default function App({ userEmail, userName, onLogout }) {
               const activeItem = NAV.find(n => n.key === active);
               const parentItem = activeItem?.parent ? NAV.find(n => n.key === activeItem.parent) : null;
               return <>
-                {activeItem?.section && <><span>›</span><span>{activeItem.section}</span></>}
+                {activeItem?.section && activeItem.section !== activeItem.label && <><span>›</span><span>{activeItem.section}</span></>}
                 {parentItem && <><span>›</span>
                   <span style={{ color: C.accent, cursor: "pointer" }} onClick={() => setActive(parentItem.key)}>
                     {parentItem.label}

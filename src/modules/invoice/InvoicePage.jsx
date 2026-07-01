@@ -544,12 +544,12 @@ function DateRangePicker({ startDate, endDate, onApply, monthOnly }) {
   const dIn       = { padding: "5px 8px", border: `0.5px solid ${C.border}`, borderRadius: 4, fontSize: 12, fontFamily: "inherit" };
 
   return (
-    <div>
+    <div style={{ position: "relative" }}>
       <button onClick={() => setOpen(o => !o)} style={{ display: "flex", alignItems: "center", gap: 6, height: 30, padding: "0 12px", border: `0.5px solid ${C.border}`, borderRadius: 4, background: "white", fontSize: 12, cursor: "pointer", fontFamily: "inherit", color: C.text }}>
         <Calendar size={13}/> {labelFor(startDate, endDate)} <ChevronDown size={12} style={{ color: C.muted }}/>
       </button>
       {open && (
-        <div style={{ marginTop: 8, width: 290, background: "white", border: `0.5px solid ${C.border}`, borderRadius: 8, padding: 12, boxShadow: "0 6px 20px rgba(0,0,0,0.10)" }}>
+        <div style={{ position: "absolute", top: "100%", left: 0, marginTop: 8, width: 290, background: "white", border: `0.5px solid ${C.border}`, borderRadius: 8, padding: 12, boxShadow: "0 6px 20px rgba(0,0,0,0.10)", zIndex: 50 }}>
           {!monthOnly && (
             <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
               {[["month","เดือน"],["year","ทั้งปี"]].map(([v,l]) => (
@@ -684,7 +684,7 @@ function DeliveryNotePage({ products, setProducts, sizes, cache, updateCache, on
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="ค้นหาลูกค้า / เลขที่..."
                 style={{ padding: "6px 10px", border: `0.5px solid rgba(0,0,0,0.2)`, borderRadius: 4, fontSize: 12, width: 200, height: 30, boxSizing: "border-box" }} />
               <DateRangePicker startDate={startDate} endDate={endDate} onApply={(s, e) => { setStartDate(s); setEndDate(e); }} />
-              {loading && <Loader size={14}/>}
+              <Btn small primary onClick={loadInvoices}><RefreshCw size={14}/> รีเฟรช</Btn>
               <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted }}>พบ {filtered.length} รายการ</span>
             </div>
           </div>
@@ -1274,8 +1274,9 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
   const [cancelLoading, setCancelLoading] = useState(false);
   const [lsLoading, setLsLoading]         = useState(false);
   const [ptLoading, setPtLoading]         = useState(false);
-  const [dnPopup, setDnPopup]             = useState(null);
+  const [expandedDn, setExpandedDn]       = useState(null); // #230 — inline expand instead of popup
   const [dnCache, setDnCache]             = useState({});
+  const [dnLoading, setDnLoading]         = useState(null); // which DN is loading
   const [hovered, setHovered]             = useState(null);
   const [showQr, setShowQr]               = useState(false);
   const [qrLoading, setQrLoading]         = useState(false);
@@ -1349,6 +1350,20 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
     finally { setQrLoading(false); }
   };
 
+  // #230 — toggle inline DN detail expand
+  const toggleDnExpand = async (dnNo) => {
+    if (expandedDn === dnNo) { setExpandedDn(null); return; }
+    setExpandedDn(dnNo);
+    if (dnCache[dnNo] || _dnStore[dnNo]) return; // already cached
+    setDnLoading(dnNo);
+    try {
+      const d = await api.getDNDetail(dnNo);
+      _dnStore[dnNo] = d;
+      setDnCache(prev => ({ ...prev, [dnNo]: d }));
+    } catch (_) {}
+    finally { setDnLoading(null); }
+  };
+
   if (editing) return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
@@ -1363,7 +1378,6 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
   return (
     <div>
       {showCancelConfirm && <ConfirmModal message={`ยืนยันยกเลิกใบวางบิล ${bnNo}?`} confirmLabel="ยืนยันยกเลิก" onConfirm={handleCancel} onCancel={() => setShowCC(false)} loading={cancelLoading} enterConfirm />}
-      {dnPopup && <DNDetailPopup dnNo={dnPopup} onClose={() => setDnPopup(null)} cachedData={dnCache[dnPopup]} onCached={(no, d) => setDnCache(prev => ({ ...prev, [no]: d }))} />}
       {showQr && qrUrl && (
         <>
           <div onClick={() => { setShowQr(false); setShowInstructions(false); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 200 }} />
@@ -1421,7 +1435,7 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
           <button onClick={onBack} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 3 }}><ChevronLeft size={14}/> รายการ</button>
           <span style={{ color: C.muted }}>›</span>
           <span style={{ fontSize: 14, fontWeight: 500 }}>{bnNo}</span>
-          {detail && <Badge type={detail.cancelled ? "warning" : "success"}>{detail.cancelled ? "ยกเลิก" : "ปกติ"}</Badge>}
+          {detail?.cancelled && <Badge type="warning">ยกเลิก</Badge>}
         </div>
         {detail && !detail.cancelled && (
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -1466,9 +1480,9 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
             </div>
           </div>
 
-          {/* DN table — click row for popup */}
+          {/* DN table — #230 click row to expand inline */}
           <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>
-            <div style={{ padding: "8px 14px", background: "#fafafa", borderBottom: `0.5px solid ${C.border}`, fontSize: 12, color: C.muted, fontWeight: 500 }}>รายการใบส่งของ — คลิกเพื่อดูรายละเอียด</div>
+            <div style={{ padding: "8px 14px", background: "#fafafa", borderBottom: `0.5px solid ${C.border}`, fontSize: 12, color: C.muted, fontWeight: 500 }}>รายการใบส่งของ — คลิกเพื่อขยายรายละเอียด</div>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
                 <tr>
@@ -1480,16 +1494,71 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
               <tbody>
                 {(detail.invoices||[]).length === 0 ? (
                   <tr><td colSpan={3} style={{ padding: 24, textAlign: "center", color: C.muted }}>ไม่พบรายการ</td></tr>
-                ) : (detail.invoices||[]).map((inv,i) => (
-                  <tr key={i}
-                    onClick={() => setDnPopup(inv.no)}
-                    onMouseEnter={() => setHovered(i)} onMouseLeave={() => setHovered(null)}
-                    style={{ borderBottom: `0.5px solid ${C.borderLight}`, cursor: "pointer", background: hovered===i ? C.rowHover : "white" }}>
-                    <td style={{ padding: "8px 14px", color: C.accent, fontWeight: 500 }}>{inv.no}</td>
-                    <td style={{ padding: "8px 14px", color: C.muted }}>{inv.date}</td>
-                    <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{(inv.total||0).toLocaleString()}</td>
-                  </tr>
-                ))}
+                ) : (detail.invoices||[]).map((inv,i) => {
+                  const isExp = expandedDn === inv.no;
+                  const dnData = dnCache[inv.no] || _dnStore[inv.no] || null;
+                  return (
+                    <React.Fragment key={i}>
+                      <tr onClick={() => toggleDnExpand(inv.no)}
+                        onMouseEnter={() => setHovered(i)} onMouseLeave={() => setHovered(null)}
+                        style={{ borderBottom: isExp ? "none" : `0.5px solid ${C.borderLight}`, cursor: "pointer", background: isExp ? "#f0f6ff" : (hovered===i ? C.rowHover : "white") }}>
+                        <td style={{ padding: "8px 14px", color: C.accent, fontWeight: 500 }}>
+                          <ChevronDown size={12} style={{ verticalAlign: "middle", marginRight: 4, transform: isExp ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s" }}/>{inv.no}
+                        </td>
+                        <td style={{ padding: "8px 14px", color: C.muted }}>{inv.date}</td>
+                        <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{(inv.total||0).toLocaleString()}</td>
+                      </tr>
+                      {isExp && (
+                        <tr>
+                          <td colSpan={3} style={{ padding: 0, borderBottom: `0.5px solid ${C.borderLight}` }}>
+                            <div style={{ background: "#f8faff", padding: "10px 18px 14px" }}>
+                              {dnLoading === inv.no && <Spinner />}
+                              {dnData && (
+                                <>
+                                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5, marginBottom: 8 }}>
+                                    <thead>
+                                      <tr style={{ background: C.sidebar }}>
+                                        {["#", "รายการ", "ขนาด", "จำนวน", "หน่วยละ", "จำนวนเงิน"].map((h, hi) => (
+                                          <th key={hi} style={{ padding: "6px 8px", color: "white", fontWeight: 500, textAlign: hi >= 3 ? "right" : "left", fontSize: 10.5 }}>{h}</th>
+                                        ))}
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {(dnData.items||[]).filter(it => it.desc||it.qty||it.amount).map((it, ii) => (
+                                        <tr key={ii} style={{ background: ii%2===0 ? "white" : "#f5f7ff", borderBottom: `0.5px solid ${C.borderLight}` }}>
+                                          <td style={{ padding: "5px 8px", color: C.muted, textAlign: "center" }}>{ii+1}</td>
+                                          <td style={{ padding: "5px 8px" }}>{it.desc}</td>
+                                          <td style={{ padding: "5px 8px", color: C.muted }}>{it.desc2}</td>
+                                          <td style={{ padding: "5px 8px", textAlign: "right" }}>{it.qty}</td>
+                                          <td style={{ padding: "5px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{Number(it.unitPrice||0).toLocaleString()}</td>
+                                          <td style={{ padding: "5px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{Number(it.amount||0).toLocaleString()}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                    <tfoot>
+                                      <tr style={{ background: "#eef2ff", borderTop: `1px solid ${C.border}` }}>
+                                        <td colSpan={5} style={{ padding: "7px 8px", textAlign: "right", fontWeight: 500 }}>ยอดรวม</td>
+                                        <td style={{ padding: "7px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: C.accent }}>฿{(dnData.total||0).toLocaleString()}</td>
+                                      </tr>
+                                    </tfoot>
+                                  </table>
+                                  {dnData.pdfUrl && (
+                                    <div style={{ textAlign: "right" }}>
+                                      <a href={dnData.pdfUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                                        style={{ fontSize: 11, color: C.accent, border: `0.5px solid ${C.accent}`, borderRadius: 4, padding: "4px 10px", textDecoration: "none" }}>
+                                        <FileText size={11} style={{ verticalAlign: "middle", marginRight: 3 }}/> เปิด PDF
+                                      </a>
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
               {(detail.invoices||[]).length > 0 && (
                 <tfoot>
@@ -1509,7 +1578,28 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
 
 // ── BN List View ───────────────────────────────────────────
 
-function BNListView({ bnList, loading, error, onRefresh, onRowClick }) {
+// #228 — compute DN period label from invoices dates (dd/MM/yyyy)
+const THAI_M_SHORT = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+function dnPeriodLabel(invoices) {
+  if (!invoices || invoices.length === 0) return "—";
+  const months = new Set();
+  let minY = 9999, maxY = 0;
+  invoices.forEach(inv => {
+    if (!inv.date) return;
+    const p = String(inv.date).split("/");
+    if (p.length === 3) { const m = +p[1], y = +p[2]; months.add(y * 100 + m); if (y < minY) minY = y; if (y > maxY) maxY = y; }
+  });
+  if (months.size === 0) return "—";
+  const sorted = [...months].sort((a, b) => a - b);
+  const first = sorted[0], last = sorted[sorted.length - 1];
+  const fM = (first % 100) - 1, fY = Math.floor(first / 100);
+  if (sorted.length === 1) return THAI_M_SHORT[fM] + " " + fY;
+  const lM = (last % 100) - 1, lY = Math.floor(last / 100);
+  if (fY === lY) return THAI_M_SHORT[fM] + " – " + THAI_M_SHORT[lM] + " " + lY;
+  return THAI_M_SHORT[fM] + " " + fY + " – " + THAI_M_SHORT[lM] + " " + lY;
+}
+
+function BNListView({ bnList, loading, error, onRefresh, onRowClick, onCreateSingle, onCreateBatch }) {
   const [search, setSearch]           = useState("");
   const [hovered, setHovered]         = useState(null);
   const [dStart, setDStart]           = useState(""); // #122 BN history date filter (client-side)
@@ -1517,24 +1607,55 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick }) {
   const [cancelOpen, setCancelOpen]   = useState(false);
   const [cancelHovered, setCancelHovered] = useState(null);
   const [page, setPage]               = useState(1);
+  const [createDrop, setCreateDrop]   = useState(false);
+  const [sortCol, setSortCol]         = useState("dnMonth"); // #233 default sort by DN month
+  const [sortDir, setSortDir]         = useState("desc");
   useEffect(() => setPage(1), [search, dStart, dEnd]);
 
-  const parseThai = d => { if (!d) return null; const p = String(d).split("/"); return p.length === 3 ? new Date(+p[2], +p[1]-1, +p[0]) : new Date(d); };
-
+  // #228 — filter by DN month (from invoices dates), not BN create date
   const applyFilters = (list) => list.filter(bn => {
     const q = search.toLowerCase();
     if (q && !((bn.bnNo || "").toLowerCase().includes(q) || (bn.customer || "").toLowerCase().includes(q))) return false;
     if (dStart || dEnd) {
-      const bd = parseThai(bn.date);
-      if (bd) {
-        if (dStart && bd < new Date(dStart)) return false;
-        if (dEnd && bd > new Date(dEnd + "T23:59:59")) return false;
-      }
+      // Check if any DN in this BN falls within the filter range
+      const invDates = (bn.invoices || []).map(inv => {
+        if (!inv.date) return null;
+        const p = String(inv.date).split("/");
+        return p.length === 3 ? new Date(+p[2], +p[1]-1, +p[0]) : null;
+      }).filter(Boolean);
+      if (invDates.length === 0) return false;
+      const earliest = new Date(Math.min(...invDates));
+      const latest   = new Date(Math.max(...invDates));
+      if (dStart && latest < new Date(dStart)) return false;
+      if (dEnd && earliest > new Date(dEnd + "T23:59:59")) return false;
     }
     return true;
   });
 
-  const active    = applyFilters(bnList.filter(bn => !bn.cancelled));
+  // #233 — sort helpers
+  const parseDateDMY = d => { if (!d) return 0; const p = String(d).split("/"); return p.length === 3 ? +p[2] * 10000 + +p[1] * 100 + +p[0] : 0; };
+  const dnMonthKey = bn => {
+    const dates = (bn.invoices || []).map(inv => { if (!inv.date) return 0; const p = String(inv.date).split("/"); return p.length === 3 ? +p[2] * 100 + +p[1] : 0; }).filter(Boolean);
+    return dates.length > 0 ? Math.min(...dates) : 0;
+  };
+  const sortFn = (a, b) => {
+    let va, vb;
+    switch (sortCol) {
+      case "bnNo":     va = a.bnNo || ""; vb = b.bnNo || ""; break;
+      case "dnMonth":  va = dnMonthKey(a); vb = dnMonthKey(b); break;
+      case "date":     va = parseDateDMY(a.date); vb = parseDateDMY(b.date); break;
+      case "customer": va = (a.customer || "").toLowerCase(); vb = (b.customer || "").toLowerCase(); break;
+      case "count":    va = a.count || 0; vb = b.count || 0; break;
+      case "total":    va = a.total || 0; vb = b.total || 0; break;
+      default:         return 0;
+    }
+    const cmp = va < vb ? -1 : va > vb ? 1 : 0;
+    return sortDir === "asc" ? cmp : -cmp;
+  };
+  const handleSort = (col) => { if (col === sortCol) setSortDir(d => d === "asc" ? "desc" : "asc"); else { setSortCol(col); setSortDir("desc"); } };
+
+  const filtered = applyFilters(bnList.filter(bn => !bn.cancelled));
+  const active   = [...filtered].sort(sortFn);
   const cancelled = bnList.filter(bn => bn.cancelled);
   const pagedBN   = active.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
@@ -1542,26 +1663,27 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick }) {
     <tr onClick={() => onRowClick(bn)} onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)}
       style={{ background: isHov ? C.rowHover : "white", borderBottom: `0.5px solid ${C.borderLight}`, cursor: "pointer" }}>
       <td style={{ padding: "9px 14px", color: C.accent, fontWeight: 500 }}>{bn.bnNo}</td>
+      <td style={{ padding: "9px 14px", fontWeight: 500, fontSize: 11.5 }}>{dnPeriodLabel(bn.invoices)}</td>
       <td style={{ padding: "9px 14px", color: C.muted }}>{bn.date}</td>
       <td style={{ padding: "9px 14px" }}>{bn.customer}</td>
       <td style={{ padding: "9px 14px" }}>{bn.count} ฉบับ</td>
       <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{(bn.total || 0).toLocaleString()}</td>
-      <td style={{ padding: "9px 14px", textAlign: "center" }}>
-        {bn.pdfUrl ? (
-          <a href={bn.pdfUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-            style={{ fontSize: 11, color: C.accent, textDecoration: "none", border: `0.5px solid ${C.accent}`, borderRadius: 4, padding: "3px 8px", whiteSpace: "nowrap" }}>
-            <FileText size={11} style={{ verticalAlign: "middle", marginRight: 3 }}/> PDF
-          </a>
-        ) : <span style={{ fontSize: 11, color: C.muted }}>—</span>}
-      </td>
     </tr>
   );
 
+  const cols = [
+    { key: "bnNo", label: "เลขที่ BN" }, { key: "dnMonth", label: "เดือน DN" }, { key: "date", label: "วันที่ออก" },
+    { key: "customer", label: "ชื่อลูกค้า" }, { key: "count", label: "จำนวนบิล" }, { key: "total", label: "รวมเงิน", align: "right" },
+  ];
+  const sortArrow = (col) => sortCol === col ? (sortDir === "asc" ? " ▲" : " ▼") : "";
   const thead = (
     <thead>
       <tr>
-        {["เลขที่ BN", "วันที่ออก", "ชื่อลูกค้า", "จำนวนบิล", "รวมเงิน", ""].map((h, i) => (
-          <th key={i} style={{ padding: "8px 14px", textAlign: i === 4 ? "right" : "left", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, background: "#fafafa", position: "sticky", top: 88, zIndex: 1 }}>{h}</th>
+        {cols.map(c => (
+          <th key={c.key} onClick={() => handleSort(c.key)}
+            style={{ padding: "8px 14px", textAlign: c.align || "left", color: sortCol === c.key ? C.accent : C.muted, fontWeight: sortCol === c.key ? 600 : 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, background: "#fafafa", position: "sticky", top: 70, zIndex: 2, boxShadow: "0 1px 0 rgba(0,0,0,0.06)", cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}>
+            {c.label}{sortArrow(c.key)}
+          </th>
         ))}
       </tr>
     </thead>
@@ -1569,8 +1691,8 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick }) {
   const plainThead = (
     <thead>
       <tr>
-        {["เลขที่ BN", "วันที่ออก", "ชื่อลูกค้า", "จำนวนบิล", "รวมเงิน", ""].map((h, i) => (
-          <th key={i} style={{ padding: "8px 14px", textAlign: i === 4 ? "right" : "left", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, background: "#fafafa" }}>{h}</th>
+        {cols.map(c => (
+          <th key={c.key} style={{ padding: "8px 14px", textAlign: c.align || "left", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, background: "#fafafa" }}>{c.label}</th>
         ))}
       </tr>
     </thead>
@@ -1578,16 +1700,41 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick }) {
 
   return (
     <div>
-      <div style={{ position: "sticky", top: 32, zIndex: 9, background: C.pageBg, paddingBottom: 6 }}>
+      <div style={{ position: "sticky", top: -18, zIndex: 10, background: C.pageBg }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 10 }}>
+          <div style={{ fontSize: 16, fontWeight: 500 }}><ClipboardList size={15}/> ใบวางบิล</div>
+          {onCreateSingle && (
+            <div style={{ position: "relative" }}>
+              <Btn primary onClick={() => setCreateDrop(p => !p)}>+ สร้างใบวางบิล <ChevronDown size={13} style={{ marginLeft: 2 }}/></Btn>
+              {createDrop && (
+                <>
+                  <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setCreateDrop(false)} />
+                  <div style={{ position: "absolute", right: 0, top: "100%", marginTop: 4, background: "white", border: `1px solid ${C.border}`, borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.12)", zIndex: 50, minWidth: 180, overflow: "hidden" }}>
+                    <div onClick={() => { setCreateDrop(false); onCreateSingle(); }} style={{ padding: "9px 14px", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+                      onMouseEnter={e => e.currentTarget.style.background = C.rowHover} onMouseLeave={e => e.currentTarget.style.background = "white"}>
+                      <Plus size={13}/> สร้างทีละราย
+                    </div>
+                    {onCreateBatch && (
+                      <div onClick={() => { setCreateDrop(false); onCreateBatch(); }} style={{ padding: "9px 14px", fontSize: 12, cursor: "pointer", borderTop: `0.5px solid ${C.borderLight}`, display: "flex", alignItems: "center", gap: 6 }}
+                        onMouseEnter={e => e.currentTarget.style.background = C.rowHover} onMouseLeave={e => e.currentTarget.style.background = "white"}>
+                        <ClipboardList size={13}/> สร้างแบบรวม
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
         <div style={{ padding: "10px 14px", display: "flex", gap: 8, alignItems: "center", background: "#fafafa", border: `0.5px solid ${C.border}`, borderRadius: "8px 8px 0 0", flexWrap: "wrap" }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="ค้นหาเลขที่ / ลูกค้า..."
             style={{ ...inputStyle, width: 200, height: 30 }} />
           <DateRangePicker startDate={dStart} endDate={dEnd} onApply={(s, e) => { setDStart(s); setDEnd(e); }} />
-          <Btn small onClick={onRefresh}><RefreshCw size={14}/> รีเฟรช</Btn>
+          <Btn small primary onClick={onRefresh}><RefreshCw size={14}/> รีเฟรช</Btn>
           <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted }}>พบ {active.length} รายการ</span>
         </div>
       </div>
-      <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: "0 0 8px 8px", overflow: "clip", borderTop: "none" }}>
+      <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: "0 0 8px 8px", overflow: "clip", borderTop: "none", position: "relative", zIndex: 1 }}>
         {error && <div style={{ padding: 14 }}><ErrorBox msg={error} onRetry={onRefresh} /></div>}
         {loading && <Spinner />}
         {!loading && !error && (
@@ -1665,7 +1812,6 @@ function BNDetailMiniPopup({ bnNo, onClose, onCancelled }) {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: `0.5px solid ${C.border}`, position: "sticky", top: 0, background: "white", zIndex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ fontSize: 14, fontWeight: 600, color: C.accent }}>{bnNo}</span>
-            {data && !data.cancelled && <span style={{ fontSize: 10, background: "#eaf3de", color: "#3b6d11", padding: "1px 6px", borderRadius: 7, fontWeight: 500 }}>ปกติ</span>}
             {data?.cancelled && <span style={{ fontSize: 10, background: "#fdf0ef", color: "#c0392b", padding: "1px 6px", borderRadius: 7, fontWeight: 500 }}>ยกเลิกแล้ว</span>}
           </div>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: C.muted, fontSize: 22, lineHeight: 1, padding: "0 4px" }}>×</button>
@@ -1724,7 +1870,7 @@ function BNDetailMiniPopup({ bnNo, onClose, onCancelled }) {
   );
 }
 
-function BNCustomerPanel({ cust, nextBnNo, onConfirm }) {
+function BNCustomerPanel({ cust, nextBnNo, onConfirm, onCreatingChange }) {
   const today = new Date().toISOString().slice(0, 10);
   const [bnDate, setBnDate]   = useState(today);
   const [confirming, setConf] = useState(false);
@@ -1758,19 +1904,22 @@ function BNCustomerPanel({ cust, nextBnNo, onConfirm }) {
   const handleConfirm = async () => {
     if (selectedRows.length === 0) return;
     setConf(true); setError("");
+    onCreatingChange?.(true); // #237 — block customer switching
     try {
       const invoices = selectedRows.map(r => ({ dnNo: r.no, dnDate: r.date, amount: r.total }));
       const result = await api.confirmBN(cust.customer, nextBnNo, invoices, bnDate, address, phone);
+      onCreatingChange?.(false);
       onConfirm({ bnNo: result.bnNo, pdfUrl: result.pdfUrl, customer: cust.customer, count: selectedRows.length, total: grandTotal, date: bnDate, dnNos: selectedRows.map(r => r.no) });
     } catch (e) {
       setError(e.message); setConf(false);
+      onCreatingChange?.(false);
     }
   };
 
   return (
-    <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>
+    <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "hidden", display: "flex", flexDirection: "column", maxHeight: "calc(100vh - 200px)" }}>
       {/* header */}
-      <div style={{ padding: "10px 14px", background: "#fafafa", borderBottom: `0.5px solid ${C.border}`, display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ padding: "10px 14px", background: "#fafafa", borderBottom: `0.5px solid ${C.border}`, display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
         <span style={{ fontSize: 13, fontWeight: 500 }}>{cust.customer}</span>
         <span style={{ fontSize: 11, color: C.accent, background: "#e3f0ff", padding: "1px 8px", borderRadius: 10, fontWeight: 500 }}>{nextBnNo}</span>
       </div>
@@ -1779,7 +1928,7 @@ function BNCustomerPanel({ cust, nextBnNo, onConfirm }) {
         const bnGroups = {};
         (cust.invoices || []).forEach(inv => { if (inv.bnNo) { if (!bnGroups[inv.bnNo]) bnGroups[inv.bnNo] = []; bnGroups[inv.bnNo].push(inv.no); } });
         return (
-          <div style={{ background: "#f8faff", borderBottom: `0.5px solid ${C.borderLight}` }}>
+          <div style={{ background: "#f8faff", borderBottom: `0.5px solid ${C.borderLight}`, flexShrink: 0 }}>
             <div style={{ padding: "5px 14px 3px", fontSize: 10, color: C.muted, display: "flex", alignItems: "center", gap: 4 }}>
               <FileText size={11}/> BN ที่สร้างแล้วในเดือนนี้
             </div>
@@ -1794,68 +1943,71 @@ function BNCustomerPanel({ cust, nextBnNo, onConfirm }) {
         );
       })()}
       {/* customer info — per-BN override for address/phone (#115) */}
-      <div style={{ padding: "8px 14px", borderBottom: `0.5px solid ${C.borderLight}`, display: "grid", gridTemplateColumns: "60px 1fr", gap: "6px 10px", alignItems: "center" }}>
+      <div style={{ padding: "8px 14px", borderBottom: `0.5px solid ${C.borderLight}`, display: "grid", gridTemplateColumns: "60px 1fr", gap: "6px 10px", alignItems: "center", flexShrink: 0 }}>
         <span style={{ fontSize: 11, color: C.muted }}>ที่อยู่</span>
         <input value={address} onChange={e => setAddress(e.target.value)} placeholder="—" style={{ ...inputStyle, width: "100%", fontSize: 11 }} />
         <span style={{ fontSize: 11, color: C.muted }}>โทรศัพท์</span>
         <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="—" style={{ ...inputStyle, width: "100%", fontSize: 11 }} />
       </div>
       {/* date — single col now that format toggle removed (#123) */}
-      <div style={{ padding: "10px 14px", borderBottom: `0.5px solid ${C.borderLight}` }}>
+      <div style={{ padding: "10px 14px", borderBottom: `0.5px solid ${C.borderLight}`, flexShrink: 0 }}>
         <div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>วันที่ออกใบวางบิล</div>
         <input type="date" value={bnDate} onChange={e => setBnDate(e.target.value)} style={{ ...inputStyle, width: 190 }} />
       </div>
-      {/* DN table */}
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-        <thead>
-          <tr>
-            <th style={{ padding: "7px 14px", width: 32, background: "#fafafa", borderBottom: `0.5px solid ${C.border}` }}>
-              <input type="checkbox" checked={rows.every(r => r.checked)} onChange={toggleAll} />
-            </th>
-            {["เลขที่ DN", "วันที่", "รวมเงิน"].map((h, i) => (
-              <th key={i} style={{ padding: "7px 14px", textAlign: i===2?"right":"left", color: C.muted, fontWeight: 500, fontSize: 11, background: "#fafafa", borderBottom: `0.5px solid ${C.border}` }}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <React.Fragment key={row.idx}>
-              <tr style={{ borderBottom: row.bnNo ? "none" : `0.5px solid ${C.borderLight}`, background: row.bnNo ? "#fafafa" : (row.checked ? "white" : "#fafafa"), opacity: row.bnNo ? 0.5 : (row.checked ? 1 : 0.55) }}>
-                <td style={{ padding: "8px 14px", opacity: row.bnNo ? 1 : undefined }}>
-                  <input type="checkbox" checked={row.checked} disabled={!!row.bnNo} onChange={() => toggleRow(row.idx)} style={{ cursor: row.bnNo ? "not-allowed" : "pointer" }} />
-                </td>
-                <td style={{ padding: "8px 14px" }}>
-                  <span onClick={() => setDnPopup(row.no)} style={{ color: row.bnNo ? C.muted : C.accent, fontWeight: 500, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" }}>{row.no}</span>
-                </td>
-                <td style={{ padding: "8px 14px", color: C.muted }}>{row.date}</td>
-                <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{(parseFloat(row.total)||0).toLocaleString()}</td>
-              </tr>
-              {row.bnNo && (
-                <tr style={{ borderBottom: `0.5px solid ${C.borderLight}` }}>
-                  <td colSpan={4} style={{ padding: 0 }}>
-                    <div style={{ background: "#fff8e1", borderTop: `0.5px solid #fac775`, padding: "5px 10px 5px 36px", fontSize: 10, color: "#633806", display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
-                      <AlertCircle size={11} style={{ color: "#854f0b", flexShrink: 0, marginLeft: -20 }}/>
-                      {row.no} อยู่ใน {row.bnNo} แล้ว — ถ้าต้องการรวม DN นี้ ให้
-                      <span onClick={() => setBnPopup(row.bnNo)} style={{ color: C.accent, fontWeight: 500, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" }}>ยกเลิก {row.bnNo} →</span>
-                    </div>
+      {/* DN table — scrollable (#229) */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <thead>
+            <tr>
+              <th style={{ padding: "7px 14px", width: 32, background: "#fafafa", borderBottom: `0.5px solid ${C.border}`, position: "sticky", top: 0, zIndex: 1 }}>
+                <input type="checkbox" checked={rows.every(r => r.checked)} onChange={toggleAll} />
+              </th>
+              {["เลขที่ DN", "วันที่", "รวมเงิน"].map((h, i) => (
+                <th key={i} style={{ padding: "7px 14px", textAlign: i===2?"right":"left", color: C.muted, fontWeight: 500, fontSize: 11, background: "#fafafa", borderBottom: `0.5px solid ${C.border}`, position: "sticky", top: 0, zIndex: 1 }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <React.Fragment key={row.idx}>
+                <tr style={{ borderBottom: row.bnNo ? "none" : `0.5px solid ${C.borderLight}`, background: row.bnNo ? "#fafafa" : (row.checked ? "white" : "#fafafa"), opacity: row.bnNo ? 0.5 : (row.checked ? 1 : 0.55) }}>
+                  <td style={{ padding: "8px 14px", opacity: row.bnNo ? 1 : undefined }}>
+                    <input type="checkbox" checked={row.checked} disabled={!!row.bnNo} onChange={() => toggleRow(row.idx)} style={{ cursor: row.bnNo ? "not-allowed" : "pointer" }} />
                   </td>
+                  <td style={{ padding: "8px 14px" }}>
+                    <span onClick={() => setDnPopup(row.no)} style={{ color: row.bnNo ? C.muted : C.accent, fontWeight: 500, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" }}>{row.no}</span>
+                  </td>
+                  <td style={{ padding: "8px 14px", color: C.muted }}>{row.date}</td>
+                  <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{(parseFloat(row.total)||0).toLocaleString()}</td>
                 </tr>
-              )}
-            </React.Fragment>
-          ))}
-        </tbody>
-        <tfoot>
-          <tr style={{ borderTop: `0.5px solid ${C.border}`, background: "#f5f9f6" }}>
-            <td colSpan={3} style={{ padding: "7px 14px", fontSize: 11, color: C.muted }}>รวม {selectedRows.length} ฉบับ</td>
-            <td style={{ padding: "7px 14px", textAlign: "right", fontWeight: 600, color: C.accent, fontVariantNumeric: "tabular-nums" }}>฿{grandTotal.toLocaleString()}</td>
-          </tr>
-        </tfoot>
-      </table>
-      {error && <div style={{ padding: "8px 14px" }}><ErrorBox msg={error} /></div>}
-      <div style={{ padding: "10px 14px", display: "flex", justifyContent: "flex-end" }}>
-        <Btn primary onClick={handleConfirm} disabled={confirming || selectedRows.length === 0}>
-          {confirming ? <><Loader size={13}/> กำลังสร้าง...</> : <><Check size={13}/> ออกใบวางบิล</>}
-        </Btn>
+                {row.bnNo && (
+                  <tr style={{ borderBottom: `0.5px solid ${C.borderLight}` }}>
+                    <td colSpan={4} style={{ padding: 0 }}>
+                      <div style={{ background: "#fff8e1", borderTop: `0.5px solid #fac775`, padding: "5px 10px 5px 36px", fontSize: 10, color: "#633806", display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+                        <AlertCircle size={11} style={{ color: "#854f0b", flexShrink: 0, marginLeft: -20 }}/>
+                        {row.no} อยู่ใน {row.bnNo} แล้ว — ถ้าต้องการรวม DN นี้ ให้
+                        <span onClick={() => setBnPopup(row.bnNo)} style={{ color: C.accent, fontWeight: 500, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" }}>ยกเลิก {row.bnNo} →</span>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {/* #229 — sticky footer: total + create button always visible */}
+      <div style={{ flexShrink: 0, borderTop: `1px solid ${C.border}`, background: "#f5f9f6" }}>
+        <div style={{ padding: "7px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span style={{ fontSize: 11, color: C.muted }}>รวม {selectedRows.length} ฉบับ</span>
+          <span style={{ fontWeight: 600, color: C.accent, fontVariantNumeric: "tabular-nums" }}>฿{grandTotal.toLocaleString()}</span>
+        </div>
+        {error && <div style={{ padding: "4px 14px 8px" }}><ErrorBox msg={error} /></div>}
+        <div style={{ padding: "6px 14px 10px", display: "flex", justifyContent: "flex-end" }}>
+          <Btn primary onClick={handleConfirm} disabled={confirming || selectedRows.length === 0}>
+            {confirming ? <><Loader size={13}/> กำลังสร้าง...</> : <><Check size={13}/> ออกใบวางบิล</>}
+          </Btn>
+        </div>
       </div>
       {/* DN detail popup */}
       {dnPopup && (
@@ -1881,6 +2033,395 @@ function BNCustomerPanel({ cust, nextBnNo, onConfirm }) {
   );
 }
 
+// ── BN Batch Create View (#234b) ──────────────────────────
+
+function BNBatchCreateView({ onBack }) {
+  const now = new Date();
+  const [month, setMonth]         = useState(now.getMonth() + 1);
+  const [year, setYear]           = useState(now.getFullYear());
+  const [loading, setLoading]     = useState(false);
+  const [error, setError]         = useState("");
+  const [customers, setCustomers] = useState([]); // [{customer, invoices, address, phone, checked, generated}]
+  const [searched, setSearched]   = useState(false);
+  const [expanded, setExpanded]   = useState({}); // { customerName: true/false }
+  const [creating, setCreating]   = useState(false);
+  const [progress, setProgress]   = useState({ done: 0, total: 0, current: "" });
+  const [results, setResults]     = useState([]); // [{ customer, bnNo, success, error }]
+  const [nextBnNo, setNextBnNo]   = useState(null);
+  const [expandedDn, setExpandedDn] = useState(null); // #236 inline DN detail
+  const [dnCache, setDnCache]       = useState({});
+  const [dnLoading, setDnLoading]   = useState(null);
+
+  const handleSearch = async (mArg = month, yArg = year) => {
+    setLoading(true); setError("");
+    const m = String(mArg).padStart(2, "0");
+    const days = new Date(yArg, mArg, 0).getDate();
+    try {
+      const data = await api.searchDeliveryNotes(`${yArg}-${m}-01`, `${yArg}-${m}-${String(days).padStart(2, "0")}`);
+      const mapped = (Array.isArray(data) ? data : []).map(cust => ({
+        ...cust,
+        checked: !cust.generated, // pre-check unbilled customers
+        invoices: (cust.invoices || []).map(inv => ({ ...inv, checked: !inv.bnNo })),
+      }));
+      setCustomers(mapped);
+      setSearched(true);
+      setResults([]);
+      // expand all by default
+      const exp = {};
+      mapped.forEach(c => { if (!c.generated) exp[c.customer] = true; });
+      setExpanded(exp);
+      // fetch next BN number
+      try {
+        const hist = await api.getBillingNotes();
+        if (hist && hist.length > 0) {
+          const parts = hist[0].bnNo.split("-");
+          const lastNum = parseInt(parts[parts.length - 1], 10) || 0;
+          const yy = new Date().getFullYear().toString().slice(-2);
+          setNextBnNo(`${yy}-BN-${String(lastNum + 1).padStart(6, "0")}`);
+        } else { setNextBnNo("26-BN-000001"); }
+      } catch (_) { setNextBnNo("26-BN-000001"); }
+    } catch (err) { setError(err.message); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { handleSearch(); }, []);
+
+  const toggleCustomer = (idx) => setCustomers(prev => prev.map((c, i) => {
+    if (i !== idx) return c;
+    const newChecked = !c.checked;
+    return { ...c, checked: newChecked, invoices: c.invoices.map(inv => inv.bnNo ? inv : { ...inv, checked: newChecked }) };
+  }));
+
+  const toggleDN = (custIdx, dnIdx) => setCustomers(prev => prev.map((c, ci) => {
+    if (ci !== custIdx) return c;
+    const newInv = c.invoices.map((inv, di) => di === dnIdx && !inv.bnNo ? { ...inv, checked: !inv.checked } : inv);
+    const anyChecked = newInv.some(inv => inv.checked && !inv.bnNo);
+    return { ...c, invoices: newInv, checked: anyChecked };
+  }));
+
+  const toggleExpand = (name) => setExpanded(prev => ({ ...prev, [name]: !prev[name] }));
+
+  const pendingCustomers = customers.filter(c => !c.generated);
+  const selectedCustomers = pendingCustomers.filter(c => c.checked);
+  const totalDNs = selectedCustomers.reduce((s, c) => s + c.invoices.filter(inv => inv.checked && !inv.bnNo).length, 0);
+  const grandTotal = selectedCustomers.reduce((s, c) => s + c.invoices.filter(inv => inv.checked && !inv.bnNo).reduce((t, inv) => t + (parseFloat(inv.total) || 0), 0), 0);
+
+  const selectAll = () => {
+    const allChecked = pendingCustomers.every(c => c.checked);
+    setCustomers(prev => prev.map(c => c.generated ? c : { ...c, checked: !allChecked, invoices: c.invoices.map(inv => inv.bnNo ? inv : { ...inv, checked: !allChecked }) }));
+  };
+
+  // #236 — inline DN detail expand
+  const toggleDnDetail = async (dnNo) => {
+    if (expandedDn === dnNo) { setExpandedDn(null); return; }
+    setExpandedDn(dnNo);
+    if (dnCache[dnNo]) return;
+    setDnLoading(dnNo);
+    try {
+      const d = await api.getDNDetail(dnNo);
+      setDnCache(prev => ({ ...prev, [dnNo]: d }));
+    } catch (_) {}
+    finally { setDnLoading(null); }
+  };
+
+  const incrementBn = (bnNo) => {
+    const parts = bnNo.split("-");
+    const num = parseInt(parts[parts.length - 1], 10) || 0;
+    const yy = parts[0];
+    return `${yy}-BN-${String(num + 1).padStart(6, "0")}`;
+  };
+
+  const handleBatchCreate = async () => {
+    if (!nextBnNo || selectedCustomers.length === 0) return;
+    setCreating(true);
+    setResults([]);
+    const today = new Date().toISOString().slice(0, 10);
+    const total = selectedCustomers.length;
+    setProgress({ done: 0, total, current: "" });
+
+    let currentBn = nextBnNo;
+    const batchResults = [];
+
+    for (const cust of selectedCustomers) {
+      setProgress(prev => ({ ...prev, current: cust.customer }));
+      const checkedDNs = cust.invoices.filter(inv => inv.checked && !inv.bnNo);
+      const invoices = checkedDNs.map(inv => ({ dnNo: inv.no, dnDate: inv.date, amount: inv.total }));
+      try {
+        const result = await api.confirmBN(cust.customer, currentBn, invoices, today, cust.address || "", cust.phone || "");
+        batchResults.push({ customer: cust.customer, bnNo: result.bnNo, pdfUrl: result.pdfUrl, success: true, count: checkedDNs.length });
+        currentBn = incrementBn(currentBn);
+      } catch (err) {
+        batchResults.push({ customer: cust.customer, success: false, error: err.message });
+      }
+      setProgress(prev => ({ ...prev, done: prev.done + 1 }));
+    }
+
+    setResults(batchResults);
+    setCreating(false);
+    setNextBnNo(currentBn);
+  };
+
+  // show results view after batch complete
+  if (results.length > 0) {
+    const successCount = results.filter(r => r.success).length;
+    const failCount = results.filter(r => !r.success).length;
+    const totalDNsCreated = results.filter(r => r.success).reduce((s, r) => s + (r.count || 0), 0);
+    return (
+      <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+        <div style={{ flexShrink: 0, paddingBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+            <button onClick={onBack} style={{ background: "none", border: `0.5px solid ${C.border}`, borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", color: C.muted, display: "flex", alignItems: "center", gap: 4 }}>
+              <ChevronLeft size={13}/> กลับ
+            </button>
+            <span style={{ fontSize: 15, fontWeight: 500 }}>ผลการสร้างใบวางบิล</span>
+          </div>
+
+          {/* summary banner */}
+          <div style={{ background: failCount === 0 ? C.successBg : C.warningBg, border: `1px solid ${failCount === 0 ? C.success : C.warning}`, borderRadius: 8, padding: "14px 18px", marginBottom: 12 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: failCount === 0 ? C.success : C.warning }}>
+              {failCount === 0 ? "สร้างใบวางบิลสำเร็จทั้งหมด" : `สำเร็จ ${successCount} ราย · ไม่สำเร็จ ${failCount} ราย`}
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>รวม {totalDNsCreated} ฉบับ DN</div>
+          </div>
+        </div>
+
+        {/* results list */}
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "hidden", fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: "#f0f4f8" }}>
+                <th style={{ padding: "8px 14px", textAlign: "left", fontSize: 11, fontWeight: 500, color: C.muted }}>ลูกค้า</th>
+                <th style={{ padding: "8px 14px", textAlign: "left", fontSize: 11, fontWeight: 500, color: C.muted }}>เลขที่ BN</th>
+                <th style={{ padding: "8px 14px", textAlign: "center", fontSize: 11, fontWeight: 500, color: C.muted }}>สถานะ</th>
+                <th style={{ padding: "8px 14px", textAlign: "center", fontSize: 11, fontWeight: 500, color: C.muted }}>PDF</th>
+              </tr>
+            </thead>
+            <tbody>
+              {results.map((r, i) => (
+                <tr key={i} style={{ borderBottom: `0.5px solid ${C.borderLight}` }}>
+                  <td style={{ padding: "8px 14px", fontWeight: 500 }}>{r.customer}</td>
+                  <td style={{ padding: "8px 14px", color: C.accent }}>{r.success ? r.bnNo : "—"}</td>
+                  <td style={{ padding: "8px 14px", textAlign: "center" }}>
+                    {r.success
+                      ? <span style={{ color: C.success, fontSize: 12 }}><Check size={14}/> สำเร็จ</span>
+                      : <span style={{ color: C.danger, fontSize: 12 }}>✕ {r.error}</span>}
+                  </td>
+                  <td style={{ padding: "8px 14px", textAlign: "center" }}>
+                    {r.success && r.pdfUrl && (
+                      <a href={r.pdfUrl} target="_blank" rel="noreferrer" style={{ color: C.accent, fontSize: 12, textDecoration: "none" }}>ดู PDF</a>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* footer */}
+        <div style={{ flexShrink: 0, padding: "14px 0", display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <Btn small onClick={() => { setResults([]); handleSearch(month, year, true); }}>
+            <RefreshCw size={13}/> สร้างเพิ่ม
+          </Btn>
+          <Btn small primary onClick={onBack}>
+            กลับหน้ารายการ
+          </Btn>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+      {/* top bar */}
+      <div style={{ flexShrink: 0, paddingBottom: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+          <button onClick={onBack} style={{ background: "none", border: `0.5px solid ${C.border}`, borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", color: C.muted, display: "flex", alignItems: "center", gap: 4 }}>
+            <ChevronLeft size={13}/> กลับ
+          </button>
+          <span style={{ fontSize: 15, fontWeight: 500 }}>สร้างใบวางบิลแบบรวม</span>
+        </div>
+        <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", display: "flex", alignItems: "center", gap: 8 }}>
+          <DateRangePicker monthOnly startDate={`${year}-${String(month).padStart(2,"0")}-01`} endDate=""
+            onApply={(s) => { if (!s) return; const d = new Date(s); setMonth(d.getMonth()+1); setYear(d.getFullYear()); handleSearch(d.getMonth()+1, d.getFullYear()); }} />
+          <Btn small primary onClick={() => handleSearch(month, year)} disabled={loading}>
+            {loading ? <Loader size={13}/> : <RefreshCw size={13}/>} รีเฟรช
+          </Btn>
+          {searched && pendingCustomers.length > 0 && (
+            <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted }}>
+              {pendingCustomers.length} รายที่ยังไม่สร้าง
+            </span>
+          )}
+        </div>
+        {error && <div style={{ marginTop: 8 }}><ErrorBox msg={error} onRetry={() => handleSearch()} /></div>}
+      </div>
+
+      {/* main content — scrollable checklist */}
+      {loading && <Spinner text="กำลังดึงข้อมูลใบส่งของ..." />}
+      {!loading && searched && pendingCustomers.length === 0 && (
+        <div style={{ textAlign: "center", padding: 40, color: C.muted, fontSize: 13 }}>ไม่มีใบส่งของที่ยังไม่ได้วางบิลในเดือนนี้</div>
+      )}
+      {!loading && searched && pendingCustomers.length > 0 && (
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingBottom: 80 }}>
+          {/* select all */}
+          <div style={{ padding: "8px 14px", background: "#fafafa", border: `0.5px solid ${C.border}`, borderRadius: "8px 8px 0 0", display: "flex", alignItems: "center", gap: 8 }}>
+            <span onClick={selectAll} style={{ cursor: "pointer", color: C.accent, fontSize: 12, fontWeight: 500 }}>
+              {pendingCustomers.every(c => c.checked) ? <CheckCircle size={14}/> : <Square size={14}/>}
+            </span>
+            <span style={{ fontSize: 12, color: C.muted }}>เลือกทั้งหมด ({pendingCustomers.length} ราย)</span>
+          </div>
+
+          {/* customer list */}
+          <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderTop: "none", borderRadius: "0 0 8px 8px", overflow: "hidden" }}>
+            {customers.map((cust, ci) => {
+              if (cust.generated) return null; // skip already-created
+              const unbilled = cust.invoices.filter(inv => !inv.bnNo);
+              const custTotal = unbilled.filter(inv => inv.checked).reduce((s, inv) => s + (parseFloat(inv.total) || 0), 0);
+              const isExpanded = expanded[cust.customer];
+              return (
+                <div key={ci} style={{ borderBottom: `0.5px solid ${C.borderLight}` }}>
+                  {/* customer header */}
+                  <div style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, cursor: "pointer", background: cust.checked ? "#f8faff" : "white" }}
+                    onClick={() => toggleExpand(cust.customer)}>
+                    <span onClick={e => { e.stopPropagation(); toggleCustomer(ci); }} style={{ cursor: "pointer", color: cust.checked ? C.accent : C.muted, flexShrink: 0 }}>
+                      {cust.checked ? <CheckCircle size={16}/> : <Square size={16}/>}
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500 }}>{cust.customer}</div>
+                      <div style={{ fontSize: 11, color: C.muted }}>{unbilled.length} ฉบับ · ฿{custTotal.toLocaleString()}</div>
+                    </div>
+                    <ChevronDown size={14} style={{ color: C.muted, transform: isExpanded ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s" }}/>
+                  </div>
+
+                  {/* DN list (expanded) */}
+                  {isExpanded && (
+                    <div style={{ background: "#fafbfd", borderTop: `0.5px solid ${C.borderLight}` }}>
+                      {/* already-billed DNs */}
+                      {cust.invoices.filter(inv => inv.bnNo).length > 0 && (
+                        <div style={{ padding: "4px 14px 4px 44px", fontSize: 10, color: C.muted, background: "#f5f5f5" }}>
+                          วางบิลแล้ว: {cust.invoices.filter(inv => inv.bnNo).map(inv => inv.no).join(", ")}
+                        </div>
+                      )}
+                      {/* unbilled DNs with checkboxes */}
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                        <thead>
+                          <tr style={{ background: "#f0f4f8" }}>
+                            <th style={{ width: 44, padding: "6px 14px" }}></th>
+                            <th style={{ padding: "6px 14px", textAlign: "left", fontSize: 11, color: C.muted, fontWeight: 500 }}>เลขที่ DN</th>
+                            <th style={{ padding: "6px 14px", textAlign: "left", fontSize: 11, color: C.muted, fontWeight: 500 }}>วันที่</th>
+                            <th style={{ padding: "6px 14px", textAlign: "right", fontSize: 11, color: C.muted, fontWeight: 500 }}>รวมเงิน</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {unbilled.map((inv, di) => {
+                            const origIdx = cust.invoices.indexOf(inv);
+                            const isDnExp = expandedDn === inv.no;
+                            const dnData = dnCache[inv.no] || null;
+                            return (
+                              <React.Fragment key={di}>
+                                <tr style={{ borderBottom: isDnExp ? "none" : `0.5px solid ${C.borderLight}`, cursor: "pointer", background: isDnExp ? "#f0f6ff" : "white" }}
+                                  onClick={() => toggleDnDetail(inv.no)}>
+                                  <td style={{ padding: "6px 14px", textAlign: "center" }} onClick={e => e.stopPropagation()}>
+                                    <span onClick={() => toggleDN(ci, origIdx)} style={{ cursor: "pointer", color: inv.checked ? C.accent : C.muted }}>
+                                      {inv.checked ? <Check size={14}/> : <Square size={14}/>}
+                                    </span>
+                                  </td>
+                                  <td style={{ padding: "6px 14px", color: C.accent, fontWeight: 500 }}>
+                                    <ChevronDown size={11} style={{ verticalAlign: "middle", marginRight: 3, transform: isDnExp ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s" }}/>{inv.no}
+                                  </td>
+                                  <td style={{ padding: "6px 14px", color: C.muted }}>{inv.date}</td>
+                                  <td style={{ padding: "6px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>฿{(parseFloat(inv.total) || 0).toLocaleString()}</td>
+                                </tr>
+                                {isDnExp && (
+                                  <tr>
+                                    <td colSpan={4} style={{ padding: 0, borderBottom: `0.5px solid ${C.borderLight}` }}>
+                                      <div style={{ background: "#f8faff", padding: "10px 18px 14px" }}>
+                                        {dnLoading === inv.no && <Spinner />}
+                                        {dnData && (
+                                          <>
+                                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5, marginBottom: 8 }}>
+                                              <thead>
+                                                <tr style={{ background: C.sidebar }}>
+                                                  {["#", "รายการ", "ขนาด", "จำนวน", "หน่วยละ", "จำนวนเงิน"].map((h, hi) => (
+                                                    <th key={hi} style={{ padding: "6px 8px", color: "white", fontWeight: 500, textAlign: hi >= 3 ? "right" : "left", fontSize: 10.5 }}>{h}</th>
+                                                  ))}
+                                                </tr>
+                                              </thead>
+                                              <tbody>
+                                                {(dnData.items||[]).filter(it => it.desc||it.qty||it.amount).map((it, ii) => (
+                                                  <tr key={ii} style={{ background: ii%2===0 ? "white" : "#f5f7ff", borderBottom: `0.5px solid ${C.borderLight}` }}>
+                                                    <td style={{ padding: "5px 8px", color: C.muted, textAlign: "center" }}>{ii+1}</td>
+                                                    <td style={{ padding: "5px 8px" }}>{it.desc}</td>
+                                                    <td style={{ padding: "5px 8px", color: C.muted }}>{it.desc2}</td>
+                                                    <td style={{ padding: "5px 8px", textAlign: "right" }}>{it.qty}</td>
+                                                    <td style={{ padding: "5px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{Number(it.unitPrice||0).toLocaleString()}</td>
+                                                    <td style={{ padding: "5px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{Number(it.amount||0).toLocaleString()}</td>
+                                                  </tr>
+                                                ))}
+                                              </tbody>
+                                              <tfoot>
+                                                <tr style={{ background: "#eef2ff", borderTop: `1px solid ${C.border}` }}>
+                                                  <td colSpan={5} style={{ padding: "7px 8px", textAlign: "right", fontWeight: 500 }}>ยอดรวม</td>
+                                                  <td style={{ padding: "7px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: C.accent }}>฿{(dnData.total||0).toLocaleString()}</td>
+                                                </tr>
+                                              </tfoot>
+                                            </table>
+                                            {dnData.pdfUrl && (
+                                              <div style={{ textAlign: "right" }}>
+                                                <a href={dnData.pdfUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                                                  style={{ fontSize: 11, color: C.accent, border: `0.5px solid ${C.accent}`, borderRadius: 4, padding: "4px 10px", textDecoration: "none" }}>
+                                                  <FileText size={11} style={{ verticalAlign: "middle", marginRight: 3 }}/> เปิด PDF
+                                                </a>
+                                              </div>
+                                            )}
+                                          </>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* progress overlay */}
+      {creating && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(255,255,255,0.92)", zIndex: 100, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14 }}>
+          <Loader size={28} style={{ color: C.accent, animation: "spin 1s linear infinite" }}/>
+          <div style={{ fontSize: 15, fontWeight: 500 }}>กำลังสร้างใบวางบิล...</div>
+          <div style={{ fontSize: 13, color: C.muted }}>{progress.done}/{progress.total} — {progress.current}</div>
+          <div style={{ width: 240, height: 6, background: C.borderLight, borderRadius: 3, overflow: "hidden" }}>
+            <div style={{ width: `${progress.total > 0 ? (progress.done / progress.total) * 100 : 0}%`, height: "100%", background: C.accent, borderRadius: 3, transition: "width 0.3s" }}/>
+          </div>
+        </div>
+      )}
+
+      {/* sticky footer */}
+      {!loading && !creating && searched && selectedCustomers.length > 0 && (
+        <div style={{ position: "fixed", bottom: 0, left: 200, right: 0, background: "white", borderTop: `1px solid ${C.border}`, padding: "12px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", zIndex: 20, boxShadow: "0 -2px 8px rgba(0,0,0,0.06)" }}>
+          <div style={{ fontSize: 13 }}>
+            <span style={{ fontWeight: 500 }}>เลือก {selectedCustomers.length} ราย</span>
+            <span style={{ color: C.muted, marginLeft: 12 }}>{totalDNs} ฉบับ</span>
+            <span style={{ color: C.accent, fontWeight: 600, marginLeft: 12 }}>฿{grandTotal.toLocaleString()}</span>
+          </div>
+          <Btn primary onClick={handleBatchCreate}>
+            <Check size={14}/> สร้างใบวางบิลทั้งหมด ({selectedCustomers.length} ราย)
+          </Btn>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── BN Create View ─────────────────────────────────────────
 
 function BNCreateView({ onBack }) {
@@ -1894,6 +2435,7 @@ function BNCreateView({ onBack }) {
   const [selectedIdx, setSelectedIdx] = useState(null);
   const [nextBnNo, setNextBnNo]       = useState("26-BN-000001");
   const [printQueue, setPrintQueue]   = useState([]);
+  const [isCreating, setIsCreating]   = useState(false); // #237 — block switching during creation
   const [printFormat, setPrintFormat] = useState("portrait"); // #107 combined-print format
   const [printing, setPrinting]       = useState(false);
   const [dnPopup, setDnPopup]         = useState(null); // #101 DN popup from done-state list
@@ -2055,17 +2597,18 @@ function BNCreateView({ onBack }) {
       {/* top bar */}
       <div style={{ flexShrink: 0, padding: "0 0 10px 0" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-          <button onClick={onBack} style={{ background: "none", border: `0.5px solid ${C.border}`, borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", color: C.muted, display: "flex", alignItems: "center", gap: 4 }}>
+          <button onClick={onBack} disabled={isCreating} style={{ background: "none", border: `0.5px solid ${C.border}`, borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: isCreating ? "not-allowed" : "pointer", color: C.muted, display: "flex", alignItems: "center", gap: 4, opacity: isCreating ? 0.5 : 1 }}>
             <ChevronLeft size={13}/> กลับ
           </button>
           <span style={{ fontSize: 15, fontWeight: 500 }}>สร้างใบวางบิล</span>
+          {isCreating && <span style={{ fontSize: 11, color: C.warning, display: "flex", alignItems: "center", gap: 4 }}><Loader size={12}/> กำลังสร้าง...</span>}
         </div>
         {/* month navigator */}
-        <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", display: "flex", alignItems: "center", gap: 8, opacity: isCreating ? 0.5 : 1, pointerEvents: isCreating ? "none" : "auto" }}>
           <DateRangePicker monthOnly startDate={`${year}-${String(month).padStart(2,"0")}-01`} endDate=""
             onApply={(s) => { if (!s) return; const d = new Date(s); const m1 = d.getMonth()+1, y = d.getFullYear(); setMonth(m1); setYear(y); setSelectedIdx(null); handleSearch(m1, y); }} />
-          <Btn small onClick={() => handleSearch(month, year, true)} disabled={loading} title="โหลดใหม่">
-            {loading ? <Loader size={13}/> : <RefreshCw size={13}/>}
+          <Btn small primary onClick={() => handleSearch(month, year, true)} disabled={loading}>
+            {loading ? <Loader size={13}/> : <RefreshCw size={13}/>} รีเฟรช
           </Btn>
           {searched && customers.length > 0 && (
             <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted, display: "flex", gap: 12, alignItems: "center" }}>
@@ -2090,8 +2633,8 @@ function BNCreateView({ onBack }) {
               const total      = cust.invoices.reduce((s, inv) => s + (parseFloat(inv.total)||0), 0);
               const isSelected = selectedIdx === i;
               return (
-                <div key={i} onClick={() => setSelectedIdx(i)}
-                  style={{ background: C.cardBg, border: `0.5px solid ${isSelected ? C.accent : C.border}`, borderLeft: `3px solid ${isSelected ? C.accent : cust.generated ? C.success : C.borderLight}`, borderRadius: "0 6px 6px 0", padding: "9px 10px", cursor: "pointer", flexShrink: 0 }}>
+                <div key={i} onClick={() => { if (!isCreating) setSelectedIdx(i); }}
+                  style={{ background: C.cardBg, border: `0.5px solid ${isSelected ? C.accent : C.border}`, borderLeft: `3px solid ${isSelected ? C.accent : cust.generated ? C.success : C.borderLight}`, borderRadius: "0 6px 6px 0", padding: "9px 10px", cursor: isCreating ? "not-allowed" : "pointer", opacity: isCreating && !isSelected ? 0.5 : 1, flexShrink: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
                     <span style={{ fontSize: 12, fontWeight: 500 }}>{cust.customer}</span>
                     {(() => {
@@ -2121,6 +2664,7 @@ function BNCreateView({ onBack }) {
                 cust={selectedCust}
                 nextBnNo={nextBnNo}
                 onConfirm={handleConfirm}
+                onCreatingChange={setIsCreating}
               />
             )}
             {/* done state — shows BN details + PDF link */}
@@ -2281,27 +2825,22 @@ function BillingNotePage({ cache, updateCache, goListRequest, onViewChange }) {
   useEffect(() => { if (!cache?.["bnList"]) loadBnList(); }, []);
 
   if (view === "create") return <BNCreateView onBack={() => { updateCache("bnList", null); loadBnList(); setView("list"); }} />;
+  if (view === "batchCreate") return <BNBatchCreateView onBack={() => { updateCache("bnList", null); loadBnList(); setView("list"); }} />;
   if (view === "detail") return <BNDetailView bnNo={selectedBnNo} onBack={() => setView("list")}
     cachedDetail={cache[detailKey(selectedBnNo)]}
     onDetailCached={(no, d) => updateCache(detailKey(no), d)}
     onSaved={() => { updateCache(detailKey(selectedBnNo), null); updateCache("bnList", null); loadBnList(); }} />;
 
   return (
-    <div>
-      <div style={{ position: "sticky", top: -18, zIndex: 10, background: C.pageBg, paddingBottom: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ fontSize: 16, fontWeight: 500 }}><ClipboardList size={15}/> ใบวางบิล</div>
-          <Btn primary onClick={() => setView("create", "สร้างใบวางบิล")}>+ สร้างใบวางบิล</Btn>
-        </div>
-      </div>
-      <BNListView
-        bnList={bnList}
-        loading={listLoading}
-        error={listError}
-        onRefresh={loadBnList}
-        onRowClick={bn => { updateCache(detailKey(bn.bnNo), bn); setSelectedBnNo(bn.bnNo); setView("detail", bn.bnNo); }}
-      />
-    </div>
+    <BNListView
+      bnList={bnList}
+      loading={listLoading}
+      error={listError}
+      onRefresh={loadBnList}
+      onCreateSingle={() => setView("create", "สร้างใบวางบิล")}
+      onCreateBatch={() => setView("batchCreate", "สร้างแบบรวม")}
+      onRowClick={bn => { updateCache(detailKey(bn.bnNo), bn); setSelectedBnNo(bn.bnNo); setView("detail", bn.bnNo); }}
+    />
   );
 }
 
