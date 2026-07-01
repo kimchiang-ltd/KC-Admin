@@ -14,6 +14,7 @@ import { Btn, Spinner, ErrorBox, ConfirmModal, inputStyle } from '../../shared/u
 import { findSimilarCustomers } from '../../shared/utils.jsx';
 import { QuotationPage } from '../qt/QTPage.jsx';
 import { TICustomerPage, TIProductPage } from '../ti/TISettingsPage.jsx';
+import { tiApi } from '../ti/tiApi.jsx';
 
 
 // ── Settings Components ────────────────────────────────────
@@ -128,13 +129,19 @@ function SettingsPage({ onConfigSaved, cache, updateCache, onViewChange, goListR
   const [folderBN, setFolderBN] = useState("");
   const [folderBNCombined, setFolderBNCombined] = useState("");
   const [folderQT, setFolderQT] = useState("");
+  // #240 — TI backend (TICode.gs / Invoice Admin) folders: separate deployment, own getConfig/saveConfig
+  const [tiFolderTI, setTiFolderTI] = useState("");
+  const [tiFolderBN, setTiFolderBN] = useState("");
+  const [tiFolderBNCombined, setTiFolderBNCombined] = useState("");
   const [saving, setSaving]     = useState(false);
   const [saved, setSaved]       = useState(false);
   const [error, setError]       = useState("");
   const [loading, setLoading]   = useState(false); // hub loads nothing; only load when entering company/folders
   const [locked, setLocked]     = useState(true);
   const origFolders = useRef({ dn: "", bn: "", bnCombined: "", qt: "" });
+  const origTiFolders = useRef({ ti: "", bn: "", bnCombined: "" });
   const configFetched = useRef(false);
+  const tiConfigFetched = useRef(false);
 
   const applyConfig = (cfg) => {
     const toUrl = id => id && !id.startsWith("http") ? `https://drive.google.com/drive/folders/${id}` : (id || "");
@@ -148,6 +155,15 @@ function SettingsPage({ onConfigSaved, cache, updateCache, onViewChange, goListR
     const bnCombined = toUrl(cfg.folders?.bnCombined); setFolderBNCombined(bnCombined);
     const qt = toUrl(cfg.folders?.qt); setFolderQT(qt);
     origFolders.current = { dn, bn, bnCombined, qt };
+  };
+
+  // #240 — TI backend has its own getConfig/saveConfig (separate deployment, same underlying spreadsheet)
+  const applyTiConfig = (cfg) => {
+    const toUrl = id => id && !id.startsWith("http") ? `https://drive.google.com/drive/folders/${id}` : (id || "");
+    const ti = toUrl(cfg.folders?.ti); setTiFolderTI(ti);
+    const bn = toUrl(cfg.folders?.bn); setTiFolderBN(bn);
+    const bnCombined = toUrl(cfg.folders?.bnCombined); setTiFolderBNCombined(bnCombined);
+    origTiFolders.current = { ti, bn, bnCombined };
   };
 
   useEffect(() => {
@@ -169,6 +185,41 @@ function SettingsPage({ onConfigSaved, cache, updateCache, onViewChange, goListR
       }
     })();
   }, [sView]);
+
+  useEffect(() => {
+    if (sView !== "folders") return;
+    if (tiConfigFetched.current) return;
+    if (cache?.["tiSettingsConfig"]) { applyTiConfig(cache["tiSettingsConfig"]); tiConfigFetched.current = true; return; }
+    (async () => {
+      try {
+        const cfg = await tiApi.getConfig();
+        applyTiConfig(cfg);
+        if (updateCache) updateCache("tiSettingsConfig", cfg);
+        tiConfigFetched.current = true;
+      } catch (err) {
+        setError(prev => prev || ("โหลดการตั้งค่า TI ไม่สำเร็จ: " + err.message));
+      }
+    })();
+  }, [sView]);
+
+  const handleTiFolderBlur = async (key, value, label) => {
+    if (locked) return;
+    if (value === origTiFolders.current[key]) return;
+    if (!window.confirm(`บันทึก Folder URL สำหรับ ${label} ใหม่?`)) return;
+    setSaving(true);
+    setError("");
+    try {
+      const newTiFolders = { ti: tiFolderTI, bn: tiFolderBN, bnCombined: tiFolderBNCombined, [key]: value };
+      await tiApi.saveConfig({ folders: newTiFolders });
+      origTiFolders.current = { ...origTiFolders.current, [key]: value };
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleFolderBlur = async (key, value, label) => {
     if (locked) return;
@@ -201,6 +252,13 @@ function SettingsPage({ onConfigSaved, cache, updateCache, onViewChange, goListR
         folders: { dn: folderDN, bn: folderBN, bnCombined: folderBNCombined, qt: folderQT },
       });
       if (updateCache) updateCache("settingsConfig", { company: { name: company, nameEN, address, tel, taxId }, folders: { dn: folderDN, bn: folderBN, bnCombined: folderBNCombined, qt: folderQT } });
+      // #240 — also persist TI backend folders (separate deployment) when saving from the folders view
+      if (sView === "folders") {
+        const newTiFolders = { ti: tiFolderTI, bn: tiFolderBN, bnCombined: tiFolderBNCombined };
+        await tiApi.saveConfig({ folders: newTiFolders });
+        origTiFolders.current = newTiFolders;
+        if (updateCache) updateCache("tiSettingsConfig", { folders: newTiFolders });
+      }
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
       setLocked(true);
@@ -296,6 +354,16 @@ function SettingsPage({ onConfigSaved, cache, updateCache, onViewChange, goListR
         </div>
         <div style={{ marginTop: 10, padding: "8px 12px", background: "#f0f4ff", borderRadius: 6, fontSize: 11, color: C.muted }}>
           💡 วาง URL จาก Google Drive ได้เลย — ระบบจะดึง Folder ID ให้อัตโนมัติ
+        </div>
+      </div>
+      {/* #240 — TI backend (TICode.gs / Invoice Admin deployment) — separate script, same underlying spreadsheet */}
+      <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, padding: 16, maxWidth: 520, marginTop: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 3 }}><Folder size={13}/> Google Drive Folder URLs — ใบกำกับภาษี (TI)</div>
+        <div style={{ fontSize: 11, color: C.muted, marginBottom: 11 }}>ระบบ TI ใช้ backend แยก (TICode.gs) — บันทึกที่นี่แทนแอป Invoice Admin</div>
+        <div style={{ display: "grid", gap: 10 }}>
+          <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ใบกำกับภาษี (TI)</div><input value={tiFolderTI} onChange={e => setTiFolderTI(e.target.value)} onBlur={e => handleTiFolderBlur("ti", e.target.value, "TI")} disabled={locked} placeholder="https://drive.google.com/drive/folders/..." style={monoS} /></div>
+          <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ใบวางบิล TI (BN-TI)</div><input value={tiFolderBN} onChange={e => setTiFolderBN(e.target.value)} onBlur={e => handleTiFolderBlur("bn", e.target.value, "BN-TI")} disabled={locked} placeholder="https://drive.google.com/drive/folders/..." style={monoS} /></div>
+          <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>BN-TI รวมพิมพ์ <span style={{ color: C.muted, opacity: 0.7 }}>— เว้นว่าง = subfolder อัตโนมัติ</span></div><input value={tiFolderBNCombined} onChange={e => setTiFolderBNCombined(e.target.value)} onBlur={e => handleTiFolderBlur("bnCombined", e.target.value, "BN-TI Combined")} disabled={locked} placeholder="(เว้นว่างได้)" style={monoS} /></div>
         </div>
       </div>
     </div>

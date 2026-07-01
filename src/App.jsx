@@ -7,9 +7,17 @@ const ALLOWED_EMAILS = [
   'chanavi.pp@gmail.com',
 ]
 
+// #244 — force re-login once per calendar day (resets at local midnight, not a rolling 24h window)
+const todayStr = () => new Date().toDateString()
+
 export default function App() {
   const [user, setUser] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('kc_user')) || null } catch { return null }
+    try {
+      const stored = JSON.parse(localStorage.getItem('kc_user'))
+      if (stored && stored._loginDate === todayStr()) return stored
+      localStorage.removeItem('kc_user')
+      return null
+    } catch { return null }
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -23,8 +31,9 @@ export default function App() {
         })
         const profile = await res.json()
         if (ALLOWED_EMAILS.includes(profile.email)) {
-          setUser(profile)
-          localStorage.setItem('kc_user', JSON.stringify(profile))
+          const stamped = { ...profile, _loginDate: todayStr() } // #244
+          setUser(stamped)
+          localStorage.setItem('kc_user', JSON.stringify(stamped))
           setError('')
         } else {
           setError(profile.email + ' ไม่มีสิทธิ์เข้าใช้งาน')

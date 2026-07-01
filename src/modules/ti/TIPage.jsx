@@ -270,6 +270,10 @@ function TaxInvoiceDetail({ invoice, onBack, onSaved, products, setProducts, siz
   const [data,    setData]    = useState(invoice);
   const [pdfLoading, setPdfLoading]     = useState(false);
   const [lsPdfLoading, setLsPdfLoading] = useState(false);
+  // #243 — portrait PDF page-count toggle: "1" (tax-original only, default) vs "4" (existing full set)
+  const [ptMode, setPtMode]         = useState("1");
+  const [ptDropOpen, setPtDropOpen] = useState(false);
+  const [portrait4Url, setPortrait4Url] = useState(null);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelLoading, setCancelLoading]         = useState(false);
   const [showQr, setShowQr]                       = useState(false);
@@ -291,10 +295,19 @@ function TaxInvoiceDetail({ invoice, onBack, onSaved, products, setProducts, siz
 
   const openUrl = (url) => { const a = document.createElement("a"); a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer"; document.body.appendChild(a); a.click(); document.body.removeChild(a); };
 
-  const generatePortraitPDF = async () => {
-    if (data.portraitUrl) { openUrl(data.portraitUrl); return; }
+  // #243 — mode: "1" (tax-original only, default) | "4" (existing full set: tax+receipt, orig+copy)
+  const generatePortraitPDF = async (mode) => {
+    const m = mode || ptMode;
+    const cached = m === "4" ? portrait4Url : data.portraitUrl;
+    if (cached) { openUrl(cached); return; }
     setPdfLoading(true);
-    try { const r = await tiApi.generateTaxInvoicePortraitPDF(data.id); if (r.pdfUrl) { setData(d => ({ ...d, portraitUrl: r.pdfUrl })); openUrl(r.pdfUrl); } }
+    try {
+      const r = await tiApi.generateTaxInvoicePortraitPDF(data.id, m);
+      if (r.pdfUrl) {
+        if (m === "4") setPortrait4Url(r.pdfUrl); else setData(d => ({ ...d, portraitUrl: r.pdfUrl }));
+        openUrl(r.pdfUrl);
+      }
+    }
     catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); }
     finally { setPdfLoading(false); }
   };
@@ -327,9 +340,17 @@ function TaxInvoiceDetail({ invoice, onBack, onSaved, products, setProducts, siz
       const dataUrl = await QRCode.toDataURL(dlUrl, { width: 280, margin: 2 });
       setQrUrl(dlUrl); setQrDataUrl(dataUrl); setShowQr(true); setShowInstructions(true);
     };
-    if (data.portraitUrl) { await generate(data.portraitUrl); return; }
+    // #243 — QR send uses the same page-count mode as the PDF button (default "1", tax-original only)
+    const cached = ptMode === "4" ? portrait4Url : data.portraitUrl;
+    if (cached) { await generate(cached); return; }
     setQrLoading(true);
-    try { const r = await tiApi.generateTaxInvoicePortraitPDF(data.id); if (r.pdfUrl) { setData(d => ({ ...d, portraitUrl: r.pdfUrl })); await generate(r.pdfUrl); } }
+    try {
+      const r = await tiApi.generateTaxInvoicePortraitPDF(data.id, ptMode);
+      if (r.pdfUrl) {
+        if (ptMode === "4") setPortrait4Url(r.pdfUrl); else setData(d => ({ ...d, portraitUrl: r.pdfUrl }));
+        await generate(r.pdfUrl);
+      }
+    }
     catch (err) { alert("เกิดข้อผิดพลาด: " + err.message); }
     finally { setQrLoading(false); }
   };
@@ -342,7 +363,7 @@ function TaxInvoiceDetail({ invoice, onBack, onSaved, products, setProducts, siz
         <span style={{ fontSize: 14, fontWeight: 500 }}>แก้ไข {data.id}</span>
       </div>
       <TaxInvoiceForm initial={data}
-        onSave={u => { setData({ ...data, ...u, pdfUrl: "", portraitUrl: "" }); setEditing(false); onSaved?.(); }}
+        onSave={u => { setData({ ...data, ...u, pdfUrl: "", portraitUrl: "" }); setPortrait4Url(null); setEditing(false); onSaved?.(); }}
         onCancel={() => setEditing(false)} isEdit products={products} setProducts={setProducts} sizes={sizes} vatRate={vatRate} />
     </div>
   );
@@ -412,7 +433,22 @@ function TaxInvoiceDetail({ invoice, onBack, onSaved, products, setProducts, siz
           ) : (
             <>
               <Btn onClick={generateLandscapePDF} disabled={lsPdfLoading}>{lsPdfLoading ? <Loader size={13}/> : <Printer size={14}/>} พิมพ์</Btn>
-              <Btn onClick={generatePortraitPDF} disabled={pdfLoading}>{pdfLoading ? <Loader size={13}/> : <FileText size={13}/>} PDF</Btn>
+              <div style={{ position: "relative", display: "inline-flex" }}>
+                {ptDropOpen && <div onClick={() => setPtDropOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 99 }} />}
+                <button onClick={() => generatePortraitPDF()} disabled={pdfLoading} style={{ background: "white", color: C.accent, border: `1px solid ${C.accent}`, borderRight: "none", padding: "6px 10px", borderRadius: "4px 0 0 4px", fontSize: 12, cursor: pdfLoading ? "not-allowed" : "pointer", opacity: pdfLoading ? 0.6 : 1, display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  {pdfLoading ? <Loader size={13}/> : <FileText size={13}/>} PDF{ptMode === "4" ? " 4 หน้า" : ""}
+                </button>
+                <button onClick={() => setPtDropOpen(o => !o)} disabled={pdfLoading} style={{ background: "white", color: C.accent, border: `1px solid ${C.accent}`, padding: "6px 7px", borderRadius: "0 4px 4px 0", fontSize: 11, cursor: pdfLoading ? "not-allowed" : "pointer", opacity: pdfLoading ? 0.6 : 1, lineHeight: 1 }}>▾</button>
+                {ptDropOpen && (
+                  <div style={{ position: "absolute", top: "100%", right: 0, zIndex: 100, background: "white", border: `1px solid ${C.border}`, borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.12)", overflow: "hidden", minWidth: 190, marginTop: 3 }}>
+                    {[{ value: "1", label: "1 หน้า (ต้นฉบับ)" }, { value: "4", label: "4 หน้า (ครบชุด + สำเนา)" }].map(opt => (
+                      <div key={opt.value} onClick={() => { setPtMode(opt.value); setPtDropOpen(false); generatePortraitPDF(opt.value); }} style={{ padding: "9px 14px", fontSize: 13, cursor: "pointer", background: ptMode === opt.value ? "#e8f3fc" : "white", color: ptMode === opt.value ? C.accent : C.text, display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ width: 12, color: C.accent }}>{ptMode === opt.value ? "✓" : ""}</span>{opt.label}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               <Btn onClick={handleQrTI} disabled={qrLoading}>{qrLoading ? <Loader size={13}/> : <QrCode size={14}/>} QR</Btn>
               <Btn primary onClick={() => setEditing(true)}><Pencil size={14}/> แก้ไข</Btn>
               <Btn danger onClick={() => setShowCancelConfirm(true)} disabled={cancelLoading}>ยกเลิกใบนี้</Btn>

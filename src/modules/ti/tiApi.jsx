@@ -48,7 +48,7 @@ export const tiApi = {
   restoreTaxInvoice:               (id)                         => tiApiCall("restoreTaxInvoice", { id }),
   getCancelledTaxInvoices:         (search)                     => tiApiCall("getCancelledTaxInvoices", { search }),
   // TI PDF
-  generateTaxInvoicePortraitPDF:   (id)                         => tiApiCall("generateTaxInvoicePortraitPDF", { id }),
+  generateTaxInvoicePortraitPDF:   (id, pageMode)               => tiApiCall("generateTaxInvoicePortraitPDF", { id, pageMode }),
   generateTaxInvoiceLandscapePDF:  (id)                         => tiApiCall("generateTaxInvoiceLandscapePDF", { id }),
   // BN-TI
   searchTaxInvoicesForBilling:     (startDate, endDate)          => tiApiCall("searchTaxInvoices", { startDate, endDate }),

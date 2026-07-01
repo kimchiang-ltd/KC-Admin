@@ -12,13 +12,14 @@ import { api } from './api.jsx';
 // Loads all customers once on mount, filters locally as user types.
 // onSelect(customer) called when user picks a suggestion — caller fills address/phone/taxId.
 
-function CustomerAutocomplete({ value, onChange, onSelect, onCustomersLoaded, onBlur, style }) {
+function CustomerAutocomplete({ value, onChange, onSelect, onCustomersLoaded, onBlur, style, apiOverride }) {
   const [customers, setCustomers] = useState([]);
   const [open, setOpen]           = useState(false);
   const wrapRef = useRef(null);
 
   useEffect(() => {
-    api.getCustomers("").then(list => {
+    const getCustomers = apiOverride?.getCustomers ?? api.getCustomers;
+    getCustomers("").then(list => {
       const result = Array.isArray(list) ? list : [];
       setCustomers(result);
       if (onCustomersLoaded) onCustomersLoaded(result);
