@@ -4,10 +4,10 @@
 // Phase 4 (#207) — extracted from KCFactory.jsx v1.4.163 (2026-06-26)
 // SettingsPage: hub for ข้อมูลบริษัท / Google Drive folders / สินค้า / ลูกค้า
 // OtherPage: hub that drills into ใบเสนอราคา (QT)
-// CustomerPage: customer CRUD; ProductPage: product CRUD; EditableList: helper; PlaceholderPage: "coming soon" placeholder
+// CustomerPage: customer CRUD; ProductPage: product CRUD; PlaceholderPage: "coming soon" placeholder
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Check, Pencil, FileSearch, ChevronLeft, Building, Folder, Package, Users, Lock, Unlock, CheckCircle, Loader, Save } from "lucide-react";
+import { FileSearch, ChevronLeft, Building, Folder, Package, Users, Lock, Unlock, CheckCircle, Loader, Save } from "lucide-react";
 import { api } from '../../shared/api.jsx';
 import { C } from '../../shared/constants.jsx';
 import { Btn, Spinner, ErrorBox, ConfirmModal, inputStyle } from '../../shared/ui.jsx';
@@ -18,51 +18,6 @@ import { tiApi } from '../ti/tiApi.jsx';
 
 
 // ── Settings Components ────────────────────────────────────
-
-function EditableList({ title, icon, items, setItems, placeholder }) {
-  const [newVal, setNewVal]   = useState("");
-  const [editIdx, setEditIdx] = useState(null);
-  const [editVal, setEditVal] = useState("");
-
-  const handleAdd      = () => { if (!newVal.trim()) return; setItems([...items, newVal.trim()]); setNewVal(""); };
-  const handleDelete   = (i) => setItems(items.filter((_, idx) => idx !== i));
-  const handleEdit     = (i) => { setEditIdx(i); setEditVal(items[i]); };
-  const handleSaveEdit = () => { if (!editVal.trim()) return; setItems(items.map((v, i) => i === editIdx ? editVal.trim() : v)); setEditIdx(null); };
-
-  return (
-    <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, padding: 16, marginBottom: 14 }}>
-      <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
-        <span style={{ color: C.accent }}>{icon}</span>{title}
-      </div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-        <input value={newVal} onChange={e => setNewVal(e.target.value)} placeholder={placeholder} onKeyDown={e => e.key === "Enter" && handleAdd()}
-          style={{ flex: 1, padding: "6px 10px", border: `0.5px solid rgba(0,0,0,0.2)`, borderRadius: 4, fontSize: 12 }} />
-        <Btn primary small onClick={handleAdd}>+ เพิ่ม</Btn>
-      </div>
-      <div style={{ border: `0.5px solid ${C.border}`, borderRadius: 6, overflow: "hidden" }}>
-        {items.length === 0 && <div style={{ padding: 16, textAlign: "center", color: C.muted, fontSize: 12 }}>ยังไม่มีรายการ</div>}
-        {items.map((item, i) => (
-          <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderBottom: i < items.length - 1 ? `0.5px solid ${C.borderLight}` : "none", background: i % 2 === 0 ? "white" : "#fafbff" }}>
-            {editIdx === i ? (
-              <div style={{ display: "flex", gap: 6, flex: 1, marginRight: 8 }}>
-                <input value={editVal} onChange={e => setEditVal(e.target.value)} style={{ flex: 1, padding: "4px 8px", border: `0.5px solid rgba(0,0,0,0.2)`, borderRadius: 4, fontSize: 12 }} />
-                <Btn primary small onClick={handleSaveEdit}><Check size={13}/></Btn>
-                <Btn small onClick={() => setEditIdx(null)}>✕</Btn>
-              </div>
-            ) : <span style={{ fontSize: 13 }}>{item}</span>}
-            {editIdx !== i && (
-              <div style={{ display: "flex", gap: 4 }}>
-                <button onClick={() => handleEdit(i)} style={{ background: "none", border: `0.5px solid ${C.border}`, borderRadius: 4, padding: "3px 8px", cursor: "pointer", fontSize: 11 }}><Pencil size={13}/></button>
-                <button onClick={() => handleDelete(i)} style={{ background: "none", border: `0.5px solid ${C.border}`, borderRadius: 4, padding: "3px 8px", cursor: "pointer", color: C.danger, fontSize: 11 }}>🗑</button>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-      <div style={{ marginTop: 6, fontSize: 11, color: C.muted }}>{items.length} รายการ</div>
-    </div>
-  );
-}
 
 function OtherPage({ products, sizes, cache, updateCache, onViewChange, goListRequest }) {
   const [oView, setOView] = useState("hub"); // hub | quotation
@@ -125,6 +80,7 @@ function SettingsPage({ onConfigSaved, cache, updateCache, onViewChange, goListR
   const [address, setAddress]   = useState("25/9 หมู่ 10 ต.ลอมแม่นาง อ.บางใหญ่ จ.นนทบุรี 11140");
   const [tel, setTel]           = useState("02-191-8698-9");
   const [taxId, setTaxId]       = useState("0103506007938");
+  const [vatPct, setVatPct]     = useState("7"); // #295c — VAT % (stored as decimal on the shared Config sheet)
   const [folderDN, setFolderDN] = useState("");
   const [folderBN, setFolderBN] = useState("");
   const [folderBNCombined, setFolderBNCombined] = useState("");
@@ -140,6 +96,7 @@ function SettingsPage({ onConfigSaved, cache, updateCache, onViewChange, goListR
   const [locked, setLocked]     = useState(true);
   const origFolders = useRef({ dn: "", bn: "", bnCombined: "", qt: "" });
   const origTiFolders = useRef({ ti: "", bn: "", bnCombined: "" });
+  const [folderConfirm, setFolderConfirm] = useState(null); // #291 — { kind:'dn'|'ti', key, value, label } — replaces window.confirm on folder-URL blur
   const configFetched = useRef(false);
   const tiConfigFetched = useRef(false);
 
@@ -150,6 +107,7 @@ function SettingsPage({ onConfigSaved, cache, updateCache, onViewChange, goListR
     if (cfg.company?.address) setAddress(cfg.company.address);
     if (cfg.company?.tel)     setTel(cfg.company.tel);
     if (cfg.company?.taxId)   setTaxId(cfg.company.taxId);
+    if (cfg.vatRate)          setVatPct(String(+(cfg.vatRate * 100).toFixed(2))); // #295c
     const dn = toUrl(cfg.folders?.dn); setFolderDN(dn);
     const bn = toUrl(cfg.folders?.bn); setFolderBN(bn);
     const bnCombined = toUrl(cfg.folders?.bnCombined); setFolderBNCombined(bnCombined);
@@ -202,38 +160,38 @@ function SettingsPage({ onConfigSaved, cache, updateCache, onViewChange, goListR
     })();
   }, [sView]);
 
-  const handleTiFolderBlur = async (key, value, label) => {
+  // #291 — blur just opens the styled ConfirmModal; actual save runs in doFolderSave on confirm
+  const handleTiFolderBlur = (key, value, label) => {
     if (locked) return;
     if (value === origTiFolders.current[key]) return;
-    if (!window.confirm(`บันทึก Folder URL สำหรับ ${label} ใหม่?`)) return;
-    setSaving(true);
-    setError("");
-    try {
-      const newTiFolders = { ti: tiFolderTI, bn: tiFolderBN, bnCombined: tiFolderBNCombined, [key]: value };
-      await tiApi.saveConfig({ folders: newTiFolders });
-      origTiFolders.current = { ...origTiFolders.current, [key]: value };
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
+    setFolderConfirm({ kind: "ti", key, value, label });
   };
 
-  const handleFolderBlur = async (key, value, label) => {
+  const handleFolderBlur = (key, value, label) => {
     if (locked) return;
     if (value === origFolders.current[key]) return;
-    if (!window.confirm(`บันทึก Folder URL สำหรับ ${label} ใหม่?`)) return;
+    setFolderConfirm({ kind: "dn", key, value, label });
+  };
+
+  const doFolderSave = async () => {
+    const pend = folderConfirm;
+    if (!pend) return;
+    setFolderConfirm(null);
     setSaving(true);
     setError("");
     try {
-      const newFolders = { dn: folderDN, bn: folderBN, bnCombined: folderBNCombined, qt: folderQT, [key]: value };
-      await api.saveConfig({
-        company: { name: company, nameEN, address, tel, taxId },
-        folders: newFolders,
-      });
-      origFolders.current = { ...origFolders.current, [key]: value };
+      if (pend.kind === "ti") {
+        const newTiFolders = { ti: tiFolderTI, bn: tiFolderBN, bnCombined: tiFolderBNCombined, [pend.key]: pend.value };
+        await tiApi.saveConfig({ folders: newTiFolders });
+        origTiFolders.current = { ...origTiFolders.current, [pend.key]: pend.value };
+      } else {
+        const newFolders = { dn: folderDN, bn: folderBN, bnCombined: folderBNCombined, qt: folderQT, [pend.key]: pend.value };
+        await api.saveConfig({
+          company: { name: company, nameEN, address, tel, taxId },
+          folders: newFolders,
+        });
+        origFolders.current = { ...origFolders.current, [pend.key]: pend.value };
+      }
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (err) {
@@ -250,8 +208,9 @@ function SettingsPage({ onConfigSaved, cache, updateCache, onViewChange, goListR
       await api.saveConfig({
         company: { name: company, nameEN, address, tel, taxId },
         folders: { dn: folderDN, bn: folderBN, bnCombined: folderBNCombined, qt: folderQT },
+        vatRate: (parseFloat(vatPct) || 7) / 100, // #295c
       });
-      if (updateCache) updateCache("settingsConfig", { company: { name: company, nameEN, address, tel, taxId }, folders: { dn: folderDN, bn: folderBN, bnCombined: folderBNCombined, qt: folderQT } });
+      if (updateCache) updateCache("settingsConfig", { company: { name: company, nameEN, address, tel, taxId }, folders: { dn: folderDN, bn: folderBN, bnCombined: folderBNCombined, qt: folderQT }, vatRate: (parseFloat(vatPct) || 7) / 100 }); // #302 A — keep vatRate in cache so re-opening Settings shows the saved rate (not default 7)
       // #240 — also persist TI backend folders (separate deployment) when saving from the folders view
       if (sView === "folders") {
         const newTiFolders = { ti: tiFolderTI, bn: tiFolderBN, bnCombined: tiFolderBNCombined };
@@ -329,6 +288,7 @@ function SettingsPage({ onConfigSaved, cache, updateCache, onViewChange, goListR
           <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>เลขประจำตัวผู้เสียภาษี</div><input value={taxId} onChange={e => setTaxId(e.target.value)} disabled={locked} placeholder="0000000000000" maxLength={13} style={{ ...inpS, fontFamily: "monospace", letterSpacing: "0.06em" }} /></div>
           <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ที่อยู่</div><textarea value={address} onChange={e => setAddress(e.target.value)} disabled={locked} rows={2} style={taS} /></div>
           <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>โทรศัพท์ / แฟกซ์</div><input value={tel} onChange={e => setTel(e.target.value)} disabled={locked} style={inpS} /></div>
+          <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>VAT (%) <span style={{ color: C.muted, opacity: 0.7 }}>— ใช้กับใบกำกับภาษี (TI)</span></div><input type="number" min="0" step="0.01" value={vatPct} onChange={e => setVatPct(e.target.value)} disabled={locked} placeholder="7" style={{ ...inpS, width: 120 }} /></div>
         </div>
       </div>
     </div>
@@ -366,6 +326,15 @@ function SettingsPage({ onConfigSaved, cache, updateCache, onViewChange, goListR
           <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>BN-TI รวมพิมพ์ <span style={{ color: C.muted, opacity: 0.7 }}>— เว้นว่าง = subfolder อัตโนมัติ</span></div><input value={tiFolderBNCombined} onChange={e => setTiFolderBNCombined(e.target.value)} onBlur={e => handleTiFolderBlur("bnCombined", e.target.value, "BN-TI Combined")} disabled={locked} placeholder="(เว้นว่างได้)" style={monoS} /></div>
         </div>
       </div>
+      {folderConfirm && (
+        <ConfirmModal
+          message={`บันทึก Folder URL สำหรับ ${folderConfirm.label} ใหม่?`}
+          confirmLabel="บันทึก"
+          loading={saving}
+          onConfirm={doFolderSave}
+          onCancel={() => setFolderConfirm(null)}
+        />
+      )}
     </div>
   );
 
@@ -751,4 +720,4 @@ const PlaceholderPage = ({ title, icon }) => (
   </div>
 );
 
-export { SettingsPage, OtherPage, PlaceholderPage, EditableList, CustomerPage, ProductPage };
+export { SettingsPage, OtherPage, PlaceholderPage, CustomerPage, ProductPage };

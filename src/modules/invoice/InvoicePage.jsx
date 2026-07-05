@@ -8,7 +8,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import QRCode from "qrcode";
-import { FileText, ClipboardList, Calendar, Check, CheckCircle, Square, Pencil, Save, Search, RefreshCw, Loader, Plus, ChevronLeft, ChevronRight, ChevronDown, Printer, QrCode, Smartphone, AlertCircle, Eye } from "lucide-react";
+import { FileText, ClipboardList, Calendar, Check, CheckCircle, Square, Pencil, Save, Search, RefreshCw, Loader, Plus, Trash2, ChevronLeft, ChevronRight, ChevronDown, Printer, QrCode, Smartphone, AlertCircle, Eye } from "lucide-react";
 import { api } from '../../shared/api.jsx';
 import { C, SECTION_COLORS, PAGE_SIZE, ITEMS_COUNT, DN_MAX_ROWS, emptyItem, DESC_MAX, DETAIL_WARN, DETAIL_MAX, SIMILARITY_THRESHOLD, DN_ZERO_WIDTH, DESC_MAX_DN_L, DETAIL_WARN_DN_L, DETAIL_MAX_DN_L } from '../../shared/constants.jsx';
 import { descWidth, descWidthV2, getDescText, customerSimilarity, findSimilarCustomers, collapseItems, toDownloadUrl } from '../../shared/utils.jsx';
@@ -72,7 +72,7 @@ function DeliveryNoteForm({ initial, onSave, onCancel, isEdit, products, setProd
         const update = { ...record };
         const formValues = { address, phone };
         for (const f of yesFields) update[f] = formValues[f];
-        api.updateCustomer(name, update).catch(() => {});
+        api.updateCustomer(name, update).catch(e => alert("บันทึกที่อยู่/เบอร์ลูกค้าลงระบบไม่สำเร็จ — " + e.message)); // #284
       }
     }
     onSave({ ...payload, id: result.invoiceNo || initial?.id, pdfUrl: result.pdfUrl || initial?.pdfUrl });
@@ -216,7 +216,7 @@ function DeliveryNoteForm({ initial, onSave, onCancel, isEdit, products, setProd
                   <td style={{ padding: "3px 6px" }}>{!it._cont && cellInput(i, "qty", "right")}</td>
                   <td style={{ padding: "3px 6px" }}>{!it._cont && cellInput(i, "unitPrice", "right")}</td>
                   <td style={{ padding: "4px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: it.amount ? C.text : C.muted }}>
-                    {!it._cont && (it.amount ? Number(it.amount).toLocaleString() : "—")}
+                    {!it._cont && (it.amount ? Number(it.amount).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) : "—")}
                   </td>
                 </tr>
                 );
@@ -224,7 +224,7 @@ function DeliveryNoteForm({ initial, onSave, onCancel, isEdit, products, setProd
               })}
               <tr style={{ background: "#f0f4ff", borderTop: `1px solid ${C.border}` }}>
                 <td colSpan={7} style={{ padding: "8px 10px", textAlign: "right", fontWeight: 500 }}>ยอดรวม</td>
-                <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500, color: C.accent, fontSize: 13 }}>฿{total.toLocaleString()}</td>
+                <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500, color: C.accent, fontSize: 13 }}>{total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
               </tr>
             </tbody>
           </table>
@@ -275,6 +275,9 @@ function DeliveryNoteDetail({ invoice, onBack, onSaved, products, setProducts, s
   const handleSave = (updated) => {
     setData({ ...data, ...updated, pdfUrl: "", portraitUrl: "" }); // clear so both PDFs regenerate after edit
     setPortraitCopyUrl(""); // clear 2-page cache too
+    // #282 — drop stale session cache so a later open (incl. from a BN) reflects the edit
+    if (data?.id) delete _dnStore[data.id];
+    if (updated?.id) delete _dnStore[updated.id];
     setEditing(false);
     onSaved?.(); // invalidate list cache + reload
   };
@@ -459,7 +462,7 @@ function DeliveryNoteDetail({ invoice, onBack, onSaved, products, setProducts, s
                 )}
               </div>
               <Btn onClick={handleQr} disabled={qrLoading}>{qrLoading ? <Loader size={13}/> : <QrCode size={14}/>} QR</Btn>
-              <Btn primary onClick={() => setEditing(true)}><Pencil size={14}/> แก้ไข</Btn>
+              <Btn primary onClick={() => { if (data.billed) { alert(`ใบส่งของนี้อยู่ใน ${data.bnNo || "BN"} แล้ว\nกรุณายกเลิก BN นั้นก่อนแก้ไข`); return; } setEditing(true); }}><Pencil size={14}/> แก้ไข</Btn>
               <Btn danger onClick={() => { if (data.billed) { alert(`ใบส่งของนี้อยู่ใน ${data.bnNo || "BN"} แล้ว\nกรุณายกเลิก BN นั้นก่อน`); return; } setShowCancelConfirm(true); }} disabled={cancelLoading}>ยกเลิกใบนี้</Btn>
             </>
           )}
@@ -493,13 +496,13 @@ function DeliveryNoteDetail({ invoice, onBack, onSaved, products, setProducts, s
                   <td style={{ padding: "8px 12px", color: C.muted }}>{it.desc2}</td>
                   <td style={{ padding: "8px 12px", color: C.muted }}>{it.detail}</td>
                   <td style={{ padding: "8px 12px", textAlign: "right" }}>{it.qty}</td>
-                  <td style={{ padding: "8px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{Number(it.unitPrice).toLocaleString()}</td>
-                  <td style={{ padding: "8px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{Number(it.amount).toLocaleString()}</td>
+                  <td style={{ padding: "8px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{Number(it.unitPrice||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                  <td style={{ padding: "8px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{Number(it.amount||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                 </tr>
               ))}
               <tr style={{ background: "#f0f4ff", borderTop: `1px solid ${C.border}` }}>
                 <td colSpan={6} style={{ padding: "10px 12px", textAlign: "right", fontWeight: 500 }}>ยอดรวมทั้งสิ้น</td>
-                <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500, color: C.accent, fontSize: 14 }}>฿{(data.total || 0).toLocaleString()}</td>
+                <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500, color: C.accent, fontSize: 14 }}>{(data.total || 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
               </tr>
             </tbody>
           </table>
@@ -627,17 +630,17 @@ function DeliveryNotePage({ products, setProducts, sizes, cache, updateCache, on
     setLoading(true);
     setError("");
     try {
-      const data = await api.getDeliveryNotes(startDate, endDate, search);
+      const data = await api.getDeliveryNotes(startDate, endDate); // #279 — full range; search is client-side (filtered) to avoid cache poisoning
       const list = Array.isArray(data) ? data : [];
       updateCache(cacheKey, list);
       // #116 — seed shared DN store so opening any of these DNs (e.g. from BN) is instant, no getDNDetail fetch
-      list.forEach(dn => { if (dn && dn.id) _dnStore[dn.id] = { dnNo: dn.id, date: dn.date, customer: dn.name, address: dn.address || "", phone: dn.phone || "", total: dn.total, pdfUrl: dn.pdfUrl, items: dn.items || [] }; });
+      list.forEach(dn => { if (dn && dn.id) _dnStore[dn.id] = { dnNo: dn.id, date: dn.date, customer: dn.name, address: dn.address || "", phone: dn.phone || "", total: dn.total, pdfUrl: dn.pdfUrl, createdAt: dn.createdAt || "", items: dn.items || [] }; });
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate, search]);
+  }, [startDate, endDate]);
 
   useEffect(() => { if (!cache[cacheKey]) loadInvoices(); }, [cacheKey]);
 
@@ -695,13 +698,13 @@ function DeliveryNotePage({ products, setProducts, sizes, cache, updateCache, on
               <>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
-                  <tr>{["เลขที่ใบส่งของ", "วันที่", "ชื่อลูกค้า", "รายการ", "ยอดรวม", "สถานะ"].map((h, i) => (
+                  <tr>{["เลขที่ใบส่งของ", "วันที่", "ชื่อลูกค้า", "รายการ", "ยอดรวม", "สถานะ", "สร้างเมื่อ"].map((h, i) => (
                     <th key={i} style={{ padding: "8px 14px", textAlign: i === 4 ? "right" : "left", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, background: "#fafafa", position: "sticky", top: 70, zIndex: 1 }}>{h}</th>
                   ))}</tr>
                 </thead>
                 <tbody>
                   {filtered.length === 0 ? (
-                    <tr><td colSpan={7} style={{ padding: 32, textAlign: "center", color: C.muted, fontSize: 13 }}>ไม่พบข้อมูล</td></tr>
+                    <tr><td colSpan={8} style={{ padding: 32, textAlign: "center", color: C.muted, fontSize: 13 }}>ไม่พบข้อมูล</td></tr>
                   ) : pagedDN.map(inv => (
                     <tr key={inv.id} onMouseEnter={() => setHovered(inv.id)} onMouseLeave={() => setHovered(null)}
                       style={{ background: hovered === inv.id ? C.rowHover : "white", borderBottom: `0.5px solid ${C.borderLight}` }}>
@@ -715,8 +718,9 @@ function DeliveryNotePage({ products, setProducts, sizes, cache, updateCache, on
                       <td style={{ padding: "9px 14px", color: C.muted, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {(inv.items || []).filter(it => it.desc).map(it => it.desc + (it.desc2 ? " " + it.desc2 : "")).join(", ")}
                       </td>
-                      <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{(inv.total || 0).toLocaleString()}</td>
+                      <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(inv.total || 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                       <td style={{ padding: "9px 14px" }}><Badge success={inv.billed}>{inv.billed ? "วางบิลแล้ว" : "รอวางบิล"}</Badge></td>
+                      <td style={{ padding: "9px 14px", color: C.muted, fontSize: 11, whiteSpace: "nowrap" }}>{inv.createdAt || "—"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -763,7 +767,7 @@ function DeliveryNotePage({ products, setProducts, sizes, cache, updateCache, on
                             {inv.date ? new Date(inv.date).toLocaleDateString("th-TH", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
                           </td>
                           <td style={{ padding: "9px 14px" }}>{inv.name}</td>
-                          <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{(inv.total || 0).toLocaleString()}</td>
+                          <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(inv.total || 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -975,7 +979,7 @@ function BNPreviewModal({ customer, onClose, onConfirm, nextBnNo }) {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "#f0f4ff", borderRadius: 6, marginBottom: 8 }}>
             <div style={{ fontSize: 12, color: C.muted }}>รวม <strong style={{ color: C.text }}>{selectedRows.length}</strong> ฉบับ</div>
             <div style={{ fontVariantNumeric: "tabular-nums", fontWeight: 500, fontSize: 15, color: C.accent }}>
-              รวมเงิน ฿{baht.toLocaleString()}{satang > 0 ? "." + String(satang).padStart(2, "0") : ""}
+              รวมเงิน {baht.toLocaleString()}{satang > 0 ? "." + String(satang).padStart(2, "0") : ""}
             </div>
           </div>
         </div>
@@ -983,7 +987,7 @@ function BNPreviewModal({ customer, onClose, onConfirm, nextBnNo }) {
         {error && <div style={{ margin: "0 20px 8px" }}><ErrorBox msg={error} /></div>}
 
         <div style={{ padding: "12px 20px", borderTop: `0.5px solid ${C.border}`, background: "#fafafa", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 11, color: C.muted }}>{selectedRows.length} บิล · ฿{baht.toLocaleString()} · {nextBnNo}</div>
+          <div style={{ fontSize: 11, color: C.muted }}>{selectedRows.length} บิล · {baht.toLocaleString()} · {nextBnNo}</div>
           <div style={{ display: "flex", gap: 8 }}>
             <Btn onClick={onClose}>ยกเลิก</Btn>
             <Btn primary onClick={handleConfirm} disabled={saving || selectedRows.length === 0}>
@@ -1029,7 +1033,7 @@ function DNDetailPopup({ dnNo, onClose, cachedData, onCached }) {
           {data && (
             <div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 14, marginBottom: 14 }}>
-                {[["ลูกค้า", data.customer], ["วันที่", data.date], ["โทรศัพท์", data.phone || "—"], ["รวมเงิน", `฿${(data.total||0).toLocaleString()}`]].map(([l, v]) => (
+                {[["ลูกค้า", data.customer], ["วันที่", fmtDateThai(data.date)], ["โทรศัพท์", data.phone || "—"], ["รวมเงิน", `${(data.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`]].map(([l, v]) => (
                   <div key={l}><div style={{ fontSize: 11, color: C.muted, marginBottom: 2 }}>{l}</div><div style={{ fontSize: 13, fontWeight: 500 }}>{v}</div></div>
                 ))}
               </div>
@@ -1049,15 +1053,15 @@ function DNDetailPopup({ dnNo, onClose, cachedData, onCached }) {
                       <td style={{ padding: "7px 10px" }}>{it.desc}</td>
                       <td style={{ padding: "7px 10px", color: C.muted }}>{it.desc2}</td>
                       <td style={{ padding: "7px 10px", textAlign: "right" }}>{it.qty}</td>
-                      <td style={{ padding: "7px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{Number(it.unitPrice||0).toLocaleString()}</td>
-                      <td style={{ padding: "7px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{Number(it.amount||0).toLocaleString()}</td>
+                      <td style={{ padding: "7px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{Number(it.unitPrice||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                      <td style={{ padding: "7px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{Number(it.amount||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr style={{ background: "#f0f4ff", borderTop: `1px solid ${C.border}` }}>
                     <td colSpan={5} style={{ padding: "9px 10px", textAlign: "right", fontWeight: 500 }}>ยอดรวม</td>
-                    <td style={{ padding: "9px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: C.accent }}>฿{(data.total||0).toLocaleString()}</td>
+                    <td style={{ padding: "9px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: C.accent }}>{(data.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -1156,7 +1160,7 @@ function BNEditForm({ detail, onSave, onCancel }) {
         const update = { ...custRecord };
         const formValues = { address, phone };
         for (const f of yesFields) update[f] = formValues[f];
-        api.updateCustomer(customer, update).catch(() => {});
+        api.updateCustomer(customer, update).catch(e => alert("บันทึกที่อยู่/เบอร์ลูกค้าลงระบบไม่สำเร็จ — " + e.message)); // #284
       }
       const displayDate = dateInput ? (() => { const p = dateInput.split("-"); return `${p[2]}/${p[1]}/${p[0]}`; })() : detail.date;
       onSave({ date: displayDate, customer, address, phone, invoices, count: invoices.length, total: invoices.reduce((s, inv) => s + (parseFloat(inv.total)||0), 0) });
@@ -1211,8 +1215,8 @@ function BNEditForm({ detail, onSave, onCancel }) {
             ) : invoices.map((inv, i) => (
               <tr key={i} style={{ borderBottom: `0.5px solid ${C.borderLight}` }}>
                 <td style={{ padding: "8px 14px", color: C.accent, fontWeight: 500 }}>{inv.no}</td>
-                <td style={{ padding: "8px 14px", color: C.muted }}>{inv.date}</td>
-                <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{(inv.total||0).toLocaleString()}</td>
+                <td style={{ padding: "8px 14px", color: C.muted }}>{fmtDateThai(inv.date)}</td>
+                <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(inv.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                 <td style={{ padding: "8px 14px", textAlign: "center" }}>
                   <button onClick={() => removeDN(inv.no)} style={{ background: "none", border: "none", color: C.danger, cursor: "pointer", fontSize: 18, lineHeight: 1 }} title="ลบออก">×</button>
                 </td>
@@ -1223,7 +1227,7 @@ function BNEditForm({ detail, onSave, onCancel }) {
             <tfoot>
               <tr style={{ borderTop: `0.5px solid ${C.border}`, background: "#f5f9f6" }}>
                 <td colSpan={2} style={{ padding: "7px 14px", fontSize: 11, color: C.muted }}>รวม {invoices.length} ฉบับ</td>
-                <td style={{ padding: "7px 14px", textAlign: "right", fontWeight: 600, color: C.accent, fontVariantNumeric: "tabular-nums" }}>฿{invoices.reduce((s, inv) => s+(parseFloat(inv.total)||0), 0).toLocaleString()}</td>
+                <td style={{ padding: "7px 14px", textAlign: "right", fontWeight: 600, color: C.accent, fontVariantNumeric: "tabular-nums" }}>{invoices.reduce((s, inv) => s+(parseFloat(inv.total)||0), 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                 <td></td>
               </tr>
             </tfoot>
@@ -1243,8 +1247,8 @@ function BNEditForm({ detail, onSave, onCancel }) {
               {available.map((dn, i) => (
                 <tr key={i} style={{ borderBottom: `0.5px solid ${C.borderLight}` }}>
                   <td style={{ padding: "8px 14px", color: C.accent, fontWeight: 500 }}>{dn.no}</td>
-                  <td style={{ padding: "8px 14px", color: C.muted }}>{dn.date}</td>
-                  <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{(dn.total||0).toLocaleString()}</td>
+                  <td style={{ padding: "8px 14px", color: C.muted }}>{fmtDateThai(dn.date)}</td>
+                  <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(dn.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                   <td style={{ padding: "8px 14px", textAlign: "center" }}>
                     <Btn small onClick={() => addDN(dn)}><Plus size={11}/> เพิ่ม</Btn>
                   </td>
@@ -1475,7 +1479,7 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
               )}
             </div>
             <div style={{ display: "flex", gap: 20, padding: "10px 16px", background: "#f5f9f6", borderTop: `0.5px solid ${C.borderLight}`, alignItems: "center" }}>
-              <div><span style={{ fontSize: 11, color: C.muted }}>รวมเงิน </span><span style={{ fontWeight: 600, fontSize: 15, color: C.accent }}>฿{(detail.total||0).toLocaleString()}</span></div>
+              <div><span style={{ fontSize: 11, color: C.muted }}>รวมเงิน </span><span style={{ fontWeight: 600, fontSize: 15, color: C.accent }}>{(detail.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>
               <div style={{ fontSize: 11, color: C.muted }}>{detail.count} ฉบับ</div>
             </div>
           </div>
@@ -1505,8 +1509,8 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
                         <td style={{ padding: "8px 14px", color: C.accent, fontWeight: 500 }}>
                           <ChevronDown size={12} style={{ verticalAlign: "middle", marginRight: 4, transform: isExp ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s" }}/>{inv.no}
                         </td>
-                        <td style={{ padding: "8px 14px", color: C.muted }}>{inv.date}</td>
-                        <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{(inv.total||0).toLocaleString()}</td>
+                        <td style={{ padding: "8px 14px", color: C.muted }}>{fmtDateThai(inv.date)}</td>
+                        <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(inv.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                       </tr>
                       {isExp && (
                         <tr>
@@ -1530,15 +1534,15 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
                                           <td style={{ padding: "5px 8px" }}>{it.desc}</td>
                                           <td style={{ padding: "5px 8px", color: C.muted }}>{it.desc2}</td>
                                           <td style={{ padding: "5px 8px", textAlign: "right" }}>{it.qty}</td>
-                                          <td style={{ padding: "5px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{Number(it.unitPrice||0).toLocaleString()}</td>
-                                          <td style={{ padding: "5px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{Number(it.amount||0).toLocaleString()}</td>
+                                          <td style={{ padding: "5px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{Number(it.unitPrice||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                                          <td style={{ padding: "5px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{Number(it.amount||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                                         </tr>
                                       ))}
                                     </tbody>
                                     <tfoot>
                                       <tr style={{ background: "#eef2ff", borderTop: `1px solid ${C.border}` }}>
                                         <td colSpan={5} style={{ padding: "7px 8px", textAlign: "right", fontWeight: 500 }}>ยอดรวม</td>
-                                        <td style={{ padding: "7px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: C.accent }}>฿{(dnData.total||0).toLocaleString()}</td>
+                                        <td style={{ padding: "7px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: C.accent }}>{(dnData.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                                       </tr>
                                     </tfoot>
                                   </table>
@@ -1564,7 +1568,7 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
                 <tfoot>
                   <tr style={{ borderTop: `0.5px solid ${C.border}`, background: "#f5f9f6" }}>
                     <td colSpan={2} style={{ padding: "7px 14px", fontSize: 11, color: C.muted }}>รวม {detail.invoices.length} ฉบับ</td>
-                    <td style={{ padding: "7px 14px", textAlign: "right", fontWeight: 600, color: C.accent, fontVariantNumeric: "tabular-nums" }}>฿{(detail.total||0).toLocaleString()}</td>
+                    <td style={{ padding: "7px 14px", textAlign: "right", fontWeight: 600, color: C.accent, fontVariantNumeric: "tabular-nums" }}>{(detail.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                   </tr>
                 </tfoot>
               )}
@@ -1597,6 +1601,21 @@ function dnPeriodLabel(invoices) {
   const lM = (last % 100) - 1, lY = Math.floor(last / 100);
   if (fY === lY) return THAI_M_SHORT[fM] + " – " + THAI_M_SHORT[lM] + " " + lY;
   return THAI_M_SHORT[fM] + " " + fY + " – " + THAI_M_SHORT[lM] + " " + lY;
+}
+
+// #268 — parse "dd/MM/yyyy" → Thai locale date string (display only)
+function fmtDateThai(s) {
+  if (!s) return "—";
+  const str = String(s);
+  let d;
+  if (str.includes("/")) {            // dd/MM/yyyy
+    const p = str.split("/"); if (p.length !== 3) return s;
+    d = new Date(+p[2], +p[1] - 1, +p[0]);
+  } else if (str.includes("-")) {     // #280 — yyyy-MM-dd (getDeliveryNotes/list format)
+    const p = str.split("-"); if (p.length !== 3) return s;
+    d = new Date(+p[0], +p[1] - 1, +p[2]);
+  } else return s;
+  return isNaN(d.getTime()) ? s : d.toLocaleDateString("th-TH", { day: "2-digit", month: "short", year: "numeric" });
 }
 
 function BNListView({ bnList, loading, error, onRefresh, onRowClick, onCreateSingle, onCreateBatch }) {
@@ -1664,10 +1683,10 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick, onCreateSin
       style={{ background: isHov ? C.rowHover : "white", borderBottom: `0.5px solid ${C.borderLight}`, cursor: "pointer" }}>
       <td style={{ padding: "9px 14px", color: C.accent, fontWeight: 500 }}>{bn.bnNo}</td>
       <td style={{ padding: "9px 14px", fontWeight: 500, fontSize: 11.5 }}>{dnPeriodLabel(bn.invoices)}</td>
-      <td style={{ padding: "9px 14px", color: C.muted }}>{bn.date}</td>
+      <td style={{ padding: "9px 14px", color: C.muted }}>{fmtDateThai(bn.date)}</td>
       <td style={{ padding: "9px 14px" }}>{bn.customer}</td>
       <td style={{ padding: "9px 14px" }}>{bn.count} ฉบับ</td>
-      <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{(bn.total || 0).toLocaleString()}</td>
+      <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(bn.total || 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
     </tr>
   );
 
@@ -1703,23 +1722,28 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick, onCreateSin
       <div style={{ position: "sticky", top: -18, zIndex: 10, background: C.pageBg }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 10 }}>
           <div style={{ fontSize: 16, fontWeight: 500 }}><ClipboardList size={15}/> ใบวางบิล</div>
-          {onCreateSingle && (
-            <div style={{ position: "relative" }}>
-              <Btn primary onClick={() => setCreateDrop(p => !p)}>+ สร้างใบวางบิล <ChevronDown size={13} style={{ marginLeft: 2 }}/></Btn>
+          {/* #262 — split button: main click → batch (default), chevron → dropdown with single */}
+          {onCreateBatch && (
+            <div style={{ position: "relative", display: "inline-flex" }}>
+              <button onClick={() => { onCreateBatch(); }} style={{ background: C.accent, color: "white", border: "none", borderRadius: "6px 0 0 6px", padding: "6px 14px", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                + สร้างใบวางบิล
+              </button>
+              <button onClick={() => setCreateDrop(p => !p)} style={{ background: C.accent, color: "white", border: "none", borderLeft: "1px solid rgba(255,255,255,0.3)", borderRadius: "0 6px 6px 0", padding: "6px 6px", cursor: "pointer", display: "flex", alignItems: "center" }}>
+                <ChevronDown size={13}/>
+              </button>
               {createDrop && (
                 <>
                   <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setCreateDrop(false)} />
                   <div style={{ position: "absolute", right: 0, top: "100%", marginTop: 4, background: "white", border: `1px solid ${C.border}`, borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.12)", zIndex: 50, minWidth: 180, overflow: "hidden" }}>
+                    {/* #326 — dropdown lists BOTH modes */}
+                    <div onClick={() => { setCreateDrop(false); onCreateBatch(); }} style={{ padding: "9px 14px", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, borderBottom: `0.5px solid ${C.borderLight}` }}
+                      onMouseEnter={e => e.currentTarget.style.background = C.rowHover} onMouseLeave={e => e.currentTarget.style.background = "white"}>
+                      <Plus size={13}/> สร้างแบบรวม
+                    </div>
                     <div onClick={() => { setCreateDrop(false); onCreateSingle(); }} style={{ padding: "9px 14px", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
                       onMouseEnter={e => e.currentTarget.style.background = C.rowHover} onMouseLeave={e => e.currentTarget.style.background = "white"}>
                       <Plus size={13}/> สร้างทีละราย
                     </div>
-                    {onCreateBatch && (
-                      <div onClick={() => { setCreateDrop(false); onCreateBatch(); }} style={{ padding: "9px 14px", fontSize: 12, cursor: "pointer", borderTop: `0.5px solid ${C.borderLight}`, display: "flex", alignItems: "center", gap: 6 }}
-                        onMouseEnter={e => e.currentTarget.style.background = C.rowHover} onMouseLeave={e => e.currentTarget.style.background = "white"}>
-                        <ClipboardList size={13}/> สร้างแบบรวม
-                      </div>
-                    )}
                   </div>
                 </>
               )}
@@ -1822,7 +1846,7 @@ function BNDetailMiniPopup({ bnNo, onClose, onCancelled }) {
           {data && (
             <>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 10, marginBottom: 12 }}>
-                {[["ลูกค้า", data.customer], ["วันที่", data.date], ["จำนวน", `${data.count} ฉบับ`], ["รวมเงิน", `฿${(data.total||0).toLocaleString()}`]].map(([l, v]) => (
+                {[["ลูกค้า", data.customer], ["วันที่", data.date], ["จำนวน", `${data.count} ฉบับ`], ["รวมเงิน", `${(data.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`]].map(([l, v]) => (
                   <div key={l}><div style={{ fontSize: 10, color: C.muted, marginBottom: 1 }}>{l}</div><div style={{ fontSize: 12, fontWeight: 500 }}>{v}</div></div>
                 ))}
               </div>
@@ -1839,8 +1863,8 @@ function BNDetailMiniPopup({ bnNo, onClose, onCancelled }) {
                   {(data.invoices || []).map((inv, i) => (
                     <tr key={i} style={{ borderBottom: `0.5px solid ${C.borderLight}` }}>
                       <td style={{ padding: "7px 10px", color: C.accent, fontWeight: 500 }}>{inv.no}</td>
-                      <td style={{ padding: "7px 10px", color: C.muted }}>{inv.date}</td>
-                      <td style={{ padding: "7px 10px", textAlign: "right", fontWeight: 500 }}>฿{(parseFloat(inv.total)||0).toLocaleString()}</td>
+                      <td style={{ padding: "7px 10px", color: C.muted }}>{fmtDateThai(inv.date)}</td>
+                      <td style={{ padding: "7px 10px", textAlign: "right", fontWeight: 500 }}>{(parseFloat(inv.total)||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1870,7 +1894,7 @@ function BNDetailMiniPopup({ bnNo, onClose, onCancelled }) {
   );
 }
 
-function BNCustomerPanel({ cust, nextBnNo, onConfirm, onCreatingChange }) {
+function BNCustomerPanel({ cust, nextBnNo, products, sizes, onConfirm, onCreatingChange, onDnEdited }) {
   const today = new Date().toISOString().slice(0, 10);
   const [bnDate, setBnDate]   = useState(today);
   const [confirming, setConf] = useState(false);
@@ -1883,12 +1907,35 @@ function BNCustomerPanel({ cust, nextBnNo, onConfirm, onCreatingChange }) {
   const [bnPopup, setBnPopup] = useState(null); // #182
   const [address, setAddress] = useState(cust.address || "");
   const [phone, setPhone]     = useState(cust.phone || "");
+  const [expandedDn, setExpandedDn] = useState(null); // #310b — inline DN detail expand
+  const [dnLoading, setDnLoading]   = useState(null);
+  const [editMode, setEditMode]     = useState(false); // #310b pass 2 — exclusion edit mode (mirror batch #252d)
+  const [prefetching, setPrefetching] = useState(false); // #327 — parallel DN-detail prefetch in progress
+  const [editingDn, setEditingDn]   = useState(null); // #310c — inline DN edit (reuses DNInlineEditor)
 
   // reset on customer switch (key prop handles unmount, but keep for safety)
   useEffect(() => {
-    setBnDate(today); setError("");
+    setBnDate(today); setError(""); setExpandedDn(null); setEditMode(false); setEditingDn(null);
     setRows((cust.invoices || []).map((inv, i) => ({ ...inv, idx: i, checked: !inv.bnNo })));
     setAddress(cust.address || ""); setPhone(cust.phone || "");
+  }, [cust.customer]);
+
+  // #327 — pre-fetch this customer's DN line items in PARALLEL on select, so สินค้า counts
+  // show immediately and every expand is instant (mirrors batch #251, instead of one-by-one on click).
+  useEffect(() => {
+    const nos = (cust.invoices || []).map(inv => inv.no).filter(no => !dnCache[no]);
+    if (nos.length === 0) return;
+    let cancelled = false;
+    setPrefetching(true);
+    Promise.all(nos.map(no => api.getDNDetail(no).then(d => [no, d]).catch(() => null)))
+      .then(results => {
+        if (cancelled) return;
+        const add = {};
+        results.forEach(r => { if (r) add[r[0]] = r[1]; });
+        if (Object.keys(add).length) setDnCache(prev => ({ ...prev, ...add }));
+      })
+      .finally(() => { if (!cancelled) setPrefetching(false); });
+    return () => { cancelled = true; };
   }, [cust.customer]);
 
   const toggleRow = (idx) => setRows(prev => prev.map(r => r.idx === idx && !r.bnNo ? { ...r, checked: !r.checked } : r));
@@ -1896,6 +1943,17 @@ function BNCustomerPanel({ cust, nextBnNo, onConfirm, onCreatingChange }) {
     const unbilled = rows.filter(r => !r.bnNo);
     const allChecked = unbilled.length > 0 && unbilled.every(r => r.checked);
     setRows(prev => prev.map(r => r.bnNo ? r : { ...r, checked: !allChecked }));
+  };
+
+  // #310b — lazy-load a DN's line items for the สินค้า count + inline expand (reuses dnCache)
+  const toggleDnDetail = async (dnNo) => {
+    setEditingDn(null); // #310c — leaving/switching a row cancels any in-progress inline edit
+    if (expandedDn === dnNo) { setExpandedDn(null); return; }
+    setExpandedDn(dnNo);
+    if (dnCache[dnNo]) return;
+    setDnLoading(dnNo);
+    try { const d = await api.getDNDetail(dnNo); setDnCache(prev => ({ ...prev, [dnNo]: d })); } catch (_) {}
+    finally { setDnLoading(null); }
   };
 
   const selectedRows = rows.filter(r => r.checked);
@@ -1917,11 +1975,23 @@ function BNCustomerPanel({ cust, nextBnNo, onConfirm, onCreatingChange }) {
   };
 
   return (
-    <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "hidden", display: "flex", flexDirection: "column", maxHeight: "calc(100vh - 200px)" }}>
-      {/* header */}
-      <div style={{ padding: "10px 14px", background: "#fafafa", borderBottom: `0.5px solid ${C.border}`, display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-        <span style={{ fontSize: 13, fontWeight: 500 }}>{cust.customer}</span>
-        <span style={{ fontSize: 11, color: C.accent, background: "#e3f0ff", padding: "1px 8px", borderRadius: 10, fontWeight: 500 }}>{nextBnNo}</span>
+    <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+      {/* header — #310b: name + reserved BN + DN count/total subline */}
+      <div style={{ padding: "10px 14px", background: "#fafafa", borderBottom: `0.5px solid ${C.border}`, flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 13, fontWeight: 500 }}>{cust.customer}</span>
+          <span style={{ fontSize: 11, color: C.accent, background: "#e3f0ff", padding: "1px 8px", borderRadius: 10, fontWeight: 500 }}>{nextBnNo}</span>
+          {rows.some(r => !r.bnNo) && (
+            <span style={{ marginLeft: "auto" }}>
+              <Btn small onClick={() => setEditMode(!editMode)} style={editMode ? { background: "#eef2ff", border: `1px solid ${C.accent}`, color: C.accent } : {}}>
+                <Pencil size={12}/> {editMode ? "เสร็จสิ้น" : "แก้ไขรายการ"}
+              </Btn>
+            </span>
+          )}
+        </div>
+        <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>
+          {(cust.invoices || []).length} ใบส่งของ · รวม {(cust.invoices || []).reduce((s, inv) => s + (parseFloat(inv.total) || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </div>
       </div>
       {/* #182 — BN ที่สร้างแล้วในเดือนนี้ */}
       {(cust.invoices || []).some(inv => inv.bnNo) && (() => {
@@ -1954,53 +2024,116 @@ function BNCustomerPanel({ cust, nextBnNo, onConfirm, onCreatingChange }) {
         <div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>วันที่ออกใบวางบิล</div>
         <input type="date" value={bnDate} onChange={e => setBnDate(e.target.value)} style={{ ...inputStyle, width: 190 }} />
       </div>
-      {/* DN table — scrollable (#229) */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+      {/* DN table — #310b: clean rows (no checkboxes), สินค้า count + inline expand; whole panel scrolls (#325) */}
+      <div>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
           <thead>
             <tr>
-              <th style={{ padding: "7px 14px", width: 32, background: "#fafafa", borderBottom: `0.5px solid ${C.border}`, position: "sticky", top: 0, zIndex: 1 }}>
-                <input type="checkbox" checked={rows.every(r => r.checked)} onChange={toggleAll} />
-              </th>
-              {["เลขที่ DN", "วันที่", "รวมเงิน"].map((h, i) => (
-                <th key={i} style={{ padding: "7px 14px", textAlign: i===2?"right":"left", color: C.muted, fontWeight: 500, fontSize: 11, background: "#fafafa", borderBottom: `0.5px solid ${C.border}`, position: "sticky", top: 0, zIndex: 1 }}>{h}</th>
+              {editMode && (
+                <th style={{ padding: "7px 14px", width: 32, background: "#fafafa", borderBottom: `0.5px solid ${C.border}`, position: "sticky", top: 0, zIndex: 1 }}>
+                  <input type="checkbox" checked={(() => { const u = rows.filter(r => !r.bnNo); return u.length > 0 && u.every(r => r.checked); })()} onChange={toggleAll} />
+                </th>
+              )}
+              {["เลขที่ DN", "วันที่", "สินค้า", "รวมเงิน"].map((h, i) => (
+                <th key={i} style={{ padding: "7px 14px", textAlign: i===3?"right":"left", color: C.muted, fontWeight: 500, fontSize: 11, background: "#fafafa", borderBottom: `0.5px solid ${C.border}`, position: "sticky", top: 0, zIndex: 1 }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
+            {rows.map((row) => {
+              const det       = dnCache[row.no];
+              const itemCount = det && det.items ? det.items.length : null;
+              const isExp     = expandedDn === row.no;
+              const excluded  = editMode && !row.bnNo && !row.checked; // #310b — unchecked = excluded from this BN
+              return (
               <React.Fragment key={row.idx}>
-                <tr style={{ borderBottom: row.bnNo ? "none" : `0.5px solid ${C.borderLight}`, background: row.bnNo ? "#fafafa" : (row.checked ? "white" : "#fafafa"), opacity: row.bnNo ? 0.5 : (row.checked ? 1 : 0.55) }}>
-                  <td style={{ padding: "8px 14px", opacity: row.bnNo ? 1 : undefined }}>
-                    <input type="checkbox" checked={row.checked} disabled={!!row.bnNo} onChange={() => toggleRow(row.idx)} style={{ cursor: row.bnNo ? "not-allowed" : "pointer" }} />
+                <tr onClick={() => toggleDnDetail(row.no)} style={{ borderBottom: row.bnNo ? "none" : `0.5px solid ${C.borderLight}`, background: row.bnNo ? "#fafafa" : "white", opacity: row.bnNo ? 0.5 : (excluded ? 0.4 : 1), cursor: "pointer" }}>
+                  {editMode && (
+                    <td style={{ padding: "8px 14px" }} onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox" checked={row.checked} disabled={!!row.bnNo} onChange={() => toggleRow(row.idx)} style={{ cursor: row.bnNo ? "not-allowed" : "pointer" }} />
+                    </td>
+                  )}
+                  <td style={{ padding: "8px 14px", textDecoration: excluded ? "line-through" : "none" }}>
+                    <span style={{ color: row.bnNo ? C.muted : C.accent, fontWeight: 500 }}>{row.no}</span>
                   </td>
-                  <td style={{ padding: "8px 14px" }}>
-                    <span onClick={() => setDnPopup(row.no)} style={{ color: row.bnNo ? C.muted : C.accent, fontWeight: 500, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" }}>{row.no}</span>
+                  <td style={{ padding: "8px 14px", color: C.muted }}>{fmtDateThai(row.date)}</td>
+                  <td style={{ padding: "8px 14px", color: C.muted, fontSize: 11 }}>
+                    {(dnLoading === row.no || (prefetching && itemCount == null)) ? "…" : itemCount != null ? `สินค้า ${itemCount} รายการ ${isExp ? "▼" : "▸"}` : "ดู ▸"}
                   </td>
-                  <td style={{ padding: "8px 14px", color: C.muted }}>{row.date}</td>
-                  <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{(parseFloat(row.total)||0).toLocaleString()}</td>
+                  <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(parseFloat(row.total)||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                 </tr>
+                {isExp && (
+                  <tr>
+                    <td colSpan={editMode ? 5 : 4} style={{ padding: 0, borderBottom: `0.5px solid ${C.borderLight}`, background: "#fafafa" }}>
+                      <div style={{ padding: "8px 12px 12px" }} onClick={(e) => e.stopPropagation()}>
+                        {!det && <div style={{ fontSize: 11, color: C.muted, padding: "4px 0" }}>กำลังโหลด…</div>}
+                        {det && det.items && editingDn !== row.no && (
+                          <>
+                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                              <thead>
+                                <tr>{["รายการ", "ขนาด", "จำนวน", "หน่วยละ", "จำนวนเงิน"].map((h, hi) => (
+                                  <th key={hi} style={{ padding: "4px 10px", textAlign: hi>=2?"right":"left", color: C.muted, fontWeight: 500 }}>{h}</th>
+                                ))}</tr>
+                              </thead>
+                              <tbody>
+                                {(det.items || []).map((it, ii) => (
+                                  <tr key={ii}>
+                                    <td style={{ padding: "4px 10px" }}>{it.desc || ""}</td>
+                                    <td style={{ padding: "4px 10px", color: C.muted }}>{it.desc2 || ""}</td>
+                                    <td style={{ padding: "4px 10px", textAlign: "right" }}>{it.qty || ""}</td>
+                                    <td style={{ padding: "4px 10px", textAlign: "right" }}>{it.unitPrice !== "" && it.unitPrice != null ? Number(it.unitPrice||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) : ""}</td>
+                                    <td style={{ padding: "4px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{Number(it.amount||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                            {/* #310c — edit a not-yet-billed DN in place (billed DNs stay read-only, #296) */}
+                            {!row.bnNo && (
+                              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+                                <button onClick={() => setEditingDn(row.no)} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: C.accent, border: `0.5px solid ${C.accent}`, borderRadius: 4, padding: "4px 10px", background: "none", cursor: "pointer" }}>
+                                  <Pencil size={11}/> แก้ไขใบส่งของ
+                                </button>
+                              </div>
+                            )}
+                          </>
+                        )}
+                        {det && editingDn === row.no && (
+                          <DNInlineEditor dnData={det} products={products} sizes={sizes}
+                            onCancel={() => setEditingDn(null)}
+                            onSaved={(u) => {
+                              setDnCache(prev => ({ ...prev, [row.no]: { ...(prev[row.no] || {}), items: u.items, total: u.total, pdfUrl: "", portraitUrl: "" } })); // #309 clear PDF so re-print regenerates
+                              setRows(prev => prev.map(r => r.no === row.no ? { ...r, total: u.total } : r)); // footer total live
+                              onDnEdited?.(row.no, u.total); // #310a metric cards + header recompute
+                              delete _dnStore[row.no]; // #282
+                              setEditingDn(null);
+                            }} />
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )}
                 {row.bnNo && (
                   <tr style={{ borderBottom: `0.5px solid ${C.borderLight}` }}>
-                    <td colSpan={4} style={{ padding: 0 }}>
+                    <td colSpan={editMode ? 5 : 4} style={{ padding: 0 }}>
                       <div style={{ background: "#fff8e1", borderTop: `0.5px solid #fac775`, padding: "5px 10px 5px 36px", fontSize: 10, color: "#633806", display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
                         <AlertCircle size={11} style={{ color: "#854f0b", flexShrink: 0, marginLeft: -20 }}/>
                         {row.no} อยู่ใน {row.bnNo} แล้ว — ถ้าต้องการรวม DN นี้ ให้
-                        <span onClick={() => setBnPopup(row.bnNo)} style={{ color: C.accent, fontWeight: 500, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" }}>ยกเลิก {row.bnNo} →</span>
+                        <span onClick={(e) => { e.stopPropagation(); setBnPopup(row.bnNo); }} style={{ color: C.accent, fontWeight: 500, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" }}>ยกเลิก {row.bnNo} →</span>
                       </div>
                     </td>
                   </tr>
                 )}
               </React.Fragment>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
       {/* #229 — sticky footer: total + create button always visible */}
       <div style={{ flexShrink: 0, borderTop: `1px solid ${C.border}`, background: "#f5f9f6" }}>
         <div style={{ padding: "7px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span style={{ fontSize: 11, color: C.muted }}>รวม {selectedRows.length} ฉบับ</span>
-          <span style={{ fontWeight: 600, color: C.accent, fontVariantNumeric: "tabular-nums" }}>฿{grandTotal.toLocaleString()}</span>
+          <span style={{ fontSize: 11, color: C.muted }}>รวม {selectedRows.length} ฉบับ{(() => { const ex = rows.filter(r => !r.bnNo && !r.checked).length; return editMode && ex > 0 ? ` · ข้าม ${ex}` : ""; })()}</span>
+          <span style={{ fontWeight: 600, color: C.accent, fontVariantNumeric: "tabular-nums" }}>{grandTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
         </div>
         {error && <div style={{ padding: "4px 14px 8px" }}><ErrorBox msg={error} /></div>}
         <div style={{ padding: "6px 14px 10px", display: "flex", justifyContent: "flex-end" }}>
@@ -2035,7 +2168,94 @@ function BNCustomerPanel({ cust, nextBnNo, onConfirm, onCreatingChange }) {
 
 // ── BN Batch Create View (#234b) ──────────────────────────
 
-function BNBatchCreateView({ onBack }) {
+// #301 — inline DN editor inside BN batch create: edit a not-yet-billed DN's item table in place (no popup).
+// Reuses useInvoiceForm item logic (qty×price, continuation rows). Customer is LOCKED (change customer at BN level).
+// Date is intentionally not editable here — payload omits `date`, so the backend preserves the original (Code.gs #272).
+function DNInlineEditor({ dnData, products, sizes, onSaved, onCancel }) {
+  const f = useInvoiceForm({ initial: dnData, isEdit: true, products, detailAttr: "data-dnedit-idx", maxRows: DN_MAX_ROWS });
+  const total = f.items.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0);
+  const rows = f.items.map((it, absIdx) => ({ it, absIdx })).filter(x => !x.it._cont); // hide continuation rows; preserved through collapseItems
+
+  const removeAt = (absIdx) => f.setItems(prev => {
+    const next = [...prev];
+    let end = absIdx + 1;
+    while (end < next.length && next[end]._cont) end++; // also drop this row's continuation rows
+    const removed = next[absIdx];
+    if (removed && removed._orig) {
+      const note = [removed.desc, removed.desc2, removed.qty].filter(Boolean).join(" ");
+      if (note) f.setRemovedOrigItems(r => [...r, note]);
+    }
+    next.splice(absIdx, end - absIdx);
+    return next.length ? next : [emptyItem()];
+  });
+
+  const save = () => f.guardedSave(dnData.customer, async ({ filled, cleanItems }) => {
+    const payload = {
+      name: dnData.customer, address: dnData.address || "", phone: dnData.phone || "",
+      items: cleanItems, total,
+      _logAdded: filled.filter(it => !it._orig).length, _logDeleted: f.removedOrigItems,
+    };
+    await api.updateDeliveryNote(dnData.id || dnData.dnNo, payload);
+    onSaved({ id: dnData.id || dnData.dnNo, total, items: cleanItems });
+  });
+
+  const cell = (absIdx, field, align) => (
+    <input value={f.items[absIdx][field] ?? ""} onChange={e => f.updateItem(absIdx, field, e.target.value)}
+      style={{ width: "100%", border: `0.5px solid ${C.border}`, borderRadius: 4, background: "white", fontSize: 11.5, padding: "4px 6px", outline: "none", textAlign: align || "left", boxSizing: "border-box" }} />
+  );
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: C.muted, marginBottom: 8 }}>
+        <Save size={12}/> แก้ไขรายการสินค้า — ลูกค้า “{dnData.customer}” <span style={{ color: C.muted }}>(ล็อก · เปลี่ยนที่ระดับ BN)</span>
+      </div>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5, marginBottom: 8 }}>
+        <thead>
+          <tr style={{ background: C.sidebar }}>
+            {["#", "รายการ", "ขนาด", "จำนวน", "หน่วยละ", "จำนวนเงิน", ""].map((h, hi) => (
+              <th key={hi} style={{ padding: "6px 8px", color: "white", fontWeight: 500, textAlign: (hi >= 3 && hi <= 5) ? "right" : "left", fontSize: 10.5, width: hi === 6 ? 34 : undefined }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ it, absIdx }, ri) => (
+            <tr key={absIdx} style={{ background: ri % 2 === 0 ? "white" : "#f5f7ff", borderBottom: `0.5px solid ${C.borderLight}` }}>
+              <td style={{ padding: "4px 6px", color: C.muted, textAlign: "center" }}>{ri + 1}</td>
+              <td style={{ padding: "4px 6px" }}>{cell(absIdx, "desc", "left")}</td>
+              <td style={{ padding: "4px 6px", width: 74 }}>{cell(absIdx, "desc2", "left")}</td>
+              <td style={{ padding: "4px 6px", width: 72 }}>{cell(absIdx, "qty", "right")}</td>
+              <td style={{ padding: "4px 6px", width: 86 }}>{cell(absIdx, "unitPrice", "right")}</td>
+              <td style={{ padding: "4px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{Number(it.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              <td style={{ padding: "4px 6px", textAlign: "center" }}>
+                <button aria-label="ลบแถว" onClick={() => removeAt(absIdx)} style={{ border: "none", background: "none", cursor: "pointer", color: C.danger, display: "inline-flex" }}><Trash2 size={13}/></button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr style={{ background: "#eef2ff", borderTop: `1px solid ${C.border}` }}>
+            <td colSpan={5} style={{ padding: "7px 8px", textAlign: "right", fontWeight: 500 }}>ยอดรวม</td>
+            <td style={{ padding: "7px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: C.accent }}>{total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+      {f.error && <div style={{ color: C.danger, fontSize: 11.5, marginBottom: 6 }}>{f.error}</div>}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <button onClick={f.addRow} disabled={f.items.length >= DN_MAX_ROWS}
+          style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, color: C.accent, border: `0.5px dashed ${C.accent}`, borderRadius: 4, padding: "5px 10px", background: "none", cursor: f.items.length >= DN_MAX_ROWS ? "not-allowed" : "pointer", opacity: f.items.length >= DN_MAX_ROWS ? 0.5 : 1 }}>
+          <Plus size={12}/> เพิ่มรายการ
+        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Btn small onClick={onCancel} disabled={f.saving}>ยกเลิก</Btn>
+          <Btn small primary onClick={save} disabled={f.saving}>{f.saving ? <Loader size={12}/> : <Check size={12}/>} บันทึก</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BNBatchCreateView({ onBack, products, setProducts, sizes }) {
   const now = new Date();
   const [month, setMonth]         = useState(now.getMonth() + 1);
   const [year, setYear]           = useState(now.getFullYear());
@@ -2049,8 +2269,20 @@ function BNBatchCreateView({ onBack }) {
   const [results, setResults]     = useState([]); // [{ customer, bnNo, success, error }]
   const [nextBnNo, setNextBnNo]   = useState(null);
   const [expandedDn, setExpandedDn] = useState(null); // #236 inline DN detail
+  const [editingDn, setEditingDn]   = useState(null); // #301 inline DN edit (dnNo currently being edited)
+  const [pdfGenDn, setPdfGenDn]     = useState(null); // #309 DN whose landscape PDF is regenerating after an inline edit
   const [dnCache, setDnCache]       = useState({});
   const [dnLoading, setDnLoading]   = useState(null);
+  const [editMode, setEditMode]     = useState(false); // #252d — edit mode toggle
+  const [showConfirm, setShowConfirm] = useState(false); // #252e — confirm dialog
+  const [batchPrinting, setBatchPrinting] = useState(false); // #256 — batch print
+  const [batchPrintFormat, setBatchPrintFormat] = useState("portrait"); // #256
+  const [printMode, setPrintMode] = useState(false); // #259 — all-done print selection toggle
+  const [printSel, setPrintSel] = useState(new Set()); // #259 — selected BN numbers for printing
+  const [configCustomers, setConfigCustomers] = useState([]); // #271
+
+  // #271 — fetch Config_Customers once on mount
+  useEffect(() => { api.getCustomers().then(list => setConfigCustomers(list || [])).catch(() => {}); }, []);
 
   const handleSearch = async (mArg = month, yArg = year) => {
     setLoading(true); setError("");
@@ -2058,18 +2290,35 @@ function BNBatchCreateView({ onBack }) {
     const days = new Date(yArg, mArg, 0).getDate();
     try {
       const data = await api.searchDeliveryNotes(`${yArg}-${m}-01`, `${yArg}-${m}-${String(days).padStart(2, "0")}`);
-      const mapped = (Array.isArray(data) ? data : []).map(cust => ({
-        ...cust,
-        checked: !cust.generated, // pre-check unbilled customers
-        invoices: (cust.invoices || []).map(inv => ({ ...inv, checked: !inv.bnNo })),
-      }));
+      const mapped = (Array.isArray(data) ? data : []).map(cust => {
+        // #271 — enrich with Config_Customers address/phone (source of truth)
+        const cfg = configCustomers.find(c => c.name === cust.customer);
+        return {
+          ...cust,
+          checked: !cust.generated, // pre-check unbilled customers
+          invoices: (cust.invoices || []).map(inv => ({ ...inv, checked: !inv.bnNo })),
+          address: cfg ? cfg.address || "" : "",
+          phone: cfg ? cfg.phone || "" : "",
+        };
+      });
       setCustomers(mapped);
       setSearched(true);
       setResults([]);
+      setExpandedDn(null); setDnCache({}); // reset DN cache on new search
       // expand all by default
       const exp = {};
       mapped.forEach(c => { if (!c.generated) exp[c.customer] = true; });
       setExpanded(exp);
+      // #251 — batch-fetch all DN details in background (instant expand later)
+      const allDnNos = mapped.flatMap(c => (c.invoices || []).map(inv => inv.no)).filter(Boolean);
+      if (allDnNos.length > 0) {
+        Promise.all(allDnNos.map(no => api.getDNDetail(no).then(d => ({ no, d })).catch(() => null)))
+          .then(results => {
+            const cache = {};
+            results.forEach(r => { if (r) cache[r.no] = r.d; });
+            setDnCache(cache);
+          });
+      }
       // fetch next BN number
       try {
         const hist = await api.getBillingNotes();
@@ -2078,8 +2327,8 @@ function BNBatchCreateView({ onBack }) {
           const lastNum = parseInt(parts[parts.length - 1], 10) || 0;
           const yy = new Date().getFullYear().toString().slice(-2);
           setNextBnNo(`${yy}-BN-${String(lastNum + 1).padStart(6, "0")}`);
-        } else { setNextBnNo("26-BN-000001"); }
-      } catch (_) { setNextBnNo("26-BN-000001"); }
+        } else { setNextBnNo(`${new Date().getFullYear().toString().slice(-2)}-BN-000001`); }
+      } catch (_) { setNextBnNo(`${new Date().getFullYear().toString().slice(-2)}-BN-000001`); }
     } catch (err) { setError(err.message); }
     finally { setLoading(false); }
   };
@@ -2111,17 +2360,34 @@ function BNBatchCreateView({ onBack }) {
     setCustomers(prev => prev.map(c => c.generated ? c : { ...c, checked: !allChecked, invoices: c.invoices.map(inv => inv.bnNo ? inv : { ...inv, checked: !allChecked }) }));
   };
 
-  // #236 — inline DN detail expand
+  // #236 — inline DN detail expand (#251: uses pre-cached data, fallback fetch if not yet cached)
   const toggleDnDetail = async (dnNo) => {
+    setEditingDn(null); // #301 — leaving/switching a row cancels any in-progress inline edit
     if (expandedDn === dnNo) { setExpandedDn(null); return; }
     setExpandedDn(dnNo);
-    if (dnCache[dnNo]) return;
+    if (dnCache[dnNo]) return; // already cached from batch fetch
     setDnLoading(dnNo);
     try {
       const d = await api.getDNDetail(dnNo);
       setDnCache(prev => ({ ...prev, [dnNo]: d }));
     } catch (_) {}
     finally { setDnLoading(null); }
+  };
+
+  // #309 — open the DN's landscape PDF; if an inline edit cleared it, regenerate the fresh one first (mirrors the DN page)
+  const openOrGenDnPdf = async (dnNo) => {
+    const openUrl = (url) => { const a = document.createElement("a"); a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer"; document.body.appendChild(a); a.click(); document.body.removeChild(a); };
+    const cur = dnCache[dnNo];
+    if (cur && cur.pdfUrl) { openUrl(cur.pdfUrl); return; }
+    setPdfGenDn(dnNo);
+    try {
+      const res = await api.generateDeliveryNoteLandscapePDF(dnNo);
+      if (res && res.pdfUrl) {
+        setDnCache(prev => ({ ...prev, [dnNo]: { ...(prev[dnNo] || {}), pdfUrl: res.pdfUrl } }));
+        openUrl(res.pdfUrl);
+      }
+    } catch (e) { alert("สร้าง PDF ไม่สำเร็จ: " + e.message); }
+    finally { setPdfGenDn(null); }
   };
 
   const incrementBn = (bnNo) => {
@@ -2148,7 +2414,8 @@ function BNBatchCreateView({ onBack }) {
       const invoices = checkedDNs.map(inv => ({ dnNo: inv.no, dnDate: inv.date, amount: inv.total }));
       try {
         const result = await api.confirmBN(cust.customer, currentBn, invoices, today, cust.address || "", cust.phone || "");
-        batchResults.push({ customer: cust.customer, bnNo: result.bnNo, pdfUrl: result.pdfUrl, success: true, count: checkedDNs.length });
+        const custAmount = checkedDNs.reduce((s, inv) => s + (parseFloat(inv.total) || 0), 0);
+        batchResults.push({ customer: cust.customer, bnNo: result.bnNo, pdfUrl: result.pdfUrl, success: true, count: checkedDNs.length, amount: custAmount });
         currentBn = incrementBn(currentBn);
       } catch (err) {
         batchResults.push({ customer: cust.customer, success: false, error: err.message });
@@ -2166,8 +2433,9 @@ function BNBatchCreateView({ onBack }) {
     const successCount = results.filter(r => r.success).length;
     const failCount = results.filter(r => !r.success).length;
     const totalDNsCreated = results.filter(r => r.success).reduce((s, r) => s + (r.count || 0), 0);
+    const totalAmount = results.filter(r => r.success).reduce((s, r) => s + (r.amount || 0), 0);
     return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+      <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
         <div style={{ flexShrink: 0, paddingBottom: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
             <button onClick={onBack} style={{ background: "none", border: `0.5px solid ${C.border}`, borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", color: C.muted, display: "flex", alignItems: "center", gap: 4 }}>
@@ -2176,12 +2444,14 @@ function BNBatchCreateView({ onBack }) {
             <span style={{ fontSize: 15, fontWeight: 500 }}>ผลการสร้างใบวางบิล</span>
           </div>
 
-          {/* summary banner */}
+          {/* #257 — summary banner with BN count, DN count, total amount */}
           <div style={{ background: failCount === 0 ? C.successBg : C.warningBg, border: `1px solid ${failCount === 0 ? C.success : C.warning}`, borderRadius: 8, padding: "14px 18px", marginBottom: 12 }}>
             <div style={{ fontSize: 14, fontWeight: 600, color: failCount === 0 ? C.success : C.warning }}>
               {failCount === 0 ? "สร้างใบวางบิลสำเร็จทั้งหมด" : `สำเร็จ ${successCount} ราย · ไม่สำเร็จ ${failCount} ราย`}
             </div>
-            <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>รวม {totalDNsCreated} ฉบับ DN</div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
+              สร้าง {successCount} ใบวางบิล · รวม {totalDNsCreated} ฉบับ DN · ยอดรวม {totalAmount.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
+            </div>
           </div>
         </div>
 
@@ -2217,8 +2487,40 @@ function BNBatchCreateView({ onBack }) {
           </table>
         </div>
 
-        {/* footer */}
-        <div style={{ flexShrink: 0, padding: "14px 0", display: "flex", gap: 10, justifyContent: "flex-end" }}>
+        {/* #256 — footer with batch print */}
+        <div style={{ flexShrink: 0, padding: "14px 0", display: "flex", alignItems: "center", gap: 10 }}>
+          {/* print format toggle + print button */}
+          {successCount > 0 && (
+            <>
+              <div style={{ display: "inline-flex", gap: 2 }}>
+                {[["portrait", "PDF"], ["landscape", "แบบพิมพ์"]].map(([v, label]) => (
+                  <button key={v} onClick={() => setBatchPrintFormat(v)} disabled={batchPrinting}
+                    style={{ fontSize: 11, padding: "3px 9px", borderRadius: 4, cursor: batchPrinting ? "default" : "pointer", display: "inline-flex", alignItems: "center", gap: 3,
+                      background: batchPrintFormat === v ? C.accent : "white", color: batchPrintFormat === v ? "white" : C.muted,
+                      border: `0.5px solid ${batchPrintFormat === v ? C.accent : C.border}` }}>
+                    {v === "portrait" ? <FileText size={10}/> : <Printer size={10}/>} {label}
+                  </button>
+                ))}
+              </div>
+              <Btn small onClick={async () => {
+                const bnNos = results.filter(r => r.success).map(r => r.bnNo).filter(Boolean);
+                if (!bnNos.length) return;
+                setBatchPrinting(true);
+                try {
+                  const res = await api.printCombinedBillingNotes(bnNos, batchPrintFormat);
+                  if (res && res.url) {
+                    const a = document.createElement("a"); a.href = res.url; a.target = "_blank"; a.rel = "noopener noreferrer";
+                    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                  }
+                  try { await api.markBillingNotesPrinted(bnNos); } catch (_) {}
+                } catch (err) { alert("พิมพ์ไม่สำเร็จ: " + err.message); }
+                finally { setBatchPrinting(false); }
+              }} disabled={batchPrinting}>
+                {batchPrinting ? <Loader size={13}/> : <Printer size={13}/>} {batchPrinting ? "กำลังสร้าง..." : `พิมพ์ทั้งหมด (${successCount})`}
+              </Btn>
+            </>
+          )}
+          <span style={{ marginLeft: "auto" }}/>
           <Btn small onClick={() => { setResults([]); handleSearch(month, year, true); }}>
             <RefreshCw size={13}/> สร้างเพิ่ม
           </Btn>
@@ -2226,20 +2528,69 @@ function BNBatchCreateView({ onBack }) {
             กลับหน้ารายการ
           </Btn>
         </div>
+
+        {/* #261 — batch print overlay (duplicated here because result view has early return) */}
+        {batchPrinting && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(255,255,255,0.92)", zIndex: 100, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14 }}>
+            <style>{`@keyframes spin { to { transform: rotate(360deg); }}`}</style>
+            <Loader size={28} style={{ color: C.accent, animation: "spin 1s linear infinite" }}/>
+            <div style={{ fontSize: 15, fontWeight: 500 }}>กำลังสร้าง PDF สำหรับพิมพ์...</div>
+            <div style={{ fontSize: 13, color: C.muted }}>{printSel.size || results.filter(r => r.success).length} ใบวางบิล</div>
+          </div>
+        )}
       </div>
     );
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
-      {/* top bar */}
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+      {/* #252a — top bar + summary cards */}
       <div style={{ flexShrink: 0, paddingBottom: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
           <button onClick={onBack} style={{ background: "none", border: `0.5px solid ${C.border}`, borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", color: C.muted, display: "flex", alignItems: "center", gap: 4 }}>
             <ChevronLeft size={13}/> กลับ
           </button>
           <span style={{ fontSize: 15, fontWeight: 500 }}>สร้างใบวางบิลแบบรวม</span>
         </div>
+
+        {/* summary cards */}
+        {/* #252a summary cards — #252d: update live in edit mode */}
+        {searched && pendingCustomers.length > 0 && (() => {
+          const totalCust = pendingCustomers.length;
+          const selCust = selectedCustomers.length;
+          const allDnCount = pendingCustomers.reduce((s, c) => s + c.invoices.filter(inv => !inv.bnNo).length, 0);
+          const selDnCount = totalDNs;
+          const allTotal = pendingCustomers.reduce((s, c) => s + c.invoices.filter(inv => !inv.bnNo).reduce((t, inv) => t + (parseFloat(inv.total) || 0), 0), 0);
+          const selTotal = grandTotal;
+          const hasExclusions = editMode && (selCust < totalCust || selDnCount < allDnCount);
+          return (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+            <div style={{ background: C.cardBg, border: `0.5px solid ${hasExclusions ? C.accent : C.border}`, borderRadius: 10, padding: "14px 20px" }}>
+              <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>ลูกค้า</div>
+              {hasExclusions && selCust < totalCust
+                ? <div style={{ fontSize: 26, fontWeight: 500 }}>{selCust}<span style={{ fontSize: 16, color: C.muted, fontWeight: 400 }}>/{totalCust}</span> <span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>ราย</span></div>
+                : <div style={{ fontSize: 26, fontWeight: 500 }}>{totalCust} <span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>ราย</span></div>
+              }
+            </div>
+            <div style={{ background: C.cardBg, border: `0.5px solid ${hasExclusions ? C.accent : C.border}`, borderRadius: 10, padding: "14px 20px" }}>
+              <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>ใบส่งของ</div>
+              {hasExclusions && selDnCount < allDnCount
+                ? <div style={{ fontSize: 26, fontWeight: 500 }}>{selDnCount}<span style={{ fontSize: 16, color: C.muted, fontWeight: 400 }}>/{allDnCount}</span> <span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>ฉบับ</span></div>
+                : <div style={{ fontSize: 26, fontWeight: 500 }}>{allDnCount} <span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>ฉบับ</span></div>
+              }
+            </div>
+            <div style={{ background: C.cardBg, border: `0.5px solid ${hasExclusions ? C.accent : C.border}`, borderRadius: 10, padding: "14px 20px" }}>
+              <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>ยอดรวม</div>
+              {hasExclusions && selTotal < allTotal
+                ? <div><div style={{ fontSize: 26, fontWeight: 500, color: C.accent }}>{selTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div><div style={{ fontSize: 11, color: C.muted, textDecoration: "line-through" }}>{allTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>
+                : <div style={{ fontSize: 26, fontWeight: 500, color: C.accent }}>{allTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+              }
+            </div>
+          </div>
+          );
+        })()}
+
+        {/* action bar */}
         <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", display: "flex", alignItems: "center", gap: 8 }}>
           <DateRangePicker monthOnly startDate={`${year}-${String(month).padStart(2,"0")}-01`} endDate=""
             onApply={(s) => { if (!s) return; const d = new Date(s); setMonth(d.getMonth()+1); setYear(d.getFullYear()); handleSearch(d.getMonth()+1, d.getFullYear()); }} />
@@ -2247,9 +2598,16 @@ function BNBatchCreateView({ onBack }) {
             {loading ? <Loader size={13}/> : <RefreshCw size={13}/>} รีเฟรช
           </Btn>
           {searched && pendingCustomers.length > 0 && (
-            <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted }}>
-              {pendingCustomers.length} รายที่ยังไม่สร้าง
-            </span>
+            <>
+              <span style={{ marginLeft: "auto" }}/>
+              {/* #252d — edit mode toggle */}
+              <Btn small onClick={() => setEditMode(!editMode)} style={editMode ? { background: "#eef2ff", border: `1px solid ${C.accent}`, color: C.accent } : {}}>
+                <Pencil size={12}/> {editMode ? "เสร็จสิ้น" : "แก้ไขรายการ"}
+              </Btn>
+              <Btn small primary onClick={() => setShowConfirm(true)} disabled={creating || selectedCustomers.length === 0}>
+                <Check size={13}/> {editMode ? `สร้าง ${selectedCustomers.length} ราย` : `สร้างทั้งหมด (${pendingCustomers.length} ราย)`}
+              </Btn>
+            </>
           )}
         </div>
         {error && <div style={{ marginTop: 8 }}><ErrorBox msg={error} onRetry={() => handleSearch()} /></div>}
@@ -2257,39 +2615,157 @@ function BNBatchCreateView({ onBack }) {
 
       {/* main content — scrollable checklist */}
       {loading && <Spinner text="กำลังดึงข้อมูลใบส่งของ..." />}
-      {!loading && searched && pendingCustomers.length === 0 && (
-        <div style={{ textAlign: "center", padding: 40, color: C.muted, fontSize: 13 }}>ไม่มีใบส่งของที่ยังไม่ได้วางบิลในเดือนนี้</div>
+      {!loading && searched && pendingCustomers.length === 0 && customers.length === 0 && (
+        <div style={{ textAlign: "center", padding: 40, color: C.muted, fontSize: 13 }}>ไม่มีใบส่งของในเดือนนี้</div>
       )}
-      {!loading && searched && pendingCustomers.length > 0 && (
-        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingBottom: 80 }}>
-          {/* select all */}
-          <div style={{ padding: "8px 14px", background: "#fafafa", border: `0.5px solid ${C.border}`, borderRadius: "8px 8px 0 0", display: "flex", alignItems: "center", gap: 8 }}>
-            <span onClick={selectAll} style={{ cursor: "pointer", color: C.accent, fontSize: 12, fontWeight: 500 }}>
-              {pendingCustomers.every(c => c.checked) ? <CheckCircle size={14}/> : <Square size={14}/>}
-            </span>
-            <span style={{ fontSize: 12, color: C.muted }}>เลือกทั้งหมด ({pendingCustomers.length} ราย)</span>
-          </div>
+      {/* #253 — all customers already billed: show created BNs */}
+      {!loading && searched && pendingCustomers.length === 0 && customers.length > 0 && (() => {
+        const generatedCustomers = customers.filter(c => c.generated);
+        const allBnNos = [...new Set(generatedCustomers.flatMap(c => (c.invoices || []).map(inv => inv.bnNo).filter(Boolean)))];
+        const allDnCount = generatedCustomers.reduce((s, c) => s + (c.invoices || []).length, 0);
+        const allAmount = generatedCustomers.reduce((s, c) => s + (c.invoices || []).reduce((t, inv) => t + (parseFloat(inv.total) || 0), 0), 0);
+        const enterPrintMode = () => { setPrintSel(new Set(allBnNos)); setPrintMode(true); };
+        const exitPrintMode = () => { setPrintMode(false); };
+        const togglePrintSel = (bn) => setPrintSel(prev => { const s = new Set(prev); s.has(bn) ? s.delete(bn) : s.add(bn); return s; });
+        const togglePrintAll = () => setPrintSel(prev => prev.size === allBnNos.length ? new Set() : new Set(allBnNos));
+        return (
+          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+            <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+            {/* summary cards — all done */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+              <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 10, padding: "14px 20px" }}>
+                <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>ลูกค้า</div>
+                <div style={{ fontSize: 26, fontWeight: 500 }}>{generatedCustomers.length} <span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>ราย</span></div>
+              </div>
+              <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 10, padding: "14px 20px" }}>
+                <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>ใบวางบิล</div>
+                <div style={{ fontSize: 26, fontWeight: 500 }}>{allBnNos.length} <span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>ฉบับ</span></div>
+              </div>
+              <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 10, padding: "14px 20px" }}>
+                <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>ยอดรวม</div>
+                <div style={{ fontSize: 26, fontWeight: 500, color: C.accent }}>{allAmount.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+              </div>
+            </div>
 
-          {/* customer list */}
-          <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderTop: "none", borderRadius: "0 0 8px 8px", overflow: "hidden" }}>
+            {/* done banner + print button */}
+            <div style={{ background: C.successBg, border: `1px solid ${C.success}`, borderRadius: 8, padding: "12px 16px", marginBottom: 12, fontSize: 13, color: C.success, fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span><CheckCircle size={14} style={{ verticalAlign: "middle", marginRight: 6 }}/>วางบิลครบทุกรายแล้ว — {allBnNos.length} ใบวางบิล รวม {allDnCount} ฉบับ DN</span>
+              {!printMode && (
+                <Btn small onClick={enterPrintMode} style={{ flexShrink: 0 }}>
+                  <Printer size={13}/> พิมพ์
+                </Btn>
+              )}
+            </div>
+
+            {/* generated customer list */}
+            <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: "#f0f4f8" }}>
+                    {printMode && (
+                      <th style={{ padding: "8px 10px", width: 36, textAlign: "center" }}>
+                        <input type="checkbox" checked={printSel.size === allBnNos.length} onChange={togglePrintAll} style={{ cursor: "pointer" }} />
+                      </th>
+                    )}
+                    <th style={{ padding: "8px 16px", textAlign: "left", fontSize: 11, fontWeight: 500, color: C.muted }}>ลูกค้า</th>
+                    <th style={{ padding: "8px 14px", textAlign: "left", fontSize: 11, fontWeight: 500, color: C.muted }}>เลขที่ BN</th>
+                    <th style={{ padding: "8px 14px", textAlign: "center", fontSize: 11, fontWeight: 500, color: C.muted }}>จำนวน DN</th>
+                    <th style={{ padding: "8px 16px", textAlign: "right", fontSize: 11, fontWeight: 500, color: C.muted }}>ยอดรวม</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {generatedCustomers.map((cust, i) => {
+                    const bnNo = (cust.invoices || []).find(inv => inv.bnNo)?.bnNo || "—";
+                    const dnCount = (cust.invoices || []).length;
+                    const amount = (cust.invoices || []).reduce((s, inv) => s + (parseFloat(inv.total) || 0), 0);
+                    const isSelected = printMode && printSel.has(bnNo);
+                    return (
+                      <tr key={i} style={{ borderBottom: `0.5px solid ${C.borderLight}`, opacity: printMode && !isSelected ? 0.4 : 1, transition: "opacity 0.15s" }}>
+                        {printMode && (
+                          <td style={{ padding: "8px 10px", textAlign: "center" }}>
+                            <input type="checkbox" checked={isSelected} onChange={() => togglePrintSel(bnNo)} style={{ cursor: "pointer" }} />
+                          </td>
+                        )}
+                        <td style={{ padding: "8px 16px", fontWeight: 500 }}>{cust.customer}</td>
+                        <td style={{ padding: "8px 14px", color: C.accent }}>{bnNo}</td>
+                        <td style={{ padding: "8px 14px", textAlign: "center", color: C.muted }}>{dnCount}</td>
+                        <td style={{ padding: "8px 16px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{amount.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            </div>
+
+            {/* #259 — print mode footer */}
+            {printMode && (
+              <div style={{ flexShrink: 0, padding: "14px 0", display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ display: "inline-flex", gap: 2 }}>
+                  {[["portrait", "PDF"], ["landscape", "แบบพิมพ์"]].map(([v, label]) => (
+                    <button key={v} onClick={() => setBatchPrintFormat(v)} disabled={batchPrinting}
+                      style={{ fontSize: 11, padding: "3px 9px", borderRadius: 4, cursor: batchPrinting ? "default" : "pointer", display: "inline-flex", alignItems: "center", gap: 3,
+                        background: batchPrintFormat === v ? C.accent : "white", color: batchPrintFormat === v ? "white" : C.muted,
+                        border: `0.5px solid ${batchPrintFormat === v ? C.accent : C.border}` }}>
+                      {v === "portrait" ? <FileText size={10}/> : <Printer size={10}/>} {label}
+                    </button>
+                  ))}
+                </div>
+                <Btn small primary onClick={async () => {
+                  const bnNos = [...printSel].filter(Boolean);
+                  if (!bnNos.length) return;
+                  setBatchPrinting(true);
+                  try {
+                    const res = await api.printCombinedBillingNotes(bnNos, batchPrintFormat);
+                    if (res && res.url) {
+                      const a = document.createElement("a"); a.href = res.url; a.target = "_blank"; a.rel = "noopener noreferrer";
+                      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                    }
+                    try { await api.markBillingNotesPrinted(bnNos); } catch (_) {}
+                    exitPrintMode();
+                  } catch (err) { alert("พิมพ์ไม่สำเร็จ: " + err.message); }
+                  finally { setBatchPrinting(false); }
+                }} disabled={batchPrinting || printSel.size === 0}>
+                  {batchPrinting ? <Loader size={13}/> : <Printer size={13}/>} {batchPrinting ? "กำลังสร้าง..." : `พิมพ์ที่เลือก (${printSel.size})`}
+                </Btn>
+                <Btn small onClick={exitPrintMode} disabled={batchPrinting}>ยกเลิก</Btn>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+      {!loading && searched && pendingCustomers.length > 0 && (
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+          {/* #252b/#252d — customer list: clean review mode, checkboxes in edit mode */}
+          <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>
+            {/* #252d — select all row (edit mode only) */}
+            {editMode && (
+              <div style={{ padding: "8px 16px", background: "#f8f9fb", borderBottom: `0.5px solid ${C.borderLight}`, display: "flex", alignItems: "center", gap: 10 }}>
+                <input type="checkbox" checked={pendingCustomers.every(c => c.checked)} onChange={selectAll} style={{ cursor: "pointer" }} />
+                <span style={{ fontSize: 12, color: C.muted }}>เลือกทั้งหมด ({pendingCustomers.length} ราย)</span>
+                {selectedCustomers.length < pendingCustomers.length && (
+                  <span style={{ fontSize: 11, color: "#e67700", marginLeft: "auto" }}>ข้าม {pendingCustomers.length - selectedCustomers.length} ราย</span>
+                )}
+              </div>
+            )}
             {customers.map((cust, ci) => {
               if (cust.generated) return null; // skip already-created
               const unbilled = cust.invoices.filter(inv => !inv.bnNo);
-              const custTotal = unbilled.filter(inv => inv.checked).reduce((s, inv) => s + (parseFloat(inv.total) || 0), 0);
+              const custTotal = unbilled.reduce((s, inv) => s + (parseFloat(inv.total) || 0), 0);
               const isExpanded = expanded[cust.customer];
+              const excluded = editMode && !cust.checked;
               return (
-                <div key={ci} style={{ borderBottom: `0.5px solid ${C.borderLight}` }}>
+                <div key={ci} style={{ borderBottom: `0.5px solid ${C.borderLight}`, opacity: excluded ? 0.4 : 1, transition: "opacity 0.15s" }}>
                   {/* customer header */}
-                  <div style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, cursor: "pointer", background: cust.checked ? "#f8faff" : "white" }}
+                  <div style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}
                     onClick={() => toggleExpand(cust.customer)}>
-                    <span onClick={e => { e.stopPropagation(); toggleCustomer(ci); }} style={{ cursor: "pointer", color: cust.checked ? C.accent : C.muted, flexShrink: 0 }}>
-                      {cust.checked ? <CheckCircle size={16}/> : <Square size={16}/>}
-                    </span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 500 }}>{cust.customer}</div>
-                      <div style={{ fontSize: 11, color: C.muted }}>{unbilled.length} ฉบับ · ฿{custTotal.toLocaleString()}</div>
-                    </div>
-                    <ChevronDown size={14} style={{ color: C.muted, transform: isExpanded ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s" }}/>
+                    {editMode && (
+                      <input type="checkbox" checked={cust.checked} onChange={() => toggleCustomer(ci)} onClick={e => e.stopPropagation()} style={{ cursor: "pointer", flexShrink: 0 }} />
+                    )}
+                    <ChevronDown size={14} style={{ color: C.muted, flexShrink: 0, transform: isExpanded ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s" }}/>
+                    <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 500, textDecoration: excluded ? "line-through" : "none" }}>{cust.customer}</div>
+                    <span style={{ fontSize: 12, color: C.muted, whiteSpace: "nowrap" }}>{unbilled.length} ฉบับ</span>
+                    <span style={{ fontSize: 12, fontWeight: 500, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{custTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
                   </div>
 
                   {/* DN list (expanded) */}
@@ -2297,18 +2773,18 @@ function BNBatchCreateView({ onBack }) {
                     <div style={{ background: "#fafbfd", borderTop: `0.5px solid ${C.borderLight}` }}>
                       {/* already-billed DNs */}
                       {cust.invoices.filter(inv => inv.bnNo).length > 0 && (
-                        <div style={{ padding: "4px 14px 4px 44px", fontSize: 10, color: C.muted, background: "#f5f5f5" }}>
+                        <div style={{ padding: "4px 16px 4px 42px", fontSize: 10, color: C.muted, background: "#f5f5f5" }}>
                           วางบิลแล้ว: {cust.invoices.filter(inv => inv.bnNo).map(inv => inv.no).join(", ")}
                         </div>
                       )}
-                      {/* unbilled DNs with checkboxes */}
+                      {/* unbilled DNs — #252b/#252d: checkbox column in edit mode */}
                       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                         <thead>
                           <tr style={{ background: "#f0f4f8" }}>
-                            <th style={{ width: 44, padding: "6px 14px" }}></th>
-                            <th style={{ padding: "6px 14px", textAlign: "left", fontSize: 11, color: C.muted, fontWeight: 500 }}>เลขที่ DN</th>
+                            {editMode && <th style={{ width: 36, padding: "6px 10px" }}></th>}
+                            <th style={{ padding: editMode ? "6px 14px" : "6px 16px 6px 42px", textAlign: "left", fontSize: 11, color: C.muted, fontWeight: 500 }}>เลขที่ DN</th>
                             <th style={{ padding: "6px 14px", textAlign: "left", fontSize: 11, color: C.muted, fontWeight: 500 }}>วันที่</th>
-                            <th style={{ padding: "6px 14px", textAlign: "right", fontSize: 11, color: C.muted, fontWeight: 500 }}>รวมเงิน</th>
+                            <th style={{ padding: "6px 16px", textAlign: "right", fontSize: 11, color: C.muted, fontWeight: 500 }}>รวมเงิน</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -2316,27 +2792,31 @@ function BNBatchCreateView({ onBack }) {
                             const origIdx = cust.invoices.indexOf(inv);
                             const isDnExp = expandedDn === inv.no;
                             const dnData = dnCache[inv.no] || null;
+                            const dnItemCount = dnData ? (dnData.items||[]).filter(it => it.desc||it.qty||it.amount).length : null;
+                            const dnExcluded = editMode && !inv.checked;
                             return (
                               <React.Fragment key={di}>
-                                <tr style={{ borderBottom: isDnExp ? "none" : `0.5px solid ${C.borderLight}`, cursor: "pointer", background: isDnExp ? "#f0f6ff" : "white" }}
+                                <tr style={{ borderBottom: isDnExp ? "none" : `0.5px solid ${C.borderLight}`, cursor: "pointer", background: isDnExp ? "#f0f6ff" : "white", opacity: dnExcluded ? 0.4 : 1, transition: "opacity 0.15s" }}
                                   onClick={() => toggleDnDetail(inv.no)}>
-                                  <td style={{ padding: "6px 14px", textAlign: "center" }} onClick={e => e.stopPropagation()}>
-                                    <span onClick={() => toggleDN(ci, origIdx)} style={{ cursor: "pointer", color: inv.checked ? C.accent : C.muted }}>
-                                      {inv.checked ? <Check size={14}/> : <Square size={14}/>}
-                                    </span>
+                                  {editMode && (
+                                    <td style={{ padding: "6px 10px", textAlign: "center" }} onClick={e => e.stopPropagation()}>
+                                      <input type="checkbox" checked={inv.checked} onChange={() => toggleDN(ci, origIdx)} style={{ cursor: "pointer" }} />
+                                    </td>
+                                  )}
+                                  <td style={{ padding: editMode ? "6px 14px" : "6px 16px 6px 42px", color: C.accent, fontWeight: 500, textDecoration: dnExcluded ? "line-through" : "none" }}>
+                                    <ChevronDown size={11} style={{ verticalAlign: "middle", marginRight: 4, transform: isDnExp ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s" }}/>{inv.no}
+                                    {!isDnExp && dnItemCount != null && <span style={{ fontSize: 10.5, color: C.muted, fontWeight: 400, marginLeft: 8 }}>สินค้า {dnItemCount} รายการ</span>}
+                                    {isDnExp && dnItemCount != null && <span style={{ fontSize: 10.5, color: C.muted, fontWeight: 400, marginLeft: 8 }}>{dnItemCount} รายการ ▼</span>}
                                   </td>
-                                  <td style={{ padding: "6px 14px", color: C.accent, fontWeight: 500 }}>
-                                    <ChevronDown size={11} style={{ verticalAlign: "middle", marginRight: 3, transform: isDnExp ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s" }}/>{inv.no}
-                                  </td>
-                                  <td style={{ padding: "6px 14px", color: C.muted }}>{inv.date}</td>
-                                  <td style={{ padding: "6px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>฿{(parseFloat(inv.total) || 0).toLocaleString()}</td>
+                                  <td style={{ padding: "6px 14px", color: C.muted }}>{fmtDateThai(inv.date)}</td>
+                                  <td style={{ padding: "6px 16px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{(parseFloat(inv.total) || 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                                 </tr>
                                 {isDnExp && (
                                   <tr>
-                                    <td colSpan={4} style={{ padding: 0, borderBottom: `0.5px solid ${C.borderLight}` }}>
+                                    <td colSpan={editMode ? 4 : 3} style={{ padding: 0, borderBottom: `0.5px solid ${C.borderLight}` }}>
                                       <div style={{ background: "#f8faff", padding: "10px 18px 14px" }}>
                                         {dnLoading === inv.no && <Spinner />}
-                                        {dnData && (
+                                        {dnData && editingDn !== inv.no && (
                                           <>
                                             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5, marginBottom: 8 }}>
                                               <thead>
@@ -2353,27 +2833,39 @@ function BNBatchCreateView({ onBack }) {
                                                     <td style={{ padding: "5px 8px" }}>{it.desc}</td>
                                                     <td style={{ padding: "5px 8px", color: C.muted }}>{it.desc2}</td>
                                                     <td style={{ padding: "5px 8px", textAlign: "right" }}>{it.qty}</td>
-                                                    <td style={{ padding: "5px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{Number(it.unitPrice||0).toLocaleString()}</td>
-                                                    <td style={{ padding: "5px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{Number(it.amount||0).toLocaleString()}</td>
+                                                    <td style={{ padding: "5px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{Number(it.unitPrice||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                                                    <td style={{ padding: "5px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{Number(it.amount||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                                                   </tr>
                                                 ))}
                                               </tbody>
                                               <tfoot>
                                                 <tr style={{ background: "#eef2ff", borderTop: `1px solid ${C.border}` }}>
                                                   <td colSpan={5} style={{ padding: "7px 8px", textAlign: "right", fontWeight: 500 }}>ยอดรวม</td>
-                                                  <td style={{ padding: "7px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: C.accent }}>฿{(dnData.total||0).toLocaleString()}</td>
+                                                  <td style={{ padding: "7px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: C.accent }}>{(dnData.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                                                 </tr>
                                               </tfoot>
                                             </table>
-                                            {dnData.pdfUrl && (
-                                              <div style={{ textAlign: "right" }}>
-                                                <a href={dnData.pdfUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-                                                  style={{ fontSize: 11, color: C.accent, border: `0.5px solid ${C.accent}`, borderRadius: 4, padding: "4px 10px", textDecoration: "none" }}>
-                                                  <FileText size={11} style={{ verticalAlign: "middle", marginRight: 3 }}/> เปิด PDF
-                                                </a>
-                                              </div>
-                                            )}
+                                            <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8 }}>
+                                              <button onClick={e => { e.stopPropagation(); setEditingDn(inv.no); }}
+                                                style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: C.accent, border: `0.5px solid ${C.accent}`, borderRadius: 4, padding: "4px 10px", background: "none", cursor: "pointer" }}>
+                                                <Pencil size={11}/> แก้ไขใบส่งของ
+                                              </button>
+                                              <button onClick={e => { e.stopPropagation(); openOrGenDnPdf(inv.no); }} disabled={pdfGenDn === inv.no}
+                                                style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: C.accent, border: `0.5px solid ${C.accent}`, borderRadius: 4, padding: "4px 10px", background: "none", cursor: pdfGenDn === inv.no ? "wait" : "pointer" }}>
+                                                {pdfGenDn === inv.no ? <Loader size={11}/> : <FileText size={11}/>} {dnData.pdfUrl ? "เปิด PDF" : "สร้าง PDF ใหม่"}
+                                              </button>
+                                            </div>
                                           </>
+                                        )}
+                                        {dnData && editingDn === inv.no && (
+                                          <DNInlineEditor dnData={dnData} products={products} sizes={sizes}
+                                            onCancel={() => setEditingDn(null)}
+                                            onSaved={(u) => {
+                                              setDnCache(prev => ({ ...prev, [inv.no]: { ...(prev[inv.no] || {}), items: u.items, total: u.total, pdfUrl: "", portraitUrl: "" } })); // #309 clear PDF so re-print regenerates the edited DN
+                                              setCustomers(prev => prev.map((c, i) => i === ci ? { ...c, invoices: c.invoices.map(v => v.no === inv.no ? { ...v, total: u.total } : v) } : c));
+                                              delete _dnStore[inv.no];
+                                              setEditingDn(null);
+                                            }} />
                                         )}
                                       </div>
                                     </td>
@@ -2393,9 +2885,37 @@ function BNBatchCreateView({ onBack }) {
         </div>
       )}
 
+      {/* #252e — confirm dialog */}
+      {showConfirm && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 90, display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => setShowConfirm(false)}>
+          <div style={{ background: "white", borderRadius: 12, padding: "28px 32px", width: 420, maxWidth: "90vw", boxShadow: "0 8px 30px rgba(0,0,0,0.15)" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>ยืนยันการสร้างใบวางบิล</div>
+            <div style={{ fontSize: 13, lineHeight: 1.8, marginBottom: 20 }}>
+              <div>ลูกค้า: <strong>{selectedCustomers.length} ราย</strong></div>
+              <div>ใบส่งของ: <strong>{totalDNs} ฉบับ</strong></div>
+              <div>ยอดรวม: <strong style={{ color: C.accent }}>{grandTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</strong></div>
+              {editMode && selectedCustomers.length < pendingCustomers.length && (
+                <div style={{ marginTop: 8, padding: "8px 12px", background: "#fff8e6", borderRadius: 6, fontSize: 12, color: "#946200" }}>
+                  ข้าม {pendingCustomers.length - selectedCustomers.length} ราย: {pendingCustomers.filter(c => !c.checked).map(c => c.customer).join(", ")}
+                </div>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <Btn small onClick={() => setShowConfirm(false)}>ยกเลิก</Btn>
+              <Btn small primary onClick={() => { setShowConfirm(false); handleBatchCreate(); }}>
+                <Check size={13}/> ยืนยัน — สร้าง {selectedCustomers.length} ราย
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* progress overlay */}
       {creating && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(255,255,255,0.92)", zIndex: 100, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14 }}>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); }}`}</style>
           <Loader size={28} style={{ color: C.accent, animation: "spin 1s linear infinite" }}/>
           <div style={{ fontSize: 15, fontWeight: 500 }}>กำลังสร้างใบวางบิล...</div>
           <div style={{ fontSize: 13, color: C.muted }}>{progress.done}/{progress.total} — {progress.current}</div>
@@ -2405,26 +2925,24 @@ function BNBatchCreateView({ onBack }) {
         </div>
       )}
 
-      {/* sticky footer */}
-      {!loading && !creating && searched && selectedCustomers.length > 0 && (
-        <div style={{ position: "fixed", bottom: 0, left: 200, right: 0, background: "white", borderTop: `1px solid ${C.border}`, padding: "12px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", zIndex: 20, boxShadow: "0 -2px 8px rgba(0,0,0,0.06)" }}>
-          <div style={{ fontSize: 13 }}>
-            <span style={{ fontWeight: 500 }}>เลือก {selectedCustomers.length} ราย</span>
-            <span style={{ color: C.muted, marginLeft: 12 }}>{totalDNs} ฉบับ</span>
-            <span style={{ color: C.accent, fontWeight: 600, marginLeft: 12 }}>฿{grandTotal.toLocaleString()}</span>
-          </div>
-          <Btn primary onClick={handleBatchCreate}>
-            <Check size={14}/> สร้างใบวางบิลทั้งหมด ({selectedCustomers.length} ราย)
-          </Btn>
+      {/* #259 — batch print overlay */}
+      {batchPrinting && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(255,255,255,0.92)", zIndex: 100, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14 }}>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); }}`}</style>
+          <Loader size={28} style={{ color: C.accent, animation: "spin 1s linear infinite" }}/>
+          <div style={{ fontSize: 15, fontWeight: 500 }}>กำลังสร้าง PDF สำหรับพิมพ์...</div>
+          <div style={{ fontSize: 13, color: C.muted }}>{printSel.size || results.filter(r => r.success).length} ใบวางบิล</div>
         </div>
       )}
+
+      {/* #252a — sticky footer removed, create button moved to top action bar */}
     </div>
   );
 }
 
 // ── BN Create View ─────────────────────────────────────────
 
-function BNCreateView({ onBack }) {
+function BNCreateView({ onBack, products, sizes }) {
   const now = new Date();
   const [month, setMonth]             = useState(now.getMonth() + 1);
   const [year, setYear]               = useState(now.getFullYear());
@@ -2433,12 +2951,16 @@ function BNCreateView({ onBack }) {
   const [loading, setLoading]         = useState(false);
   const [error, setError]             = useState("");
   const [selectedIdx, setSelectedIdx] = useState(null);
-  const [nextBnNo, setNextBnNo]       = useState("26-BN-000001");
+  const [nextBnNo, setNextBnNo]       = useState(() => `${new Date().getFullYear().toString().slice(-2)}-BN-000001`);
   const [printQueue, setPrintQueue]   = useState([]);
   const [isCreating, setIsCreating]   = useState(false); // #237 — block switching during creation
   const [printFormat, setPrintFormat] = useState("portrait"); // #107 combined-print format
   const [printing, setPrinting]       = useState(false);
   const [dnPopup, setDnPopup]         = useState(null); // #101 DN popup from done-state list
+  const [configCustomers, setConfigCustomers] = useState([]); // #271 — Config_Customers for address/phone
+
+  // #271 — fetch Config_Customers once on mount
+  useEffect(() => { api.getCustomers().then(list => setConfigCustomers(list || [])).catch(() => {}); }, []);
   const [dnCacheBN, setDnCacheBN]     = useState({});
   const [monthCache, setMonthCache]   = useState({}); // #118 per-month search cache (key "y-m")
   const [ptLoading, setPtLoading]     = useState(false); // #134 on-demand PDF for done state
@@ -2494,6 +3016,10 @@ function BNCreateView({ onBack }) {
             createdPdfUrl: rec ? rec.pdfUrl : null };
         }
         return { ...cust, generated: false, createdBnNo: null, createdPdfUrl: null };
+      }).map(cust => {
+        // #271 — enrich with Config_Customers address/phone (source of truth)
+        const cfg = configCustomers.find(c => c.name === cust.customer);
+        return cfg ? { ...cust, address: cfg.address || "", phone: cfg.phone || "" } : cust;
       });
       setCustomers(mapped);
       setSearched(true);
@@ -2588,12 +3114,15 @@ function BNCreateView({ onBack }) {
   const done         = customers.filter(c => c.generated).length;
   const pending      = customers.filter(c => !c.generated).length;
   const selectedCust = selectedIdx !== null ? customers[selectedIdx] : null;
+  // #310a — left-panel summary metric cards (all listed customers)
+  const totalDNs     = customers.reduce((s, c) => s + (c.invoices || []).length, 0);
+  const totalAmount  = customers.reduce((s, c) => s + (c.invoices || []).reduce((t, inv) => t + (parseFloat(inv.total)||0), 0), 0);
 
   // fixed height for split pane — subtract top bars (~160px)
   const PANE_H = "calc(100vh - 175px)";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       {/* top bar */}
       <div style={{ flexShrink: 0, padding: "0 0 10px 0" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
@@ -2626,9 +3155,26 @@ function BNCreateView({ onBack }) {
         <div style={{ textAlign: "center", padding: 40, color: C.muted, fontSize: 13 }}>ไม่พบใบส่งของในเดือนนี้</div>
       )}
       {!loading && searched && customers.length > 0 && (
-        <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 12, flex: 1, minHeight: 0 }}>
-          {/* left: scrollable customer list */}
-          <div style={{ overflowY: "auto", scrollbarGutter: "stable", display: "flex", flexDirection: "column", gap: 6, paddingRight: 2 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 12, flex: 1, minHeight: 0 }}>
+          {/* left: summary metric cards (#310a) + scrollable customer list */}
+          <div style={{ display: "flex", flexDirection: "column", minHeight: 0, gap: 8 }}>
+           {/* #310a — three summary metric cards */}
+           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, flexShrink: 0 }}>
+             <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, padding: "7px 9px" }}>
+               <div style={{ fontSize: 10, color: C.muted }}>ลูกค้า</div>
+               <div style={{ fontSize: 17, fontWeight: 500 }}>{customers.length}</div>
+             </div>
+             <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, padding: "7px 9px" }}>
+               <div style={{ fontSize: 10, color: C.muted }}>ใบส่งของ</div>
+               <div style={{ fontSize: 17, fontWeight: 500 }}>{totalDNs}</div>
+             </div>
+             <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, padding: "7px 9px" }}>
+               <div style={{ fontSize: 10, color: C.muted }}>รวม</div>
+               <div style={{ fontSize: 15, fontWeight: 500, color: C.accent, fontVariantNumeric: "tabular-nums" }}>{totalAmount.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+             </div>
+           </div>
+           {/* scrollable customer list */}
+           <div style={{ overflowY: "auto", scrollbarGutter: "stable", display: "flex", flexDirection: "column", gap: 6, paddingRight: 2, minHeight: 0 }}>
             {customers.map((cust, i) => {
               const total      = cust.invoices.reduce((s, inv) => s + (parseFloat(inv.total)||0), 0);
               const isSelected = selectedIdx === i;
@@ -2647,11 +3193,12 @@ function BNCreateView({ onBack }) {
                   </div>
                   {cust.generated && cust.createdBnNo
                     ? <div style={{ fontSize: 10, color: C.accent }}>{cust.createdBnNo}</div>
-                    : <div style={{ fontSize: 10, color: C.muted }}>{cust.invoices.length} ฉบับ · ฿{total.toLocaleString()}</div>}
+                    : <div style={{ fontSize: 10, color: C.muted }}>{cust.invoices.length} ฉบับ · {total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>}
                 </div>
               );
             })}
-          </div>
+           </div>{/* end scrollable customer list */}
+          </div>{/* end left column (#310a) */}
 
           {/* right: panel (scrolls) + print queue (pinned bottom, #103) */}
           <div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0 }}>
@@ -2663,8 +3210,11 @@ function BNCreateView({ onBack }) {
                 key={selectedCust.customer}
                 cust={selectedCust}
                 nextBnNo={nextBnNo}
+                products={products}
+                sizes={sizes}
                 onConfirm={handleConfirm}
                 onCreatingChange={setIsCreating}
+                onDnEdited={(dnNo, newTotal) => setCustomers(prev => prev.map((c, i) => i === selectedIdx ? { ...c, invoices: (c.invoices || []).map(v => v.no === dnNo ? { ...v, total: newTotal } : v) } : c))}
               />
             )}
             {/* done state — shows BN details + PDF link */}
@@ -2686,7 +3236,7 @@ function BNCreateView({ onBack }) {
                   </div>
                   <div>
                     <div style={{ color: C.muted, fontSize: 11, marginBottom: 2 }}>รวมเงิน</div>
-                    <div style={{ fontWeight: 600, color: C.accent }}>฿{(selectedCust.createdTotal||0).toLocaleString()}</div>
+                    <div style={{ fontWeight: 600, color: C.accent }}>{(selectedCust.createdTotal||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
                   </div>
                   {/* #134 — always show PDF button; generates on-demand if not cached */}
                   <div style={{ alignSelf: "flex-end" }}>
@@ -2706,8 +3256,8 @@ function BNCreateView({ onBack }) {
                             <td style={{ padding: "7px 14px" }}>
                               <span onClick={() => setDnPopup(inv.no)} style={{ color: C.accent, fontWeight: 500, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" }}>{inv.no}</span>
                             </td>
-                            <td style={{ padding: "7px 14px", color: C.muted }}>{inv.date}</td>
-                            <td style={{ padding: "7px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{(parseFloat(inv.total)||0).toLocaleString()}</td>
+                            <td style={{ padding: "7px 14px", color: C.muted }}>{fmtDateThai(inv.date)}</td>
+                            <td style={{ padding: "7px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(parseFloat(inv.total)||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -2775,7 +3325,7 @@ function BNCreateView({ onBack }) {
                         </td>
                         <td style={{ padding: "6px 12px", fontSize: 11 }}>{q.customer}</td>
                         <td style={{ padding: "6px 12px", fontSize: 11 }}>{q.count}</td>
-                        <td style={{ padding: "6px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{(q.total||0).toLocaleString()}</td>
+                        <td style={{ padding: "6px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(q.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -2796,7 +3346,7 @@ function BNCreateView({ onBack }) {
 
 // ── Main BN Page ───────────────────────────────────────────
 
-function BillingNotePage({ cache, updateCache, goListRequest, onViewChange }) {
+function BillingNotePage({ cache, updateCache, goListRequest, onViewChange, products, setProducts, sizes }) {
   const [view, setView_]              = useState("list"); // "list" | "create" | "detail"
   const [selectedBnNo, setSelectedBnNo] = useState(null);
   // #120 — push breadcrumb suffix (BN no / สร้าง) like DN/TI
@@ -2824,8 +3374,8 @@ function BillingNotePage({ cache, updateCache, goListRequest, onViewChange }) {
 
   useEffect(() => { if (!cache?.["bnList"]) loadBnList(); }, []);
 
-  if (view === "create") return <BNCreateView onBack={() => { updateCache("bnList", null); loadBnList(); setView("list"); }} />;
-  if (view === "batchCreate") return <BNBatchCreateView onBack={() => { updateCache("bnList", null); loadBnList(); setView("list"); }} />;
+  if (view === "create") return <BNCreateView products={products} sizes={sizes} onBack={() => { updateCache("bnList", null); loadBnList(); setView("list"); }} />;
+  if (view === "batchCreate") return <BNBatchCreateView products={products} setProducts={setProducts} sizes={sizes} onBack={() => { updateCache("bnList", null); loadBnList(); setView("list"); }} />;
   if (view === "detail") return <BNDetailView bnNo={selectedBnNo} onBack={() => setView("list")}
     cachedDetail={cache[detailKey(selectedBnNo)]}
     onDetailCached={(no, d) => updateCache(detailKey(no), d)}

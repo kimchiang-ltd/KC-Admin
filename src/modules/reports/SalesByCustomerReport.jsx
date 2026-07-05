@@ -366,7 +366,7 @@ function SalesByCustomerReport({ cache, updateCache, expanded, setExpanded }) {
                   </div>
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 27, fontWeight: 700, color: "#0f172a", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>฿{fmtBaht(cust.grandTotal)}</div>
+                  <div style={{ fontSize: 27, fontWeight: 700, color: "#0f172a", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{fmtBaht(cust.grandTotal)}</div>
                   <div style={{ display: "flex", alignItems: "center", gap: 7, justifyContent: "flex-end", marginTop: 7 }}>
                     {mom != null && (
                       <span style={{
@@ -408,9 +408,9 @@ function SalesByCustomerReport({ cache, updateCache, expanded, setExpanded }) {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                   {[
                     { label: "จำนวน DN", value: String(dnCount) + " ใบ", sub: rangeLabel, color: "#0f172a" },
-                    { label: "ยอดเฉลี่ยต่อใบ", value: "฿" + fmtBaht0(avgPerDN), sub: "ต่อ DN", color: "#0f172a" },
+                    { label: "ยอดเฉลี่ยต่อใบ", value: fmtBaht0(avgPerDN), sub: "ต่อ DN", color: "#0f172a" },
                     { label: "วางบิลแล้ว", value: billedPct.toFixed(0) + "%", sub: `${billedCount} จาก ${dnCount} ใบ`, color: billedPct >= 80 ? "#15803d" : billedPct >= 50 ? "#ea580c" : "#b91c1c" },
-                    { label: "เดือนสูงสุด", value: bestMonthLabel, sub: "฿" + fmtBaht0(monthValues[bestIdx] || 0), color: "#1d4ed8" },
+                    { label: "เดือนสูงสุด", value: bestMonthLabel, sub: fmtBaht0(monthValues[bestIdx] || 0), color: "#1d4ed8" },
                   ].map((s, i) => (
                     <div key={i} style={{ background: "#f8fafc", border: "1px solid #eef2f7", borderRadius: 13, padding: "16px 18px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                       <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 6 }}>{s.label}</div>
@@ -440,7 +440,7 @@ function SalesByCustomerReport({ cache, updateCache, expanded, setExpanded }) {
                     <span style={{ color: "#2563eb", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{dn.id}</span>
                     <span style={{ color: "#475569", fontVariantNumeric: "tabular-nums" }}>{dn.date}</span>
                     <span style={{ color: "#64748b", fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{dn.items?.[0]?.desc || "—"}</span>
-                    <span style={{ textAlign: "right", color: "#0f172a", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>฿{fmtBaht(parseFloat(dn.total) || 0)}</span>
+                    <span style={{ textAlign: "right", color: "#0f172a", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{fmtBaht(parseFloat(dn.total) || 0)}</span>
                     <span style={{ textAlign: "right" }}>
                       <span style={{
                         display: "inline-flex", alignItems: "center", padding: "3px 10px", borderRadius: 6,
@@ -455,7 +455,7 @@ function SalesByCustomerReport({ cache, updateCache, expanded, setExpanded }) {
               {sortedDns.length > 0 && (
                 <div style={{ display: "grid", gridTemplateColumns: "140px 120px 1fr 150px 140px", alignItems: "center", ...S.footerRow }}>
                   <div /><div /><div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>รวม {dnCount} ใบ</div>
-                  <div style={{ textAlign: "right", fontSize: 16, fontWeight: 700, color: "#1d4ed8", fontVariantNumeric: "tabular-nums" }}>฿{fmtBaht(cust.grandTotal)}</div>
+                  <div style={{ textAlign: "right", fontSize: 16, fontWeight: 700, color: "#1d4ed8", fontVariantNumeric: "tabular-nums" }}>{fmtBaht(cust.grandTotal)}</div>
                   <div style={{ textAlign: "right", fontSize: 12, color: "#64748b" }}>{billedCount}/{dnCount} วางบิลแล้ว</div>
                 </div>
               )}
@@ -474,7 +474,7 @@ function SalesByCustomerReport({ cache, updateCache, expanded, setExpanded }) {
                 {
                   label: "ยอดขายรวม", icon: <TrendingUp size={17} />,
                   iconBg: "#eff4ff", iconColor: "#2563eb",
-                  value: "฿" + fmtBaht0(grandTotal),
+                  value: fmtBaht0(grandTotal),
                   delta: salesDelta, deltaLabel: salesDelta != null ? ((salesDelta >= 0 ? "▲ " : "▼ ") + Math.abs(salesDelta).toFixed(1) + "%") : "—",
                   sub: "เทียบช่วงก่อน",
                 },
@@ -495,7 +495,7 @@ function SalesByCustomerReport({ cache, updateCache, expanded, setExpanded }) {
                 {
                   label: "ค่าเฉลี่ยต่อราย", icon: <BarChart3 size={17} />,
                   iconBg: "#ecfeff", iconColor: "#0891b2",
-                  value: "฿" + fmtBaht0(avgPerCustomer),
+                  value: fmtBaht0(avgPerCustomer),
                   delta: avgDelta, deltaLabel: avgDelta != null ? ((avgDelta >= 0 ? "▲ " : "▼ ") + Math.abs(avgDelta).toFixed(1) + "%") : "—",
                   sub: "เทียบช่วงก่อน",
                 },
@@ -571,7 +571,7 @@ function SalesByCustomerReport({ cache, updateCache, expanded, setExpanded }) {
                         <div style={{ height: "100%", width: barWidth, borderRadius: 6, background: top3 ? "linear-gradient(90deg,#1d4ed8,#3b82f6)" : "#93b4f5", transition: "width 0.3s ease" }} />
                       </div>
                     </div>
-                    <div style={{ textAlign: "right", fontSize: 14, fontWeight: 600, color: "#0f172a", fontVariantNumeric: "tabular-nums" }}>฿{fmtBaht(row.grandTotal)}</div>
+                    <div style={{ textAlign: "right", fontSize: 14, fontWeight: 600, color: "#0f172a", fontVariantNumeric: "tabular-nums" }}>{fmtBaht(row.grandTotal)}</div>
                     <div style={{ textAlign: "right", fontSize: 13, fontWeight: 500, color: "#64748b", fontVariantNumeric: "tabular-nums" }}>{share.toFixed(1)}%</div>
                   </div>
                 );
@@ -583,7 +583,7 @@ function SalesByCustomerReport({ cache, updateCache, expanded, setExpanded }) {
                   <div />
                   <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>ยอดขายรวมทั้งหมด</div>
                   <div />
-                  <div style={{ textAlign: "right", fontSize: 16, fontWeight: 700, color: "#1d4ed8", fontVariantNumeric: "tabular-nums" }}>฿{fmtBaht(grandTotal)}</div>
+                  <div style={{ textAlign: "right", fontSize: 16, fontWeight: 700, color: "#1d4ed8", fontVariantNumeric: "tabular-nums" }}>{fmtBaht(grandTotal)}</div>
                   <div style={{ textAlign: "right", fontSize: 13, fontWeight: 600, color: "#64748b", fontVariantNumeric: "tabular-nums" }}>100%</div>
                 </div>
               )}
@@ -634,7 +634,7 @@ function SalesByCustomerReport({ cache, updateCache, expanded, setExpanded }) {
                           );
                         })}
                         <div style={{ display: "flex", justifyContent: "center" }}><Sparkline series={sparkSeries} color={sparkColor} /></div>
-                        <div style={{ textAlign: "right", fontSize: 14, fontWeight: 600, color: "#0f172a", fontVariantNumeric: "tabular-nums" }}>฿{fmtBaht(row.grandTotal)}</div>
+                        <div style={{ textAlign: "right", fontSize: 14, fontWeight: 600, color: "#0f172a", fontVariantNumeric: "tabular-nums" }}>{fmtBaht(row.grandTotal)}</div>
                       </div>
                     );
                   })}
@@ -648,7 +648,7 @@ function SalesByCustomerReport({ cache, updateCache, expanded, setExpanded }) {
                         <div key={i} style={{ textAlign: "right", fontSize: 12.5, fontWeight: 700, color: "#334155", fontVariantNumeric: "tabular-nums" }}>{v ? fmtBaht0(v) : "—"}</div>
                       ))}
                       <div />
-                      <div style={{ textAlign: "right", fontSize: 16, fontWeight: 700, color: "#1d4ed8", fontVariantNumeric: "tabular-nums" }}>฿{fmtBaht(grandTotal)}</div>
+                      <div style={{ textAlign: "right", fontSize: 16, fontWeight: 700, color: "#1d4ed8", fontVariantNumeric: "tabular-nums" }}>{fmtBaht(grandTotal)}</div>
                     </div>
                   )}
                 </div>

@@ -4,6 +4,8 @@
 // Same backend as standalone Invoice Admin app
 // ============================================================
 
+import { getAuthToken, notifyAuthReject } from '../../shared/api.jsx'; // #299c — shared session token
+
 const SCRIPT_URL_TI = "https://script.google.com/macros/s/AKfycbzT_r_hzNLJFFulWDgd9PU_txxmZEOcpLeE_4AVnYeuHoo1B8RF46EhZx1Y-bNJjXnceQ/exec";
 
 const _pendingCalls = {};
@@ -12,20 +14,25 @@ async function tiApiCall(action, params = {}) {
   const dedupeKey = action + JSON.stringify(params);
   if (_pendingCalls[dedupeKey]) return _pendingCalls[dedupeKey];
 
-  const url = new URL(SCRIPT_URL_TI);
-  url.searchParams.set("action", action);
-  Object.entries(params).forEach(([k, v]) => {
-    url.searchParams.set(k, typeof v === "object" ? JSON.stringify(v) : String(v ?? ""));
-  });
+  // #299c — POST as a "simple request" (text/plain) to avoid a CORS preflight.
+  // Same session token as KC Admin (Decision 1); TICode ignores it until #299d.
+  const body = JSON.stringify({ ...params, action, token: getAuthToken() || "" });
 
-  const promise = fetch(url.toString())
+  const promise = fetch(SCRIPT_URL_TI, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body,
+  })
     .then(r => {
       if (!r.ok) throw new Error("HTTP " + r.status);
       return r.json();
     })
     .then(json => {
       delete _pendingCalls[dedupeKey];
-      if (!json.success) throw new Error(json.error || "API error");
+      if (!json.success) {
+        if (json.error === "unauthorized") notifyAuthReject();
+        throw new Error(json.error || "API error");
+      }
       return json.data;
     })
     .catch(err => {

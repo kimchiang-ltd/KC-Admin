@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import QRCode from "qrcode";
-import { Receipt, FileText, Printer, Pencil, Loader, ChevronLeft, ChevronRight, ChevronDown, QrCode, Smartphone, Search } from "lucide-react";
+import { Receipt, FileText, Printer, Pencil, Loader, ChevronLeft, ChevronRight, ChevronDown, QrCode, Smartphone, Search, Save, RefreshCw } from "lucide-react";
 import { tiApi, bahtText } from "./tiApi.jsx";
 import { C, ITEMS_COUNT, PAGE_SIZE, DESC_MAX, DETAIL_WARN, DETAIL_MAX } from "../../shared/constants.jsx";
 import { descWidth, toDownloadUrl } from "../../shared/utils.jsx";
@@ -76,7 +76,7 @@ function TaxInvoiceForm({ initial, onSave, onCancel, isEdit, products, setProduc
         const update = { ...record };
         const formValues = { address, phone, taxId };
         for (const f of yesFields) update[f] = formValues[f];
-        tiApi.updateCustomer(name, update).catch(() => {});
+        tiApi.updateCustomer(name, update).catch(e => alert("บันทึกที่อยู่/เบอร์ลูกค้าลงระบบไม่สำเร็จ — " + e.message)); // #284
       }
     }
     onSave({ ...payload, id: result.invoiceNo || initial?.id, pdfUrl: result.pdfUrl || initial?.pdfUrl });
@@ -221,7 +221,7 @@ function TaxInvoiceForm({ initial, onSave, onCancel, isEdit, products, setProduc
                       {!atLimit && atWarn && <div style={{ fontSize: 11, color: C.warning, marginTop: 1 }}>ใกล้จะเต็ม — พิจารณากด Enter ขึ้นบรรทัดใหม่</div>}
                     </td>
                     <td style={{ padding: "3px 6px" }}>{!it._cont && cellInput(i, "unitPrice", "right")}</td>
-                    <td style={{ padding: "4px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: b ? C.text : C.muted }}>{!it._cont && (b ? b.toLocaleString() : "—")}</td>
+                    <td style={{ padding: "4px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: b ? C.text : C.muted }}>{!it._cont && (b ? b.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) : "—")}</td>
                     <td style={{ padding: "4px 4px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontSize: 11, color: C.muted }}>{!it._cont && (s > 0 ? String(s).padStart(2, "0") : "")}</td>
                   </tr>
                 );
@@ -239,7 +239,7 @@ function TaxInvoiceForm({ initial, onSave, onCancel, isEdit, products, setProduc
           <div style={{ fontSize: 12, padding: "8px 12px", background: "#f8f9ff", borderRadius: 6, border: `0.5px solid ${C.border}` }}>({bahtText(gt)})</div>
         </div>
         <div style={{ minWidth: 280 }}>
-          {[["รวมมูลค่าสินค้า", sub], ["จำนวนภาษีมูลค่าเพิ่ม 7%", vat]].map(([l, v]) => (
+          {[["รวมมูลค่าสินค้า", sub], ["จำนวนภาษีมูลค่าเพิ่ม " + (+(vatRate*100).toFixed(2)) + "%", vat]].map(([l, v]) => (
             <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `0.5px solid ${C.borderLight}`, fontSize: 12 }}>
               <span style={{ color: C.muted }}>{l}</span>
               <span style={{ fontVariantNumeric: "tabular-nums" }}>{v.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
@@ -247,7 +247,7 @@ function TaxInvoiceForm({ initial, onSave, onCancel, isEdit, products, setProduc
           ))}
           <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", fontSize: 14, fontWeight: 500 }}>
             <span>จำนวนเงินรวมทั้งสิ้น</span>
-            <span style={{ fontVariantNumeric: "tabular-nums", color: C.accent }}>฿{gt.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <span style={{ fontVariantNumeric: "tabular-nums", color: C.accent }}>{gt.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
         </div>
       </div>
@@ -255,7 +255,7 @@ function TaxInvoiceForm({ initial, onSave, onCancel, isEdit, products, setProduc
       <div style={{ padding: "10px 16px", background: "#fafafa", display: "flex", justifyContent: "flex-end", gap: 8 }}>
         <Btn onClick={onCancel}>ยกเลิก</Btn>
         <Btn primary onClick={handleSave} disabled={saving || !name}>
-          {saving ? <><Loader size={13}/> กำลังบันทึก...</> : (<><Receipt size={14}/> {isEdit ? "บันทึก" : "บันทึกและสร้าง PDF"}</>)}
+          {saving ? <><Loader size={13}/> กำลังบันทึก...</> : (<>{isEdit ? <Save size={14}/> : <Receipt size={14}/>} {isEdit ? "บันทึก" : "บันทึกและสร้าง PDF"}</>)}
         </Btn>
       </div>
     </div>
@@ -290,7 +290,8 @@ function TaxInvoiceDetail({ invoice, onBack, onSaved, products, setProducts, siz
 
   const fi  = (data.items || []).filter(it => it.desc || it.desc2 || it.detail || it.qty || it.amount);
   const sub = data.subtotal   ?? fi.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0);
-  const vat = data.vatAmt     ?? parseFloat((sub * vatRate).toFixed(2));
+  const rate = data.vatRate ?? vatRate; // #305 — this TI's frozen rate (from backend col T); falls back to global for new/unstamped TIs
+  const vat = data.vatAmt     ?? parseFloat((sub * rate).toFixed(2));
   const gt  = data.grandTotal ?? parseFloat((sub + vat).toFixed(2));
 
   const openUrl = (url) => { const a = document.createElement("a"); a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer"; document.body.appendChild(a); a.click(); document.body.removeChild(a); };
@@ -450,7 +451,7 @@ function TaxInvoiceDetail({ invoice, onBack, onSaved, products, setProducts, siz
                 )}
               </div>
               <Btn onClick={handleQrTI} disabled={qrLoading}>{qrLoading ? <Loader size={13}/> : <QrCode size={14}/>} QR</Btn>
-              <Btn primary onClick={() => setEditing(true)}><Pencil size={14}/> แก้ไข</Btn>
+              <Btn primary onClick={() => { if (data.billed) { alert(`ใบกำกับภาษีนี้อยู่ใน ${data.bnNo || "ใบวางบิล"} แล้ว\nกรุณายกเลิกใบวางบิลนั้นก่อนแก้ไข`); return; } setEditing(true); }}><Pencil size={14}/> แก้ไข</Btn>
               <Btn danger onClick={() => setShowCancelConfirm(true)} disabled={cancelLoading}>ยกเลิกใบนี้</Btn>
             </>
           )}
@@ -481,16 +482,16 @@ function TaxInvoiceDetail({ invoice, onBack, onSaved, products, setProducts, siz
             </thead>
             <tbody>
               {fi.map((it, i) => {
-                const b = Math.floor(Number(it.amount));
-                const s = Math.round((Number(it.amount) - b) * 100);
+                const b = Math.floor(Number(it.amount||0));
+                const s = Math.round((Number(it.amount||0) - b) * 100);
                 return (
                   <tr key={i} style={{ background: i % 2 === 0 ? "white" : "#fafbff", borderBottom: `0.5px solid ${C.borderLight}` }}>
                     <td style={{ padding: "8px 10px", textAlign: "center" }}>{it.qty}</td>
                     <td style={{ padding: "8px 10px" }}>{it.desc}</td>
                     <td style={{ padding: "8px 10px", color: C.muted }}>{it.desc2}</td>
                     <td style={{ padding: "8px 10px", color: C.muted }}>{it.detail}</td>
-                    <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{Number(it.unitPrice).toLocaleString()}</td>
-                    <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{b.toLocaleString()}</td>
+                    <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{Number(it.unitPrice||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                    <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{b.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                     <td style={{ padding: "8px 6px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontSize: 11, color: C.muted }}>{s > 0 ? String(s).padStart(2, "0") : ""}</td>
                   </tr>
                 );
@@ -504,7 +505,7 @@ function TaxInvoiceDetail({ invoice, onBack, onSaved, products, setProducts, siz
             <div style={{ fontSize: 12, padding: "8px 12px", background: "#f8f9ff", borderRadius: 6, border: `0.5px solid ${C.border}` }}>({bahtText(gt)})</div>
           </div>
           <div style={{ minWidth: 280 }}>
-            {[["รวมมูลค่าสินค้า", sub], ["จำนวนภาษีมูลค่าเพิ่ม 7%", vat]].map(([l, v]) => (
+            {[["รวมมูลค่าสินค้า", sub], ["จำนวนภาษีมูลค่าเพิ่ม " + (+(rate*100).toFixed(2)) + "%", vat]].map(([l, v]) => (
               <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `0.5px solid ${C.borderLight}`, fontSize: 12 }}>
                 <span style={{ color: C.muted }}>{l}</span>
                 <span style={{ fontVariantNumeric: "tabular-nums" }}>{v.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
@@ -512,7 +513,7 @@ function TaxInvoiceDetail({ invoice, onBack, onSaved, products, setProducts, siz
             ))}
             <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", fontSize: 14, fontWeight: 500 }}>
               <span>จำนวนเงินรวมทั้งสิ้น</span>
-              <span style={{ fontVariantNumeric: "tabular-nums", color: C.accent }}>฿{gt.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              <span style={{ fontVariantNumeric: "tabular-nums", color: C.accent }}>{gt.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
           </div>
         </div>
@@ -562,10 +563,10 @@ function TaxInvoicePage({ vatRate = 0.07, cache, updateCache, onViewChange, goLi
 
   const load = useCallback(async () => {
     setLoading(true); setErr("");
-    try { const d = await tiApi.getTaxInvoices(startDate, endDate, search); updateCache(cacheKey, Array.isArray(d) ? d : []); }
+    try { const d = await tiApi.getTaxInvoices(startDate, endDate); updateCache(cacheKey, Array.isArray(d) ? d : []); } // #279 — full range; search is client-side (filtered)
     catch (e) { setErr("โหลดไม่สำเร็จ: " + e.message); }
     finally { setLoading(false); }
-  }, [startDate, endDate, search]);
+  }, [startDate, endDate]);
 
   useEffect(() => { if (!cache[cacheKey]) load(); }, [cacheKey]);
 
@@ -600,7 +601,10 @@ function TaxInvoicePage({ vatRate = 0.07, cache, updateCache, onViewChange, goLi
           <div style={{ position: "sticky", top: -18, zIndex: 10, background: C.pageBg }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 10 }}>
               <div style={{ fontSize: 16, fontWeight: 500 }}><Receipt size={15}/> ใบกำกับภาษี</div>
-              <Btn primary onClick={() => setView("create", "สร้างใหม่")}>+ สร้างใบกำกับภาษีใหม่</Btn>
+              <div style={{ display: "flex", gap: 6 }}>
+                <Btn small primary onClick={load}><RefreshCw size={14}/> รีเฟรช</Btn>
+                <Btn primary onClick={() => setView("create", "สร้างใหม่")}>+ สร้างใบกำกับภาษีใหม่</Btn>
+              </div>
             </div>
             <div style={{ padding: "10px 14px", display: "flex", gap: 8, alignItems: "flex-start", border: `0.5px solid ${C.border}`, background: "#fafafa", flexWrap: "wrap", borderRadius: "8px 8px 0 0" }}>
               <input value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === "Enter" && load()}
@@ -628,7 +632,7 @@ function TaxInvoicePage({ vatRate = 0.07, cache, updateCache, onViewChange, goLi
                 <tbody>
                   {pagedTI.map(inv => {
                     const s = inv.subtotal ?? (inv.items || []).reduce((a, it) => a + (parseFloat(it.amount) || 0), 0);
-                    const g = inv.grandTotal ?? parseFloat((s * 1.07).toFixed(2));
+                    const g = inv.grandTotal ?? parseFloat((s * (1 + vatRate)).toFixed(2));
                     return (
                       <tr key={inv.id} onMouseEnter={() => setHovered(inv.id)} onMouseLeave={() => setHovered(null)}
                         style={{ background: hovered === inv.id ? C.rowHover : "white", borderBottom: `0.5px solid ${C.borderLight}` }}>
@@ -641,7 +645,7 @@ function TaxInvoicePage({ vatRate = 0.07, cache, updateCache, onViewChange, goLi
                         <td style={{ padding: "9px 10px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{inv.name}</td>
                         <td style={{ padding: "9px 10px", fontVariantNumeric: "tabular-nums", fontSize: 11, color: C.muted }}>{inv.taxId || "—"}</td>
                         <td style={{ padding: "9px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>
-                          {g ? `฿${g.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                          {g ? `${g.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
                         </td>
                       </tr>
                     );
@@ -680,7 +684,7 @@ function TaxInvoicePage({ vatRate = 0.07, cache, updateCache, onViewChange, goLi
                     <tbody>
                       {cancelledList.map(inv => {
                         const s = inv.subtotal ?? (inv.items || []).reduce((a, it) => a + (parseFloat(it.amount) || 0), 0);
-                        const g = inv.grandTotal ?? parseFloat((s * 1.07).toFixed(2));
+                        const g = inv.grandTotal ?? parseFloat((s * (1 + vatRate)).toFixed(2));
                         return (
                           <tr key={inv.id} style={{ borderBottom: `0.5px solid ${C.borderLight}` }}>
                             <td style={{ padding: "9px 14px" }}>
@@ -691,7 +695,7 @@ function TaxInvoicePage({ vatRate = 0.07, cache, updateCache, onViewChange, goLi
                             </td>
                             <td style={{ padding: "9px 14px" }}>{inv.name}</td>
                             <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>
-                              {g ? `฿${g.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                              {g ? `${g.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
                             </td>
                           </tr>
                         );

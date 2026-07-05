@@ -15,16 +15,25 @@ import { api } from './api.jsx';
 function CustomerAutocomplete({ value, onChange, onSelect, onCustomersLoaded, onBlur, style, apiOverride }) {
   const [customers, setCustomers] = useState([]);
   const [open, setOpen]           = useState(false);
+  const [loadError, setLoadError] = useState(false); // #273 — surface a failed customer-list load
+  const retriedRef = useRef(false);                  // #273 — auto-retry once before showing error
   const wrapRef = useRef(null);
 
-  useEffect(() => {
+  // #273 — load customer list with one silent auto-retry, then a visible error + manual retry.
+  const loadCustomers = () => {
     const getCustomers = apiOverride?.getCustomers ?? api.getCustomers;
+    setLoadError(false);
     getCustomers("").then(list => {
       const result = Array.isArray(list) ? list : [];
       setCustomers(result);
       if (onCustomersLoaded) onCustomersLoaded(result);
-    }).catch(() => {});
-  }, []);
+    }).catch(() => {
+      if (!retriedRef.current) { retriedRef.current = true; setTimeout(loadCustomers, 1200); }
+      else setLoadError(true);
+    });
+  };
+
+  useEffect(() => { loadCustomers(); }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -36,7 +45,7 @@ function CustomerAutocomplete({ value, onChange, onSelect, onCustomersLoaded, on
   const q = value.toLowerCase();
   const filtered = q.length === 0
     ? customers
-    : customers.filter(c => c.name.toLowerCase().includes(q));
+    : customers.filter(c => (c.name || "").toLowerCase().includes(q));
 
   return (
     <div ref={wrapRef} style={{ position: "relative" }}>
@@ -49,6 +58,15 @@ function CustomerAutocomplete({ value, onChange, onSelect, onCustomersLoaded, on
         placeholder="ชื่อลูกค้า"
         style={style}
       />
+      {loadError && customers.length === 0 && (
+        <div style={{ marginTop: 3, fontSize: 11, color: C.danger, display: "flex", alignItems: "center", gap: 6 }}>
+          โหลดรายชื่อลูกค้าไม่สำเร็จ
+          <button type="button" onMouseDown={e => { e.preventDefault(); retriedRef.current = false; loadCustomers(); }}
+            style={{ background: "none", border: `0.5px solid ${C.danger}`, color: C.danger, borderRadius: 4, padding: "1px 8px", fontSize: 11, cursor: "pointer" }}>
+            ลองใหม่
+          </button>
+        </div>
+      )}
       {open && filtered.length > 0 && (
         <div style={{
           position: "absolute", top: "100%", left: 0, right: 0, zIndex: 200,

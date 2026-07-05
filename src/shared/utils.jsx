@@ -61,10 +61,11 @@ export function findSimilarCustomers(nameVal, list) {
   if (!trimmed) return [];
   const normTyped = _simNorm(nameVal.trim());
   return list.filter(c => {
-    if (c.name.toLowerCase() === trimmed) return false;
-    const normC = _simNorm(c.name);
+    const cn = c.name || "";
+    if (cn.toLowerCase() === trimmed) return false;
+    const normC = _simNorm(cn);
     if (!_COMMON_PREFIXES.has(normTyped) && normC.length >= 3 && normTyped.length >= 3 && (normC.includes(normTyped) || normTyped.includes(normC))) return true;
-    return customerSimilarity(c.name, nameVal.trim()) >= SIMILARITY_THRESHOLD;
+    return customerSimilarity(cn, nameVal.trim()) >= SIMILARITY_THRESHOLD;
   }).map(c => c.name);
 }
 

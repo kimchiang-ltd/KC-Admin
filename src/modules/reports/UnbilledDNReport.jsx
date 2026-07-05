@@ -101,7 +101,7 @@ function UnbilledDNReport({ cache, updateCache }) {
                     <td style={{ padding: "9px 14px", color: C.accent, fontWeight: 500 }}>{dn.id}</td>
                     <td style={{ padding: "9px 14px", color: C.muted }}>{dn.date}</td>
                     <td style={{ padding: "9px 14px" }}>{dn.name}</td>
-                    <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{(parseFloat(dn.total) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(parseFloat(dn.total) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: ageColor, fontWeight: dn.age >= 60 ? 600 : 400 }}>{dn.age}</td>
                   </tr>
                 );
@@ -111,7 +111,7 @@ function UnbilledDNReport({ cache, updateCache }) {
               <tfoot>
                 <tr style={{ background: "#f0f4ff", borderTop: `1px solid ${C.border}` }}>
                   <td colSpan={3} style={{ padding: "10px 14px", fontWeight: 600, fontSize: 12 }}>รวม {rows.length} ใบ</td>
-                  <td style={{ padding: "10px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700, color: C.accent }}>฿{grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td style={{ padding: "10px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700, color: C.accent }}>{grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   <td style={{ padding: "10px 14px", textAlign: "right", color: C.muted, fontSize: 10 }}>≥60 = แดง · ≥30 = เหลือง</td>
                 </tr>
               </tfoot>

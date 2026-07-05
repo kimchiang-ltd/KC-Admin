@@ -4,9 +4,9 @@
 // Uses tiApi (TICode.gs backend), separate from BN-DN (invoice/InvoicePage.jsx)
 // ============================================================
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 import QRCode from "qrcode";
-import { AlertCircle, Check, CheckCircle, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Loader, Pencil, Plus, Printer, QrCode, RefreshCw, Smartphone, Square } from "lucide-react";
+import { AlertCircle, Check, CheckCircle, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, FileText, Loader, Pencil, Plus, Printer, QrCode, RefreshCw, Smartphone, Square } from "lucide-react";
 import { tiApi, bahtText } from "./tiApi.jsx";
 import { C, PAGE_SIZE } from "../../shared/constants.jsx";
 import { Btn, Badge, Spinner, ErrorBox, Paginator, ConfirmModal, CustomerFieldSyncModal, inputStyle, INSTR_STEPS, renderPhoneScreen } from "../../shared/ui.jsx";
@@ -42,7 +42,7 @@ function TIDetailPopup({ tiNo, onClose, cachedData, onCached }) {
           {data && (
             <div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 14, marginBottom: 14 }}>
-                {[["ลูกค้า", data.customer], ["วันที่", data.date], ["โทรศัพท์", data.phone || "—"], ["รวมเงิน", `฿${(data.grandTotal||0).toLocaleString()}`]].map(([l, v]) => (
+                {[["ลูกค้า", data.customer], ["วันที่", data.date], ["โทรศัพท์", data.phone || "—"], ["รวมเงิน", `${(data.grandTotal||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`]].map(([l, v]) => (
                   <div key={l}><div style={{ fontSize: 11, color: C.muted, marginBottom: 2 }}>{l}</div><div style={{ fontSize: 13, fontWeight: 500 }}>{v}</div></div>
                 ))}
               </div>
@@ -62,23 +62,23 @@ function TIDetailPopup({ tiNo, onClose, cachedData, onCached }) {
                       <td style={{ padding: "7px 10px" }}>{it.desc}</td>
                       <td style={{ padding: "7px 10px", color: C.muted }}>{it.desc2}</td>
                       <td style={{ padding: "7px 10px", textAlign: "right" }}>{it.qty}</td>
-                      <td style={{ padding: "7px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{Number(it.unitPrice||0).toLocaleString()}</td>
-                      <td style={{ padding: "7px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{Number(it.amount||0).toLocaleString()}</td>
+                      <td style={{ padding: "7px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{Number(it.unitPrice||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                      <td style={{ padding: "7px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{Number(it.amount||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr style={{ borderTop: `0.5px solid ${C.borderLight}` }}>
                     <td colSpan={5} style={{ padding: "7px 10px", textAlign: "right", color: C.muted }}>ยอดก่อนภาษี</td>
-                    <td style={{ padding: "7px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>฿{(data.subtotal||0).toLocaleString()}</td>
+                    <td style={{ padding: "7px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{(data.subtotal||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                   </tr>
                   <tr>
-                    <td colSpan={5} style={{ padding: "7px 10px", textAlign: "right", color: C.muted }}>ภาษีมูลค่าเพิ่ม 7%</td>
-                    <td style={{ padding: "7px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>฿{(data.vatAmt||0).toLocaleString()}</td>
+                    <td colSpan={5} style={{ padding: "7px 10px", textAlign: "right", color: C.muted }}>ภาษีมูลค่าเพิ่ม</td>
+                    <td style={{ padding: "7px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{(data.vatAmt||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                   </tr>
                   <tr style={{ background: "#f0f4ff", borderTop: `1px solid ${C.border}` }}>
                     <td colSpan={5} style={{ padding: "9px 10px", textAlign: "right", fontWeight: 500 }}>รวมทั้งสิ้น</td>
-                    <td style={{ padding: "9px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: C.accent }}>฿{(data.grandTotal||0).toLocaleString()}</td>
+                    <td style={{ padding: "9px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: C.accent }}>{(data.grandTotal||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -96,6 +96,15 @@ function TIDetailPopup({ tiNo, onClose, cachedData, onCached }) {
       </div>
     </div>
   );
+}
+
+// #268 — parse "dd/MM/yyyy" → Thai locale date string (display only)
+function fmtDateThai(s) {
+  if (!s) return "—";
+  const p = String(s).split("/");
+  if (p.length !== 3) return s;
+  const d = new Date(+p[2], +p[1] - 1, +p[0]);
+  return isNaN(d.getTime()) ? s : d.toLocaleDateString("th-TH", { day: "2-digit", month: "short", year: "numeric" });
 }
 
 // ── BN Edit Form ─────────────────────────────────────────────
@@ -176,7 +185,7 @@ function BNEditForm({ detail, onSave, onCancel }) {
         const update = { ...custRecord };
         const formValues = { address, phone };
         for (const f of yesFields) update[f] = formValues[f];
-        tiApi.updateCustomer(customer, update).catch(() => {});
+        tiApi.updateCustomer(customer, update).catch(e => alert("บันทึกที่อยู่/เบอร์ลูกค้าลงระบบไม่สำเร็จ — " + e.message)); // #284
       }
       const displayDate = dateInput ? (() => { const p = dateInput.split("-"); return `${p[2]}/${p[1]}/${p[0]}`; })() : detail.date;
       onSave({ date: displayDate, customer, address, phone, invoices, count: invoices.length, total: invoices.reduce((s, inv) => s + (parseFloat(inv.total)||0), 0) });
@@ -230,8 +239,8 @@ function BNEditForm({ detail, onSave, onCancel }) {
             ) : invoices.map((inv, i) => (
               <tr key={i} style={{ borderBottom: `0.5px solid ${C.borderLight}` }}>
                 <td style={{ padding: "8px 14px", color: C.accent, fontWeight: 500 }}>{inv.no}</td>
-                <td style={{ padding: "8px 14px", color: C.muted }}>{inv.date}</td>
-                <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{(inv.total||0).toLocaleString()}</td>
+                <td style={{ padding: "8px 14px", color: C.muted }}>{fmtDateThai(inv.date)}</td>
+                <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(inv.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                 <td style={{ padding: "8px 14px", textAlign: "center" }}>
                   <button onClick={() => removeTI(inv.no)} style={{ background: "none", border: "none", color: C.danger, cursor: "pointer", fontSize: 18, lineHeight: 1 }} title="ลบออก">×</button>
                 </td>
@@ -242,7 +251,7 @@ function BNEditForm({ detail, onSave, onCancel }) {
             <tfoot>
               <tr style={{ borderTop: `0.5px solid ${C.border}`, background: "#f5f9f6" }}>
                 <td colSpan={2} style={{ padding: "7px 14px", fontSize: 11, color: C.muted }}>รวม {invoices.length} ฉบับ</td>
-                <td style={{ padding: "7px 14px", textAlign: "right", fontWeight: 600, color: C.accent, fontVariantNumeric: "tabular-nums" }}>฿{invoices.reduce((s, inv) => s+(parseFloat(inv.total)||0), 0).toLocaleString()}</td>
+                <td style={{ padding: "7px 14px", textAlign: "right", fontWeight: 600, color: C.accent, fontVariantNumeric: "tabular-nums" }}>{invoices.reduce((s, inv) => s+(parseFloat(inv.total)||0), 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                 <td></td>
               </tr>
             </tfoot>
@@ -262,8 +271,8 @@ function BNEditForm({ detail, onSave, onCancel }) {
               {available.map((ti, i) => (
                 <tr key={i} style={{ borderBottom: `0.5px solid ${C.borderLight}` }}>
                   <td style={{ padding: "8px 14px", color: C.accent, fontWeight: 500 }}>{ti.no}</td>
-                  <td style={{ padding: "8px 14px", color: C.muted }}>{ti.date}</td>
-                  <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{(ti.total||0).toLocaleString()}</td>
+                  <td style={{ padding: "8px 14px", color: C.muted }}>{fmtDateThai(ti.date)}</td>
+                  <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(ti.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                   <td style={{ padding: "8px 14px", textAlign: "center" }}>
                     <Btn small onClick={() => addTI(ti)}><Plus size={11}/> เพิ่ม</Btn>
                   </td>
@@ -473,7 +482,7 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
               )}
             </div>
             <div style={{ display: "flex", gap: 20, padding: "10px 16px", background: "#f5f9f6", borderTop: `0.5px solid ${C.borderLight}`, alignItems: "center" }}>
-              <div><span style={{ fontSize: 11, color: C.muted }}>รวมเงิน </span><span style={{ fontWeight: 600, fontSize: 15, color: C.accent }}>฿{(detail.total||0).toLocaleString()}</span></div>
+              <div><span style={{ fontSize: 11, color: C.muted }}>รวมเงิน </span><span style={{ fontWeight: 600, fontSize: 15, color: C.accent }}>{(detail.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>
               <div style={{ fontSize: 11, color: C.muted }}>{detail.count} ฉบับ</div>
             </div>
           </div>
@@ -496,8 +505,8 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
                     onMouseEnter={() => setHovered(i)} onMouseLeave={() => setHovered(null)}
                     style={{ borderBottom: `0.5px solid ${C.borderLight}`, cursor: "pointer", background: hovered===i ? C.rowHover : "white" }}>
                     <td style={{ padding: "8px 14px", color: C.accent, fontWeight: 500 }}>{inv.no}</td>
-                    <td style={{ padding: "8px 14px", color: C.muted }}>{inv.date}</td>
-                    <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{(inv.total||0).toLocaleString()}</td>
+                    <td style={{ padding: "8px 14px", color: C.muted }}>{fmtDateThai(inv.date)}</td>
+                    <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(inv.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                   </tr>
                 ))}
               </tbody>
@@ -505,7 +514,7 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
                 <tfoot>
                   <tr style={{ borderTop: `0.5px solid ${C.border}`, background: "#f5f9f6" }}>
                     <td colSpan={2} style={{ padding: "7px 14px", fontSize: 11, color: C.muted }}>รวม {detail.invoices.length} ฉบับ</td>
-                    <td style={{ padding: "7px 14px", textAlign: "right", fontWeight: 600, color: C.accent, fontVariantNumeric: "tabular-nums" }}>฿{(detail.total||0).toLocaleString()}</td>
+                    <td style={{ padding: "7px 14px", textAlign: "right", fontWeight: 600, color: C.accent, fontVariantNumeric: "tabular-nums" }}>{(detail.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                   </tr>
                 </tfoot>
               )}
@@ -573,10 +582,10 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick, onCreateSin
     <tr onClick={() => onRowClick(bn)} onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)}
       style={{ background: isHov ? C.rowHover : "white", borderBottom: `0.5px solid ${C.borderLight}`, cursor: "pointer" }}>
       <td style={{ padding: "9px 14px", color: C.accent, fontWeight: 500 }}>{bn.bnNo}</td>
-      <td style={{ padding: "9px 14px", color: C.muted }}>{bn.date}</td>
+      <td style={{ padding: "9px 14px", color: C.muted }}>{fmtDateThai(bn.date)}</td>
       <td style={{ padding: "9px 14px" }}>{bn.customer}</td>
       <td style={{ padding: "9px 14px" }}>{bn.count} ฉบับ</td>
-      <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{(bn.total || 0).toLocaleString()}</td>
+      <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(bn.total || 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
     </tr>
   );
 
@@ -612,9 +621,14 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick, onCreateSin
       <div style={{ position: "sticky", top: -18, zIndex: 10, background: C.pageBg }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 10 }}>
           <div style={{ fontSize: 16, fontWeight: 500 }}><ClipboardList size={15}/> ใบวางบิล</div>
-          {onCreateSingle && (
-            <div style={{ position: "relative" }}>
-              <Btn primary onClick={() => setCreateDrop(p => !p)}>+ สร้างใบวางบิล <ChevronDown size={13} style={{ marginLeft: 2 }}/></Btn>
+          {onCreateBatch && (
+            <div style={{ position: "relative", display: "inline-flex" }}>
+              <button onClick={() => { onCreateBatch(); }} style={{ background: C.accent, color: "white", border: "none", borderRadius: "6px 0 0 6px", padding: "6px 14px", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                + สร้างใบวางบิล
+              </button>
+              <button onClick={() => setCreateDrop(p => !p)} style={{ background: C.accent, color: "white", border: "none", borderLeft: "1px solid rgba(255,255,255,0.3)", borderRadius: "0 6px 6px 0", padding: "6px 6px", cursor: "pointer", display: "flex", alignItems: "center" }}>
+                <ChevronDown size={13}/>
+              </button>
               {createDrop && (
                 <>
                   <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setCreateDrop(false)} />
@@ -623,12 +637,6 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick, onCreateSin
                       onMouseEnter={e => e.currentTarget.style.background = C.rowHover} onMouseLeave={e => e.currentTarget.style.background = "white"}>
                       <Plus size={13}/> สร้างทีละราย
                     </div>
-                    {onCreateBatch && (
-                      <div onClick={() => { setCreateDrop(false); onCreateBatch(); }} style={{ padding: "9px 14px", fontSize: 12, cursor: "pointer", borderTop: `0.5px solid ${C.borderLight}`, display: "flex", alignItems: "center", gap: 6 }}
-                        onMouseEnter={e => e.currentTarget.style.background = C.rowHover} onMouseLeave={e => e.currentTarget.style.background = "white"}>
-                        <ClipboardList size={13}/> สร้างแบบรวม
-                      </div>
-                    )}
                   </div>
                 </>
               )}
@@ -729,7 +737,7 @@ function BNDetailMiniPopup({ bnNo, onClose, onCancelled }) {
           {data && (
             <>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 10, marginBottom: 12 }}>
-                {[["ลูกค้า", data.customer], ["วันที่", data.date], ["จำนวน", `${data.count} ฉบับ`], ["รวมเงิน", `฿${(data.total||0).toLocaleString()}`]].map(([l, v]) => (
+                {[["ลูกค้า", data.customer], ["วันที่", data.date], ["จำนวน", `${data.count} ฉบับ`], ["รวมเงิน", `${(data.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`]].map(([l, v]) => (
                   <div key={l}><div style={{ fontSize: 10, color: C.muted, marginBottom: 1 }}>{l}</div><div style={{ fontSize: 12, fontWeight: 500 }}>{v}</div></div>
                 ))}
               </div>
@@ -746,8 +754,8 @@ function BNDetailMiniPopup({ bnNo, onClose, onCancelled }) {
                   {(data.invoices || []).map((inv, i) => (
                     <tr key={i} style={{ borderBottom: `0.5px solid ${C.borderLight}` }}>
                       <td style={{ padding: "7px 10px", color: C.accent, fontWeight: 500 }}>{inv.no}</td>
-                      <td style={{ padding: "7px 10px", color: C.muted }}>{inv.date}</td>
-                      <td style={{ padding: "7px 10px", textAlign: "right", fontWeight: 500 }}>฿{(parseFloat(inv.total)||0).toLocaleString()}</td>
+                      <td style={{ padding: "7px 10px", color: C.muted }}>{fmtDateThai(inv.date)}</td>
+                      <td style={{ padding: "7px 10px", textAlign: "right", fontWeight: 500 }}>{(parseFloat(inv.total)||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -859,7 +867,7 @@ function BNCustomerPanel({ cust, nextBnNo, onConfirm }) {
         <thead>
           <tr>
             <th style={{ padding: "7px 14px", width: 32, background: "#fafafa", borderBottom: `0.5px solid ${C.border}` }}>
-              <input type="checkbox" checked={rows.every(r => r.checked)} onChange={toggleAll} />
+              <input type="checkbox" checked={(() => { const u = rows.filter(r => !r.bnNo); return u.length > 0 && u.every(r => r.checked); })()} onChange={toggleAll} />
             </th>
             {["เลขที่ TI", "วันที่", "รวมเงิน"].map((h, i) => (
               <th key={i} style={{ padding: "7px 14px", textAlign: i===2?"right":"left", color: C.muted, fontWeight: 500, fontSize: 11, background: "#fafafa", borderBottom: `0.5px solid ${C.border}` }}>{h}</th>
@@ -868,7 +876,7 @@ function BNCustomerPanel({ cust, nextBnNo, onConfirm }) {
         </thead>
         <tbody>
           {rows.map((row) => (
-            <React.Fragment key={row.idx}>
+            <Fragment key={row.idx}>
               <tr style={{ borderBottom: row.bnNo ? "none" : `0.5px solid ${C.borderLight}`, background: row.bnNo ? "#fafafa" : (row.checked ? "white" : "#fafafa"), opacity: row.bnNo ? 0.5 : (row.checked ? 1 : 0.55) }}>
                 <td style={{ padding: "8px 14px", opacity: row.bnNo ? 1 : undefined }}>
                   <input type="checkbox" checked={row.checked} disabled={!!row.bnNo} onChange={() => toggleRow(row.idx)} style={{ cursor: row.bnNo ? "not-allowed" : "pointer" }} />
@@ -876,8 +884,8 @@ function BNCustomerPanel({ cust, nextBnNo, onConfirm }) {
                 <td style={{ padding: "8px 14px" }}>
                   <span onClick={() => setTiPopup(row.no)} style={{ color: row.bnNo ? C.muted : C.accent, fontWeight: 500, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" }}>{row.no}</span>
                 </td>
-                <td style={{ padding: "8px 14px", color: C.muted }}>{row.date}</td>
-                <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{(parseFloat(row.total)||0).toLocaleString()}</td>
+                <td style={{ padding: "8px 14px", color: C.muted }}>{fmtDateThai(row.date)}</td>
+                <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(parseFloat(row.total)||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
               </tr>
               {row.bnNo && (
                 <tr style={{ borderBottom: `0.5px solid ${C.borderLight}` }}>
@@ -890,13 +898,13 @@ function BNCustomerPanel({ cust, nextBnNo, onConfirm }) {
                   </td>
                 </tr>
               )}
-            </React.Fragment>
+            </Fragment>
           ))}
         </tbody>
         <tfoot>
           <tr style={{ borderTop: `0.5px solid ${C.border}`, background: "#f5f9f6" }}>
             <td colSpan={3} style={{ padding: "7px 14px", fontSize: 11, color: C.muted }}>รวม {selectedRows.length} ฉบับ</td>
-            <td style={{ padding: "7px 14px", textAlign: "right", fontWeight: 600, color: C.accent, fontVariantNumeric: "tabular-nums" }}>฿{grandTotal.toLocaleString()}</td>
+            <td style={{ padding: "7px 14px", textAlign: "right", fontWeight: 600, color: C.accent, fontVariantNumeric: "tabular-nums" }}>{grandTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
           </tr>
         </tfoot>
       </table>
@@ -928,6 +936,644 @@ function BNCustomerPanel({ cust, nextBnNo, onConfirm }) {
   );
 }
 
+// ── BN-TI Batch Create View (#263) ────────────────────────
+
+function BNTIBatchCreateView({ onBack }) {
+  const now = new Date();
+  const [month, setMonth]         = useState(now.getMonth() + 1);
+  const [year, setYear]           = useState(now.getFullYear());
+  const [loading, setLoading]     = useState(false);
+  const [error, setError]         = useState("");
+  const [customers, setCustomers] = useState([]); // [{customer, invoices, address, phone, checked, generated}]
+  const [searched, setSearched]   = useState(false);
+  const [expanded, setExpanded]   = useState({}); // { customerName: true/false }
+  const [creating, setCreating]   = useState(false);
+  const [progress, setProgress]   = useState({ done: 0, total: 0, current: "" });
+  const [results, setResults]     = useState([]); // [{ customer, bnNo, success, error }]
+  const [nextBnNo, setNextBnNo]   = useState(null);
+  const [expandedTi, setExpandedTi] = useState(null); // inline TI detail
+  const [tiCache, setTiCache]       = useState({});
+  const [tiLoading, setTiLoading]   = useState(null);
+  const [editMode, setEditMode]     = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [batchPrinting, setBatchPrinting] = useState(false);
+  const [batchPrintFormat, setBatchPrintFormat] = useState("portrait");
+  const [printMode, setPrintMode] = useState(false);
+  const [printSel, setPrintSel] = useState(new Set());
+
+  const handleSearch = async (mArg = month, yArg = year) => {
+    setLoading(true); setError("");
+    const m = String(mArg).padStart(2, "0");
+    const days = new Date(yArg, mArg, 0).getDate();
+    try {
+      const data = await tiApi.searchTaxInvoicesForBilling(`${yArg}-${m}-01`, `${yArg}-${m}-${String(days).padStart(2, "0")}`);
+      const mapped = (Array.isArray(data) ? data : []).map(cust => ({
+        ...cust,
+        checked: !cust.generated,
+        invoices: (cust.invoices || []).map(inv => ({ ...inv, checked: !inv.bnNo })),
+      }));
+      setCustomers(mapped);
+      setSearched(true);
+      setResults([]);
+      setExpandedTi(null); setTiCache({});
+      const exp = {};
+      mapped.forEach(c => { if (!c.generated) exp[c.customer] = true; });
+      setExpanded(exp);
+      // batch-fetch all TI details in background
+      const allTiNos = mapped.flatMap(c => (c.invoices || []).map(inv => inv.no)).filter(Boolean);
+      if (allTiNos.length > 0) {
+        Promise.all(allTiNos.map(no => tiApi.getTIDetail(no).then(d => ({ no, d })).catch(() => null)))
+          .then(results => {
+            const cache = {};
+            results.forEach(r => { if (r) cache[r.no] = r.d; });
+            setTiCache(cache);
+          });
+      }
+      // fetch next BN number
+      try {
+        const hist = await tiApi.getBillingNotes();
+        if (hist && hist.length > 0) {
+          const parts = hist[0].bnNo.split("-");
+          const lastNum = parseInt(parts[parts.length - 1], 10) || 0;
+          const yy = new Date().getFullYear().toString().slice(-2);
+          setNextBnNo(`${yy}-BN-${String(lastNum + 1).padStart(6, "0")}`);
+        } else { setNextBnNo(`${new Date().getFullYear().toString().slice(-2)}-BN-000001`); }
+      } catch (_) { setNextBnNo(`${new Date().getFullYear().toString().slice(-2)}-BN-000001`); }
+    } catch (err) { setError(err.message); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { handleSearch(); }, []);
+
+  const toggleCustomer = (idx) => setCustomers(prev => prev.map((c, i) => {
+    if (i !== idx) return c;
+    const newChecked = !c.checked;
+    return { ...c, checked: newChecked, invoices: c.invoices.map(inv => inv.bnNo ? inv : { ...inv, checked: newChecked }) };
+  }));
+
+  const toggleTI = (custIdx, tiIdx) => setCustomers(prev => prev.map((c, ci) => {
+    if (ci !== custIdx) return c;
+    const newInv = c.invoices.map((inv, di) => di === tiIdx && !inv.bnNo ? { ...inv, checked: !inv.checked } : inv);
+    const anyChecked = newInv.some(inv => inv.checked && !inv.bnNo);
+    return { ...c, invoices: newInv, checked: anyChecked };
+  }));
+
+  const toggleExpand = (name) => setExpanded(prev => ({ ...prev, [name]: !prev[name] }));
+
+  const pendingCustomers = customers.filter(c => !c.generated);
+  const selectedCustomers = pendingCustomers.filter(c => c.checked);
+  const totalTIs = selectedCustomers.reduce((s, c) => s + c.invoices.filter(inv => inv.checked && !inv.bnNo).length, 0);
+  const grandTotal = selectedCustomers.reduce((s, c) => s + c.invoices.filter(inv => inv.checked && !inv.bnNo).reduce((t, inv) => t + (parseFloat(inv.total) || 0), 0), 0);
+
+  const selectAll = () => {
+    const allChecked = pendingCustomers.every(c => c.checked);
+    setCustomers(prev => prev.map(c => c.generated ? c : { ...c, checked: !allChecked, invoices: c.invoices.map(inv => inv.bnNo ? inv : { ...inv, checked: !allChecked }) }));
+  };
+
+  // inline TI detail expand
+  const toggleTiDetail = async (tiNo) => {
+    if (expandedTi === tiNo) { setExpandedTi(null); return; }
+    setExpandedTi(tiNo);
+    if (tiCache[tiNo]) return;
+    setTiLoading(tiNo);
+    try {
+      const d = await tiApi.getTIDetail(tiNo);
+      setTiCache(prev => ({ ...prev, [tiNo]: d }));
+    } catch (_) {}
+    finally { setTiLoading(null); }
+  };
+
+  const incrementBn = (bnNo) => {
+    const parts = bnNo.split("-");
+    const num = parseInt(parts[parts.length - 1], 10) || 0;
+    const yy = parts[0];
+    return `${yy}-BN-${String(num + 1).padStart(6, "0")}`;
+  };
+
+  const handleBatchCreate = async () => {
+    if (!nextBnNo || selectedCustomers.length === 0) return;
+    setCreating(true);
+    setResults([]);
+    const today = new Date().toISOString().slice(0, 10);
+    const total = selectedCustomers.length;
+    setProgress({ done: 0, total, current: "" });
+
+    let currentBn = nextBnNo;
+    const batchResults = [];
+
+    for (const cust of selectedCustomers) {
+      setProgress(prev => ({ ...prev, current: cust.customer }));
+      const checkedTIs = cust.invoices.filter(inv => inv.checked && !inv.bnNo);
+      const invoices = checkedTIs.map(inv => ({ no: inv.no, date: inv.date, total: inv.total }));
+      try {
+        const result = await tiApi.confirmBN(cust.customer, currentBn, invoices, today, cust.address || "", cust.phone || "");
+        const custAmount = checkedTIs.reduce((s, inv) => s + (parseFloat(inv.total) || 0), 0);
+        batchResults.push({ customer: cust.customer, bnNo: result.bnNo, pdfUrl: result.pdfUrl, success: true, count: checkedTIs.length, amount: custAmount });
+        currentBn = incrementBn(currentBn);
+      } catch (err) {
+        batchResults.push({ customer: cust.customer, success: false, error: err.message });
+      }
+      setProgress(prev => ({ ...prev, done: prev.done + 1 }));
+    }
+
+    setResults(batchResults);
+    setCreating(false);
+    setNextBnNo(currentBn);
+  };
+
+  // ── Result view ──
+  if (results.length > 0) {
+    const successCount = results.filter(r => r.success).length;
+    const failCount = results.filter(r => !r.success).length;
+    const totalTIsCreated = results.filter(r => r.success).reduce((s, r) => s + (r.count || 0), 0);
+    const totalAmount = results.filter(r => r.success).reduce((s, r) => s + (r.amount || 0), 0);
+    return (
+      <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+        <div style={{ flexShrink: 0, paddingBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+            <button onClick={onBack} style={{ background: "none", border: `0.5px solid ${C.border}`, borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", color: C.muted, display: "flex", alignItems: "center", gap: 4 }}>
+              <ChevronLeft size={13}/> กลับ
+            </button>
+            <span style={{ fontSize: 15, fontWeight: 500 }}>ผลการสร้างใบวางบิล</span>
+          </div>
+          <div style={{ background: failCount === 0 ? C.successBg : C.warningBg, border: `1px solid ${failCount === 0 ? C.success : C.warning}`, borderRadius: 8, padding: "14px 18px", marginBottom: 12 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: failCount === 0 ? C.success : C.warning }}>
+              {failCount === 0 ? "สร้างใบวางบิลสำเร็จทั้งหมด" : `สำเร็จ ${successCount} ราย · ไม่สำเร็จ ${failCount} ราย`}
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
+              สร้าง {successCount} ใบวางบิล · รวม {totalTIsCreated} ฉบับ TI · ยอดรวม {totalAmount.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "hidden", fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: "#f0f4f8" }}>
+                <th style={{ padding: "8px 14px", textAlign: "left", fontSize: 11, fontWeight: 500, color: C.muted }}>ลูกค้า</th>
+                <th style={{ padding: "8px 14px", textAlign: "left", fontSize: 11, fontWeight: 500, color: C.muted }}>เลขที่ BN</th>
+                <th style={{ padding: "8px 14px", textAlign: "center", fontSize: 11, fontWeight: 500, color: C.muted }}>สถานะ</th>
+                <th style={{ padding: "8px 14px", textAlign: "center", fontSize: 11, fontWeight: 500, color: C.muted }}>PDF</th>
+              </tr>
+            </thead>
+            <tbody>
+              {results.map((r, i) => (
+                <tr key={i} style={{ borderBottom: `0.5px solid ${C.borderLight}` }}>
+                  <td style={{ padding: "8px 14px", fontWeight: 500 }}>{r.customer}</td>
+                  <td style={{ padding: "8px 14px", color: C.accent }}>{r.success ? r.bnNo : "—"}</td>
+                  <td style={{ padding: "8px 14px", textAlign: "center" }}>
+                    {r.success
+                      ? <span style={{ color: C.success, fontSize: 12 }}><Check size={14}/> สำเร็จ</span>
+                      : <span style={{ color: C.danger, fontSize: 12 }}>✕ {r.error}</span>}
+                  </td>
+                  <td style={{ padding: "8px 14px", textAlign: "center" }}>
+                    {r.success && r.pdfUrl && (
+                      <a href={r.pdfUrl} target="_blank" rel="noreferrer" style={{ color: C.accent, fontSize: 12, textDecoration: "none" }}>ดู PDF</a>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div style={{ flexShrink: 0, padding: "14px 0", display: "flex", alignItems: "center", gap: 10 }}>
+          {successCount > 0 && (
+            <>
+              <div style={{ display: "inline-flex", gap: 2 }}>
+                {[["portrait", "PDF"], ["landscape", "แบบพิมพ์"]].map(([v, label]) => (
+                  <button key={v} onClick={() => setBatchPrintFormat(v)} disabled={batchPrinting}
+                    style={{ fontSize: 11, padding: "3px 9px", borderRadius: 4, cursor: batchPrinting ? "default" : "pointer", display: "inline-flex", alignItems: "center", gap: 3,
+                      background: batchPrintFormat === v ? C.accent : "white", color: batchPrintFormat === v ? "white" : C.muted,
+                      border: `0.5px solid ${batchPrintFormat === v ? C.accent : C.border}` }}>
+                    {v === "portrait" ? <FileText size={10}/> : <Printer size={10}/>} {label}
+                  </button>
+                ))}
+              </div>
+              <Btn small onClick={async () => {
+                const bnNos = results.filter(r => r.success).map(r => r.bnNo).filter(Boolean);
+                if (!bnNos.length) return;
+                setBatchPrinting(true);
+                try {
+                  const res = await tiApi.printCombinedBillingNotes(bnNos, batchPrintFormat);
+                  if (res && res.url) {
+                    const a = document.createElement("a"); a.href = res.url; a.target = "_blank"; a.rel = "noopener noreferrer";
+                    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                  }
+                  try { await tiApi.markBillingNotesPrinted(bnNos); } catch (_) {}
+                } catch (err) { alert("พิมพ์ไม่สำเร็จ: " + err.message); }
+                finally { setBatchPrinting(false); }
+              }} disabled={batchPrinting}>
+                {batchPrinting ? <Loader size={13}/> : <Printer size={13}/>} {batchPrinting ? "กำลังสร้าง..." : `พิมพ์ทั้งหมด (${successCount})`}
+              </Btn>
+            </>
+          )}
+          <span style={{ marginLeft: "auto" }}/>
+          <Btn small onClick={() => { setResults([]); handleSearch(month, year); }}>
+            <RefreshCw size={13}/> สร้างเพิ่ม
+          </Btn>
+          <Btn small primary onClick={onBack}>
+            กลับหน้ารายการ
+          </Btn>
+        </div>
+
+        {batchPrinting && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(255,255,255,0.92)", zIndex: 100, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14 }}>
+            <style>{`@keyframes spin { to { transform: rotate(360deg); }}`}</style>
+            <Loader size={28} style={{ color: C.accent, animation: "spin 1s linear infinite" }}/>
+            <div style={{ fontSize: 15, fontWeight: 500 }}>กำลังสร้าง PDF สำหรับพิมพ์...</div>
+            <div style={{ fontSize: 13, color: C.muted }}>{printSel.size || results.filter(r => r.success).length} ใบวางบิล</div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Main review / All-done ──
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+      {/* top bar + summary cards */}
+      <div style={{ flexShrink: 0, paddingBottom: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+          <button onClick={onBack} style={{ background: "none", border: `0.5px solid ${C.border}`, borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", color: C.muted, display: "flex", alignItems: "center", gap: 4 }}>
+            <ChevronLeft size={13}/> กลับ
+          </button>
+          <span style={{ fontSize: 15, fontWeight: 500 }}>สร้างใบวางบิลแบบรวม</span>
+        </div>
+
+        {/* summary cards */}
+        {searched && pendingCustomers.length > 0 && (() => {
+          const totalCust = pendingCustomers.length;
+          const selCust = selectedCustomers.length;
+          const allTiCount = pendingCustomers.reduce((s, c) => s + c.invoices.filter(inv => !inv.bnNo).length, 0);
+          const selTiCount = totalTIs;
+          const allTotal = pendingCustomers.reduce((s, c) => s + c.invoices.filter(inv => !inv.bnNo).reduce((t, inv) => t + (parseFloat(inv.total) || 0), 0), 0);
+          const selTotal = grandTotal;
+          const hasExclusions = editMode && (selCust < totalCust || selTiCount < allTiCount);
+          return (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+            <div style={{ background: C.cardBg, border: `0.5px solid ${hasExclusions ? C.accent : C.border}`, borderRadius: 10, padding: "14px 20px" }}>
+              <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>ลูกค้า</div>
+              {hasExclusions && selCust < totalCust
+                ? <div style={{ fontSize: 26, fontWeight: 500 }}>{selCust}<span style={{ fontSize: 16, color: C.muted, fontWeight: 400 }}>/{totalCust}</span> <span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>ราย</span></div>
+                : <div style={{ fontSize: 26, fontWeight: 500 }}>{totalCust} <span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>ราย</span></div>
+              }
+            </div>
+            <div style={{ background: C.cardBg, border: `0.5px solid ${hasExclusions ? C.accent : C.border}`, borderRadius: 10, padding: "14px 20px" }}>
+              <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>ใบกำกับภาษี</div>
+              {hasExclusions && selTiCount < allTiCount
+                ? <div style={{ fontSize: 26, fontWeight: 500 }}>{selTiCount}<span style={{ fontSize: 16, color: C.muted, fontWeight: 400 }}>/{allTiCount}</span> <span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>ฉบับ</span></div>
+                : <div style={{ fontSize: 26, fontWeight: 500 }}>{allTiCount} <span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>ฉบับ</span></div>
+              }
+            </div>
+            <div style={{ background: C.cardBg, border: `0.5px solid ${hasExclusions ? C.accent : C.border}`, borderRadius: 10, padding: "14px 20px" }}>
+              <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>ยอดรวม</div>
+              {hasExclusions && selTotal < allTotal
+                ? <div><div style={{ fontSize: 26, fontWeight: 500, color: C.accent }}>{selTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div><div style={{ fontSize: 11, color: C.muted, textDecoration: "line-through" }}>{allTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>
+                : <div style={{ fontSize: 26, fontWeight: 500, color: C.accent }}>{allTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+              }
+            </div>
+          </div>
+          );
+        })()}
+
+        {/* action bar */}
+        <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", display: "flex", alignItems: "center", gap: 8 }}>
+          <DateRangePicker monthOnly startDate={`${year}-${String(month).padStart(2,"0")}-01`} endDate=""
+            onApply={(s) => { if (!s) return; const d = new Date(s); setMonth(d.getMonth()+1); setYear(d.getFullYear()); handleSearch(d.getMonth()+1, d.getFullYear()); }} />
+          <Btn small primary onClick={() => handleSearch(month, year)} disabled={loading}>
+            {loading ? <Loader size={13}/> : <RefreshCw size={13}/>} รีเฟรช
+          </Btn>
+          {searched && pendingCustomers.length > 0 && (
+            <>
+              <span style={{ marginLeft: "auto" }}/>
+              <Btn small onClick={() => setEditMode(!editMode)} style={editMode ? { background: "#eef2ff", border: `1px solid ${C.accent}`, color: C.accent } : {}}>
+                <Pencil size={12}/> {editMode ? "เสร็จสิ้น" : "แก้ไขรายการ"}
+              </Btn>
+              <Btn small primary onClick={() => setShowConfirm(true)} disabled={creating || selectedCustomers.length === 0}>
+                <Check size={13}/> {editMode ? `สร้าง ${selectedCustomers.length} ราย` : `สร้างทั้งหมด (${pendingCustomers.length} ราย)`}
+              </Btn>
+            </>
+          )}
+        </div>
+        {error && <div style={{ marginTop: 8 }}><ErrorBox msg={error} onRetry={() => handleSearch()} /></div>}
+      </div>
+
+      {/* loading */}
+      {loading && <Spinner text="กำลังดึงข้อมูลใบกำกับภาษี..." />}
+      {!loading && searched && pendingCustomers.length === 0 && customers.length === 0 && (
+        <div style={{ textAlign: "center", padding: 40, color: C.muted, fontSize: 13 }}>ไม่มีใบกำกับภาษีในเดือนนี้</div>
+      )}
+
+      {/* all-done view */}
+      {!loading && searched && pendingCustomers.length === 0 && customers.length > 0 && (() => {
+        const generatedCustomers = customers.filter(c => c.generated);
+        const allBnNos = [...new Set(generatedCustomers.flatMap(c => (c.invoices || []).map(inv => inv.bnNo).filter(Boolean)))];
+        const allTiCount = generatedCustomers.reduce((s, c) => s + (c.invoices || []).length, 0);
+        const allAmount = generatedCustomers.reduce((s, c) => s + (c.invoices || []).reduce((t, inv) => t + (parseFloat(inv.total) || 0), 0), 0);
+        const enterPrintMode = () => { setPrintSel(new Set(allBnNos)); setPrintMode(true); };
+        const exitPrintMode = () => { setPrintMode(false); };
+        const togglePrintSel = (bn) => setPrintSel(prev => { const s = new Set(prev); s.has(bn) ? s.delete(bn) : s.add(bn); return s; });
+        const togglePrintAll = () => setPrintSel(prev => prev.size === allBnNos.length ? new Set() : new Set(allBnNos));
+        return (
+          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+            <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+            {/* summary cards — all done */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+              <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 10, padding: "14px 20px" }}>
+                <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>ลูกค้า</div>
+                <div style={{ fontSize: 26, fontWeight: 500 }}>{generatedCustomers.length} <span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>ราย</span></div>
+              </div>
+              <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 10, padding: "14px 20px" }}>
+                <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>ใบวางบิล</div>
+                <div style={{ fontSize: 26, fontWeight: 500 }}>{allBnNos.length} <span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>ฉบับ</span></div>
+              </div>
+              <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 10, padding: "14px 20px" }}>
+                <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>ยอดรวม</div>
+                <div style={{ fontSize: 26, fontWeight: 500, color: C.accent }}>{allAmount.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+              </div>
+            </div>
+
+            {/* done banner */}
+            <div style={{ background: C.successBg, border: `1px solid ${C.success}`, borderRadius: 8, padding: "12px 16px", marginBottom: 12, fontSize: 13, color: C.success, fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span><CheckCircle size={14} style={{ verticalAlign: "middle", marginRight: 6 }}/>วางบิลครบทุกรายแล้ว — {allBnNos.length} ใบวางบิล รวม {allTiCount} ฉบับ TI</span>
+              {!printMode && (
+                <Btn small onClick={enterPrintMode} style={{ flexShrink: 0 }}>
+                  <Printer size={13}/> พิมพ์
+                </Btn>
+              )}
+            </div>
+
+            {/* generated customer list */}
+            <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: "#f0f4f8" }}>
+                    {printMode && (
+                      <th style={{ padding: "8px 10px", width: 36, textAlign: "center" }}>
+                        <input type="checkbox" checked={printSel.size === allBnNos.length} onChange={togglePrintAll} style={{ cursor: "pointer" }} />
+                      </th>
+                    )}
+                    <th style={{ padding: "8px 16px", textAlign: "left", fontSize: 11, fontWeight: 500, color: C.muted }}>ลูกค้า</th>
+                    <th style={{ padding: "8px 14px", textAlign: "left", fontSize: 11, fontWeight: 500, color: C.muted }}>เลขที่ BN</th>
+                    <th style={{ padding: "8px 14px", textAlign: "center", fontSize: 11, fontWeight: 500, color: C.muted }}>จำนวน TI</th>
+                    <th style={{ padding: "8px 16px", textAlign: "right", fontSize: 11, fontWeight: 500, color: C.muted }}>ยอดรวม</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {generatedCustomers.map((cust, i) => {
+                    const bnNo = (cust.invoices || []).find(inv => inv.bnNo)?.bnNo || "—";
+                    const tiCount = (cust.invoices || []).length;
+                    const amount = (cust.invoices || []).reduce((s, inv) => s + (parseFloat(inv.total) || 0), 0);
+                    const isSelected = printMode && printSel.has(bnNo);
+                    return (
+                      <tr key={i} style={{ borderBottom: `0.5px solid ${C.borderLight}`, opacity: printMode && !isSelected ? 0.4 : 1, transition: "opacity 0.15s" }}>
+                        {printMode && (
+                          <td style={{ padding: "8px 10px", textAlign: "center" }}>
+                            <input type="checkbox" checked={isSelected} onChange={() => togglePrintSel(bnNo)} style={{ cursor: "pointer" }} />
+                          </td>
+                        )}
+                        <td style={{ padding: "8px 16px", fontWeight: 500 }}>{cust.customer}</td>
+                        <td style={{ padding: "8px 14px", color: C.accent }}>{bnNo}</td>
+                        <td style={{ padding: "8px 14px", textAlign: "center", color: C.muted }}>{tiCount}</td>
+                        <td style={{ padding: "8px 16px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{amount.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            </div>
+
+            {/* print mode footer */}
+            {printMode && (
+              <div style={{ flexShrink: 0, padding: "14px 0", display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ display: "inline-flex", gap: 2 }}>
+                  {[["portrait", "PDF"], ["landscape", "แบบพิมพ์"]].map(([v, label]) => (
+                    <button key={v} onClick={() => setBatchPrintFormat(v)} disabled={batchPrinting}
+                      style={{ fontSize: 11, padding: "3px 9px", borderRadius: 4, cursor: batchPrinting ? "default" : "pointer", display: "inline-flex", alignItems: "center", gap: 3,
+                        background: batchPrintFormat === v ? C.accent : "white", color: batchPrintFormat === v ? "white" : C.muted,
+                        border: `0.5px solid ${batchPrintFormat === v ? C.accent : C.border}` }}>
+                      {v === "portrait" ? <FileText size={10}/> : <Printer size={10}/>} {label}
+                    </button>
+                  ))}
+                </div>
+                <Btn small primary onClick={async () => {
+                  const bnNos = [...printSel].filter(Boolean);
+                  if (!bnNos.length) return;
+                  setBatchPrinting(true);
+                  try {
+                    const res = await tiApi.printCombinedBillingNotes(bnNos, batchPrintFormat);
+                    if (res && res.url) {
+                      const a = document.createElement("a"); a.href = res.url; a.target = "_blank"; a.rel = "noopener noreferrer";
+                      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                    }
+                    try { await tiApi.markBillingNotesPrinted(bnNos); } catch (_) {}
+                    exitPrintMode();
+                  } catch (err) { alert("พิมพ์ไม่สำเร็จ: " + err.message); }
+                  finally { setBatchPrinting(false); }
+                }} disabled={batchPrinting || printSel.size === 0}>
+                  {batchPrinting ? <Loader size={13}/> : <Printer size={13}/>} {batchPrinting ? "กำลังสร้าง..." : `พิมพ์ที่เลือก (${printSel.size})`}
+                </Btn>
+                <Btn small onClick={exitPrintMode} disabled={batchPrinting}>ยกเลิก</Btn>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* pending customers — main review list */}
+      {!loading && searched && pendingCustomers.length > 0 && (
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+          <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>
+            {/* select all row (edit mode only) */}
+            {editMode && (
+              <div style={{ padding: "8px 16px", background: "#f8f9fb", borderBottom: `0.5px solid ${C.borderLight}`, display: "flex", alignItems: "center", gap: 10 }}>
+                <input type="checkbox" checked={pendingCustomers.every(c => c.checked)} onChange={selectAll} style={{ cursor: "pointer" }} />
+                <span style={{ fontSize: 12, color: C.muted }}>เลือกทั้งหมด ({pendingCustomers.length} ราย)</span>
+                {selectedCustomers.length < pendingCustomers.length && (
+                  <span style={{ fontSize: 11, color: "#e67700", marginLeft: "auto" }}>ข้าม {pendingCustomers.length - selectedCustomers.length} ราย</span>
+                )}
+              </div>
+            )}
+            {customers.map((cust, ci) => {
+              if (cust.generated) return null;
+              const unbilled = cust.invoices.filter(inv => !inv.bnNo);
+              const custTotal = unbilled.reduce((s, inv) => s + (parseFloat(inv.total) || 0), 0);
+              const isExpanded = expanded[cust.customer];
+              const excluded = editMode && !cust.checked;
+              return (
+                <div key={ci} style={{ borderBottom: `0.5px solid ${C.borderLight}`, opacity: excluded ? 0.4 : 1, transition: "opacity 0.15s" }}>
+                  {/* customer header */}
+                  <div style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}
+                    onClick={() => toggleExpand(cust.customer)}>
+                    {editMode && (
+                      <input type="checkbox" checked={cust.checked} onChange={() => toggleCustomer(ci)} onClick={e => e.stopPropagation()} style={{ cursor: "pointer", flexShrink: 0 }} />
+                    )}
+                    <ChevronDown size={14} style={{ color: C.muted, flexShrink: 0, transform: isExpanded ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s" }}/>
+                    <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 500, textDecoration: excluded ? "line-through" : "none" }}>{cust.customer}</div>
+                    <span style={{ fontSize: 12, color: C.muted, whiteSpace: "nowrap" }}>{unbilled.length} ฉบับ</span>
+                    <span style={{ fontSize: 12, fontWeight: 500, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{custTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+                  </div>
+
+                  {/* TI list (expanded) */}
+                  {isExpanded && (
+                    <div style={{ background: "#fafbfd", borderTop: `0.5px solid ${C.borderLight}` }}>
+                      {/* already-billed TIs */}
+                      {cust.invoices.filter(inv => inv.bnNo).length > 0 && (
+                        <div style={{ padding: "4px 16px 4px 42px", fontSize: 10, color: C.muted, background: "#f5f5f5" }}>
+                          วางบิลแล้ว: {cust.invoices.filter(inv => inv.bnNo).map(inv => inv.no).join(", ")}
+                        </div>
+                      )}
+                      {/* unbilled TIs */}
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                        <thead>
+                          <tr style={{ background: "#f0f4f8" }}>
+                            {editMode && <th style={{ width: 36, padding: "6px 10px" }}></th>}
+                            <th style={{ padding: editMode ? "6px 14px" : "6px 16px 6px 42px", textAlign: "left", fontSize: 11, color: C.muted, fontWeight: 500 }}>เลขที่ TI</th>
+                            <th style={{ padding: "6px 14px", textAlign: "left", fontSize: 11, color: C.muted, fontWeight: 500 }}>วันที่</th>
+                            <th style={{ padding: "6px 16px", textAlign: "right", fontSize: 11, color: C.muted, fontWeight: 500 }}>รวมเงิน</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {unbilled.map((inv, di) => {
+                            const origIdx = cust.invoices.indexOf(inv);
+                            const isTiExp = expandedTi === inv.no;
+                            const tiData = tiCache[inv.no] || null;
+                            const tiItemCount = tiData ? (tiData.items||[]).filter(it => it.desc||it.qty||it.amount).length : null;
+                            const tiExcluded = editMode && !inv.checked;
+                            return (
+                              <Fragment key={di}>
+                                <tr style={{ borderBottom: isTiExp ? "none" : `0.5px solid ${C.borderLight}`, cursor: "pointer", background: isTiExp ? "#f0f6ff" : "white", opacity: tiExcluded ? 0.4 : 1, transition: "opacity 0.15s" }}
+                                  onClick={() => toggleTiDetail(inv.no)}>
+                                  {editMode && (
+                                    <td style={{ padding: "6px 10px", textAlign: "center" }} onClick={e => e.stopPropagation()}>
+                                      <input type="checkbox" checked={inv.checked} onChange={() => toggleTI(ci, origIdx)} style={{ cursor: "pointer" }} />
+                                    </td>
+                                  )}
+                                  <td style={{ padding: editMode ? "6px 14px" : "6px 16px 6px 42px", color: C.accent, fontWeight: 500, textDecoration: tiExcluded ? "line-through" : "none" }}>
+                                    <ChevronDown size={11} style={{ verticalAlign: "middle", marginRight: 4, transform: isTiExp ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s" }}/>{inv.no}
+                                    {!isTiExp && tiItemCount != null && <span style={{ fontSize: 10.5, color: C.muted, fontWeight: 400, marginLeft: 8 }}>สินค้า {tiItemCount} รายการ</span>}
+                                    {isTiExp && tiItemCount != null && <span style={{ fontSize: 10.5, color: C.muted, fontWeight: 400, marginLeft: 8 }}>{tiItemCount} รายการ ▼</span>}
+                                  </td>
+                                  <td style={{ padding: "6px 14px", color: C.muted }}>{fmtDateThai(inv.date)}</td>
+                                  <td style={{ padding: "6px 16px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{(parseFloat(inv.total) || 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                                </tr>
+                                {isTiExp && (
+                                  <tr>
+                                    <td colSpan={editMode ? 4 : 3} style={{ padding: 0, borderBottom: `0.5px solid ${C.borderLight}` }}>
+                                      <div style={{ background: "#f8faff", padding: "10px 18px 14px" }}>
+                                        {tiLoading === inv.no && <Spinner />}
+                                        {tiData && (
+                                          <>
+                                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5, marginBottom: 8 }}>
+                                              <thead>
+                                                <tr style={{ background: C.sidebar }}>
+                                                  {["#", "รายการ", "ขนาด", "จำนวน", "หน่วยละ", "จำนวนเงิน"].map((h, hi) => (
+                                                    <th key={hi} style={{ padding: "6px 8px", color: "white", fontWeight: 500, textAlign: hi >= 3 ? "right" : "left", fontSize: 10.5 }}>{h}</th>
+                                                  ))}
+                                                </tr>
+                                              </thead>
+                                              <tbody>
+                                                {(tiData.items||[]).filter(it => it.desc||it.qty||it.amount).map((it, ii) => (
+                                                  <tr key={ii} style={{ background: ii%2===0 ? "white" : "#f5f7ff", borderBottom: `0.5px solid ${C.borderLight}` }}>
+                                                    <td style={{ padding: "5px 8px", color: C.muted, textAlign: "center" }}>{ii+1}</td>
+                                                    <td style={{ padding: "5px 8px" }}>{it.desc}</td>
+                                                    <td style={{ padding: "5px 8px", color: C.muted }}>{it.desc2}</td>
+                                                    <td style={{ padding: "5px 8px", textAlign: "right" }}>{it.qty}</td>
+                                                    <td style={{ padding: "5px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{Number(it.unitPrice||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                                                    <td style={{ padding: "5px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{Number(it.amount||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                                                  </tr>
+                                                ))}
+                                              </tbody>
+                                              <tfoot>
+                                                <tr style={{ background: "#eef2ff", borderTop: `1px solid ${C.border}` }}>
+                                                  <td colSpan={5} style={{ padding: "7px 8px", textAlign: "right", fontWeight: 500 }}>รวมทั้งสิ้น</td>
+                                                  <td style={{ padding: "7px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: C.accent }}>{(tiData.grandTotal||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                                                </tr>
+                                              </tfoot>
+                                            </table>
+                                            {tiData.pdfUrl && (
+                                              <div style={{ textAlign: "right" }}>
+                                                <a href={tiData.pdfUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                                                  style={{ fontSize: 11, color: C.accent, border: `0.5px solid ${C.accent}`, borderRadius: 4, padding: "4px 10px", textDecoration: "none" }}>
+                                                  <FileText size={11} style={{ verticalAlign: "middle", marginRight: 3 }}/> เปิด PDF
+                                                </a>
+                                              </div>
+                                            )}
+                                          </>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* confirm dialog */}
+      {showConfirm && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 90, display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => setShowConfirm(false)}>
+          <div style={{ background: "white", borderRadius: 12, padding: "28px 32px", width: 420, maxWidth: "90vw", boxShadow: "0 8px 30px rgba(0,0,0,0.15)" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>ยืนยันการสร้างใบวางบิล</div>
+            <div style={{ fontSize: 13, lineHeight: 1.8, marginBottom: 20 }}>
+              <div>ลูกค้า: <strong>{selectedCustomers.length} ราย</strong></div>
+              <div>ใบกำกับภาษี: <strong>{totalTIs} ฉบับ</strong></div>
+              <div>ยอดรวม: <strong style={{ color: C.accent }}>{grandTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</strong></div>
+              {editMode && selectedCustomers.length < pendingCustomers.length && (
+                <div style={{ marginTop: 8, padding: "8px 12px", background: "#fff8e6", borderRadius: 6, fontSize: 12, color: "#946200" }}>
+                  ข้าม {pendingCustomers.length - selectedCustomers.length} ราย: {pendingCustomers.filter(c => !c.checked).map(c => c.customer).join(", ")}
+                </div>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <Btn small onClick={() => setShowConfirm(false)}>ยกเลิก</Btn>
+              <Btn small primary onClick={() => { setShowConfirm(false); handleBatchCreate(); }}>
+                <Check size={13}/> ยืนยัน — สร้าง {selectedCustomers.length} ราย
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* progress overlay */}
+      {creating && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(255,255,255,0.92)", zIndex: 100, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14 }}>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); }}`}</style>
+          <Loader size={28} style={{ color: C.accent, animation: "spin 1s linear infinite" }}/>
+          <div style={{ fontSize: 15, fontWeight: 500 }}>กำลังสร้างใบวางบิล...</div>
+          <div style={{ fontSize: 13, color: C.muted }}>{progress.done}/{progress.total} — {progress.current}</div>
+          <div style={{ width: 240, height: 6, background: C.borderLight, borderRadius: 3, overflow: "hidden" }}>
+            <div style={{ width: `${progress.total > 0 ? (progress.done / progress.total) * 100 : 0}%`, height: "100%", background: C.accent, borderRadius: 3, transition: "width 0.3s" }}/>
+          </div>
+        </div>
+      )}
+
+      {/* batch print overlay */}
+      {batchPrinting && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(255,255,255,0.92)", zIndex: 100, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14 }}>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); }}`}</style>
+          <Loader size={28} style={{ color: C.accent, animation: "spin 1s linear infinite" }}/>
+          <div style={{ fontSize: 15, fontWeight: 500 }}>กำลังสร้าง PDF สำหรับพิมพ์...</div>
+          <div style={{ fontSize: 13, color: C.muted }}>{printSel.size || results.filter(r => r.success).length} ใบวางบิล</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── BN Create View ─────────────────────────────────────────
 
 function BNCreateView({ onBack }) {
@@ -939,7 +1585,7 @@ function BNCreateView({ onBack }) {
   const [loading, setLoading]         = useState(false);
   const [error, setError]             = useState("");
   const [selectedIdx, setSelectedIdx] = useState(null);
-  const [nextBnNo, setNextBnNo]       = useState("26-BN-000001");
+  const [nextBnNo, setNextBnNo]       = useState(() => `${new Date().getFullYear().toString().slice(-2)}-BN-000001`);
   const [printQueue, setPrintQueue]   = useState([]);
   const [printFormat, setPrintFormat] = useState("portrait");
   const [printing, setPrinting]       = useState(false);
@@ -1134,7 +1780,7 @@ function BNCreateView({ onBack }) {
                   </div>
                   {cust.generated && cust.createdBnNo
                     ? <div style={{ fontSize: 10, color: C.accent }}>{cust.createdBnNo}</div>
-                    : <div style={{ fontSize: 10, color: C.muted }}>{cust.invoices.length} ฉบับ · ฿{total.toLocaleString()}</div>}
+                    : <div style={{ fontSize: 10, color: C.muted }}>{cust.invoices.length} ฉบับ · {total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>}
                 </div>
               );
             })}
@@ -1160,7 +1806,7 @@ function BNCreateView({ onBack }) {
                 <div style={{ padding: "12px 14px", display: "flex", gap: 24, flexWrap: "wrap", fontSize: 12 }}>
                   <div><div style={{ color: C.muted, fontSize: 11, marginBottom: 2 }}>วันที่</div><div>{selectedCust.createdDate || "-"}</div></div>
                   <div><div style={{ color: C.muted, fontSize: 11, marginBottom: 2 }}>จำนวนบิล</div><div>{selectedCust.createdCount} ฉบับ</div></div>
-                  <div><div style={{ color: C.muted, fontSize: 11, marginBottom: 2 }}>รวมเงิน</div><div style={{ fontWeight: 600, color: C.accent }}>฿{(selectedCust.createdTotal||0).toLocaleString()}</div></div>
+                  <div><div style={{ color: C.muted, fontSize: 11, marginBottom: 2 }}>รวมเงิน</div><div style={{ fontWeight: 600, color: C.accent }}>{(selectedCust.createdTotal||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>
                   <div style={{ alignSelf: "flex-end" }}>
                     <Btn small onClick={handleGenBnPdf} disabled={ptLoading}>
                       {ptLoading ? <Loader size={13}/> : null} PDF
@@ -1177,8 +1823,8 @@ function BNCreateView({ onBack }) {
                             <td style={{ padding: "7px 14px" }}>
                               <span onClick={() => setTiPopup(inv.no)} style={{ color: C.accent, fontWeight: 500, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" }}>{inv.no}</span>
                             </td>
-                            <td style={{ padding: "7px 14px", color: C.muted }}>{inv.date}</td>
-                            <td style={{ padding: "7px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{(parseFloat(inv.total)||0).toLocaleString()}</td>
+                            <td style={{ padding: "7px 14px", color: C.muted }}>{fmtDateThai(inv.date)}</td>
+                            <td style={{ padding: "7px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(parseFloat(inv.total)||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1244,7 +1890,7 @@ function BNCreateView({ onBack }) {
                         </td>
                         <td style={{ padding: "6px 12px", fontSize: 11 }}>{q.customer}</td>
                         <td style={{ padding: "6px 12px", fontSize: 11 }}>{q.count}</td>
-                        <td style={{ padding: "6px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>฿{(q.total||0).toLocaleString()}</td>
+                        <td style={{ padding: "6px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(q.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1269,28 +1915,28 @@ function BillingNoteTIPage({ cache, updateCache, goListRequest, onViewChange }) 
   const [selectedBnNo, setSelectedBnNo] = useState(null);
   const setView = (v, label) => { setView_(v); onViewChange?.(label ?? null); };
   useEffect(() => { if (goListRequest) setView("list"); }, [goListRequest]);
-  const bnList = cache["bnList"] || [];
-  const [listLoading, setListLoading] = useState(!cache["bnList"]);
+  const bnList = cache["bntiList"] || [];
+  const [listLoading, setListLoading] = useState(!cache["bntiList"]);
   const [listError, setListError]     = useState("");
-  const detailKey = no => "bnDetail_" + no;
+  const detailKey = no => "bntiDetail_" + no;
 
   const loadBnList = async () => {
     setListLoading(true); setListError("");
     try {
       const data = await tiApi.getBillingNotes();
-      updateCache("bnList", Array.isArray(data) ? data : []);
+      updateCache("bntiList", Array.isArray(data) ? data : []);
     } catch (err) { setListError(err.message); }
     finally { setListLoading(false); }
   };
 
-  useEffect(() => { if (!cache?.["bnList"]) loadBnList(); }, []);
+  useEffect(() => { if (!cache?.["bntiList"]) loadBnList(); }, []);
 
-  if (view === "create") return <BNCreateView onBack={() => { updateCache("bnList", null); loadBnList(); setView("list"); }} />;
-  if (view === "batchCreate") return <div style={{ padding: 20, color: C.muted, fontSize: 13 }}>สร้างแบบรวม — coming soon (#234b)</div>;
+  if (view === "create") return <BNCreateView onBack={() => { updateCache("bntiList", null); loadBnList(); setView("list"); }} />;
+  if (view === "batchCreate") return <BNTIBatchCreateView onBack={() => { updateCache("bntiList", null); loadBnList(); setView("list"); }} />;
   if (view === "detail") return <BNDetailView bnNo={selectedBnNo} onBack={() => setView("list")}
     cachedDetail={cache[detailKey(selectedBnNo)]}
     onDetailCached={(no, d) => updateCache(detailKey(no), d)}
-    onSaved={() => { updateCache(detailKey(selectedBnNo), null); updateCache("bnList", null); loadBnList(); }} />;
+    onSaved={() => { updateCache(detailKey(selectedBnNo), null); updateCache("bntiList", null); loadBnList(); }} />;
 
   return (
     <BNListView

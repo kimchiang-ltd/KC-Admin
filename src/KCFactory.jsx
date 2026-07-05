@@ -2,64 +2,43 @@
 // KC Factory System — Web App
 // ============================================================
 // Version History — full detail in docs/daily-progress/KC_Daily_Progress_YYYY-MM-DD.md
-// v1.4.252 (2026-07-01) — #244 App.jsx: force re-login once per calendar day. Login profile stamped with `_loginDate` (local date string) on sign-in; on app mount, stale/missing date clears localStorage and shows the login screen. Same fix mirrored in Invoice Admin's App.jsx (ia_user key, separate deploy).
-// v1.4.251 (2026-07-01) — #243 TI portrait PDF page-count dropdown: "1 หน้า (ต้นฉบับ)" default vs "4 หน้า (ครบชุด + สำเนา)", mirrors DN's ต้นฉบับ/ต้นฉบับ+สำเนา pattern. TIPage.jsx (detail view PDF button + QR send now share ptMode) + tiApi.jsx (generateTaxInvoicePortraitPDF gains pageMode param). Backend: TICode.gs v0.0.4 (Invoice Admin, separate deploy).
-// v1.4.249 (2026-07-01) — #240 Settings → Google Drive folders: added TI/BN-TI/BN-TI-Combined folder fields, wired to tiApi.getConfig/saveConfig (TICode.gs backend). Fixes "Invalid argument: id" on TI create (unset cfg.folders.ti) and pre-empts same bug for BN-TI. KC Admin side only — Invoice Admin's own settings page still has the old fields (removal is a separate step).
-// v1.4.248 (2026-07-01) — #239 CustomerAutocomplete now respects `apiOverride` prop; fixes TI form showing DN customer list instead of TI customers.
-// v1.4.246–247 (2026-06-30) — #236 BN batch create: DN row expand with inline detail table. #237 block customer switching during BN creation (isCreating state). #238 cancelBillingNote: cancel ALL duplicate rows.
-// v1.4.243–245 (2026-06-30) — #234a–c BN batch create flow: dropdown button, review page with expandable checklist, sequential create with progress overlay + results. #233 sortable columns on BN lists (InvoicePage + BNTIPage). BNTIPage PDF column removal.
-// v1.4.238–242 (2026-06-30) — #228 "เดือน DN" column. #229 sticky footer on BN create. #230 BN detail inline DN expand. #231 BN list UI polish (bleed fix, remove ปกติ badge + PDF column, refresh buttons). #234a dropdown on create button.
-// v1.4.237 (2026-06-30) — #226d customer detail full page (bar chart, stats cards, DN list with BN badges). Breadcrumb 3-level sync.
-// v1.4.236 (2026-06-30) — #226d Customer insight panel: clicking a customer row swaps KPI cards area to customer detail view with back button, rank badge, name, total + MoM delta, monthly bar chart (peak highlighted), 4 stats cards (DN count, avg per DN, billed %, top month). Click "← ภาพรวมทั้งหมด" returns to overview KPI. DN expansion still shows inline under row.
-// v1.4.235 (2026-06-30) — #226c Multi-month sparkline column: inline SVG area chart (area fill gradient + polyline + dot) per customer row in 3/6/12-month mode. Top 3 customers blue (#1d4ed8), rest lighter (#7c97c9). Grid columns updated to include 70px sparkline column with "แนวโน้ม" header.
-// v1.4.234 (2026-06-30) — #226b KPI cards row: 4 summary cards above table (ยอดขายรวม, จำนวนลูกค้า, ลูกค้าสูงสุด, ค่าเฉลี่ยต่อราย). Each shows value + delta badge (▲/▼ %) vs previous period. Fetches previous period data in parallel via Promise.all for comparison. Styles ported from Sales Report mockup.
-// v1.4.233 (2026-06-30) — #226a SalesByCustomerReport UI redesign Part A: pill-style period filter bar, CSS grid layout (replaces <table>, fixes #224 sticky bleeding), rank badges (top 3 blue), proportion bars + % share (single-month mode), customer search, rounded card container, restyled expandable DN rows, grand total footer. Multi-month mode also restyled with rank column + consistent typography. Styles ported from Sales Report mockup.
-// v1.4.182 (2026-06-29) — #225 SalesByCustomerReport period selector redesign: replaced "1/3/6/12/custom" model with 4 mode buttons + range navigation. anchor={y,m} state represents END month; mode picks duration (1/3/6/12). For mode=1: DateRangePicker monthOnly (month grid dropdown matching BN create style). For mode=3/6/12: ‹ label › arrows shift anchor by ±1 month. Drops "กำหนดเอง" — flexible enough that custom date inputs are unnecessary. Default state = current month, 3-month range.
-// v1.4.181 (2026-06-29) — #223 sticky header — fix v1.4.180 implementation: the inner overflowX:auto wrapper on SalesByCustomerReport was creating a scroll context that blocked sticky from attaching to the page (contentRef). Removed the wrapper + dropped minWidth so columns auto-size. Outer card keeps overflow:clip (which doesn't create scroll context). Sticky now attaches correctly to page scroll. 12-month mode columns get tight; revisit if it becomes a problem.
-// v1.4.180 (2026-06-29) — #222 SalesByCustomerReport dnMonthKey fix: backend returns "yyyy-MM-dd" not "dd/MM/yyyy" → month columns were all "—". Now handles both formats. #223 sticky table headers in both reports (Sales + Unbilled) — outer card overflow hidden→clip; each th has position:sticky top:0 with background fill.
-// v1.4.179 (2026-06-29) — #221b redesign per design review: SalesByCustomerReport refactored to multi-month pivot table (customer × month grid). Month-count selector (1/3/6/12/custom), custom mode falls back to DateRangePicker. Click row → inline expansion shows that customer's DN list with BN status. UnbilledDNReport: 🎉 emoji removed from empty state. Process note: this iteration was design-mockup-first per CLAUDE.md (after missing mockup-first for v1.4.178 initial build).
-// v1.4.178 (2026-06-29) — #221a/b/c Reports Phase A: new modules/reports/ folder with ReportsPage hub + SalesByCustomerReport + UnbilledDNReport. Hub uses SettingsPage-style HubCard grid. Reports use frontend aggregation via api.getDeliveryNotes (no backend changes). Wire NAV: "รายงาน" entry (existed) now renders ReportsPage instead of PlaceholderPage. onViewChange + goListRequest pattern matches SettingsPage. ~310 lines new (3 files).
-// v1.4.177 (2026-06-29) — #214 refactor to on-blur per-field pattern (iii-soft cache): replaced on-save CustomerSyncConfirmModal with per-field CustomerFieldSyncModal. Field blur → if differs from customer record AND not cached "yes" → popup "เพิ่ม/อัพเดท X?". "ใช่" cached for session (no re-prompt for same field); "ไม่" doesn't cache (re-prompt if user edits to new value). Save applies cached "yes" decisions only. Deleted diffCustomerFields helper (per-field diff now inline). 4 forms refactored (DN/TI/BN-DN/BN-TI). BN forms lazy-fetch customer record on first blur.
-// v1.4.176 (2026-06-29) — #214 customer DB sync-back: DN/TI/BN-DN/BN-TI forms compare form values vs customer record on save → silent additive (fill empty fields) OR modal CustomerSyncConfirmModal on conflict (all-or-nothing overwrite). Shared helpers added: diffCustomerFields (utils.jsx), CustomerSyncConfirmModal (ui.jsx). BN forms lazy-fetch customer via api/tiApi.getCustomers since no allCustomers state. Per-field selection deferred to #220.
-// v1.4.175 (2026-06-29) — #215 TaxInvoicePage loads own TI products/sizes via tiApi.getProducts (cache key tiProductList); decoupled from KC Admin Config_Products which is DN's; KCFactory tax-invoice case no longer passes products/setProducts/sizes
-// v1.4.174 (2026-06-29) — #217 SettingsPage: wire onViewChange + goListRequest props → breadcrumb shows sub-view label (ลูกค้า/สินค้า/etc.); clicking active "ตั้งค่า" in sidebar resets to hub
-// v1.4.173 (2026-06-29) — #218 add `pdfHeader: "#0f2942"` to C in shared/constants.jsx — fixes TIDetailPopup table header rendering with undefined background (drift from Invoice Admin's local C, identified in #211f audit)
-// v1.4.172 (2026-06-29) — #216 hotfix: BNTIPage.jsx PAGE_SIZE missing from shared/constants.jsx import (regression from #211d) → BNListView pagination crashed
-// v1.4.171 (2026-06-29) — #211e Phase 7e complete: wire BN-TI as nested NAV sub-item under TI (indented + smaller font); add BillingNoteTIPage import + renderPage case; HomePage hides child items from dashboard cards; breadcrumb shows parent path (เอกสาร › ใบกำกับภาษี › ใบวางบิล TI)
-// v1.4.170 (2026-06-29) — #211d Phase 7d Extract BN-TI module: TIDetailPopup + 7 BN-TI components (BNEditForm, BNDetailView, BNListView, BNDetailMiniPopup, BNCustomerPanel, BNCreateView, BillingNoteTIPage) → src/modules/ti/BNTIPage.jsx (~1,227 lines). NAV wiring deferred to #211e.
-// v1.4.169 (2026-06-29) — #211a/b/c Phase 7 chunks 1-3: scaffold modules/ti/ (tiApi 104L + TISettingsPage 354L + TIPage 648L); wire NAV "ใบกำกับภาษี" + renderPage case (partial #211e — TI only, BN-TI deferred to 7d/7e)
-// v1.4.167 (2026-06-27) — Move APP_VERSION to shared/constants.jsx; footer reads from constant instead of hardcoded string. Future version bumps go in constants.jsx only.
-// v1.4.166 (2026-06-27) — #208 Phase 5 Extract DN+BN module: DeliveryNotePage + BillingNotePage + 11 components → src/modules/invoice/InvoicePage.jsx (~2,232 lines); KCFactory.jsx 2,519 → ~285 lines (app shell only)
-// v1.4.165 (2026-06-27) — #199 fix customer modal false positive: skip checkNameOnBlur when allCustomers not loaded yet (race condition with API)
-// v1.4.164 (2026-06-27) — #196 product warning ยกเลิก keeps typed name (remove updateItem clear); #201 QT loading indicator when opening existing quotation (editLoading state + progress bar + disabled click); #200 QT form header sticky (position:sticky top:0 on top nav bar)
-// v1.4.163 (2026-06-26) — #207 Phase 4 Extract Settings module: SettingsPage + OtherPage + CustomerPage + ProductPage + EditableList + PlaceholderPage → src/modules/settings/SettingsPage.jsx (~636 lines); KCFactory.jsx adds import from './modules/settings/SettingsPage.jsx'
-// v1.4.162 (2026-06-26) — #206 Phase 3 Extract QT module: QuotationPage + QuotationPreview → src/modules/qt/QTPage.jsx (~472 lines); KCFactory.jsx adds import { QuotationPage } from './modules/qt/QTPage.jsx'
-// v1.4.161 (2026-06-26) — Phase 2 shared layer extraction: api.jsx, constants.jsx, utils.jsx, hooks.jsx, ui.jsx, autocomplete.jsx; all .js→.jsx for consistency
-// v1.4.160 (2026-06-26) — #190 Remove TI module (now in Invoice Admin): delete TaxInvoiceForm/Detail/Page, bahtText, EMPTY_TAX_ITEMS, TI api endpoints, NAV entry, vatRate state, folderTI in Settings, Receipt icon
-// v1.4.159 (2026-06-26) — #188 guardedSave delegates to checkNameOnBlur; newCustWarning modal buttons no longer call handleSave (DN + TI forms)
-// v1.4.158 (2026-06-25) — #160 customer onBlur: checkNameOnBlur runs similar→unknown checks in sequence; newCustCheckedRef prevents duplicate check on save
-// v1.4.157 (2026-06-25) — #183 BNListView cancelled section: add plainThead (no sticky), overflow:hidden→clip on cancelled card
-// v1.4.156 (2026-06-25) — #182 BN Create: disabled rows for billed DNs + always-visible warning + "BN ที่สร้างแล้ว" section + BNDetailMiniPopup to cancel existing BN inline; badge สร้าง X/Y
-// v1.4.155 (2026-06-25) — #170 DN cancel: block if billed (check data.bnNo, show alert before modal)
-// v1.4.154 (2026-06-25) — #162 tweak: DN/TI th top:90→70 (correct direction — lower top moves th up)
-// v1.4.153 (2026-06-25) — #162 tweak: DN/TI th top:72→90 (header taller than estimated)
-// v1.4.152 (2026-06-25) — #162 sticky thead: overflow:hidden→clip on DN/TI/BN card divs; position:sticky top:72 on DN/TI th, top:88 on BN th
-// v1.4.151 (2026-06-25) — #181 sticky header regression fix: remove marginTop/paddingTop:-18/18 hack; top:-18 on DN/TI/BN title stickies; top:32 on BN search sticky — fixes bleed + restores v1.4.149 header layout
-// v1.4.150 (2026-06-25) — #158 scroll bleed fix (marginTop/paddingTop:-18/18 on DN/TI/BN sticky headers); #159 topbar fonts →13px; #163 sticky customer card DN+TI; #164 sticky add-row button DN+TI; #165 BN list search bar extracted outside card; #173 outer div height accounts for zoom
-// v1.4.149 (2026-06-24) — #161 DN+TI detail view: revert ↳ expansion; 1 row per item, detail shows full " | " joined string; keep filter fix (desc2+detail)
-// v1.4.148 (2026-06-24) — #161 DN+TI detail view: show continuation rows (split " | " detail into ↳ rows, #f5f7ff bg); fix DN filledItems filter to include desc2+detail
-// v1.4.147 (2026-06-24) — #179 BN Create handleConfirm: fix generated:true set too broadly — mark only confirmed dnNos with bnNo, recompute generated=allBilled; partial BN keeps customer open
-// v1.4.146 (2026-06-24) — #177 QR rollout: extract toDownloadUrl+renderPhoneScreen to module-level; add QR button+modal+instruction panel to TaxInvoiceDetail, BNDetailView, QuotationPage
-// v1.4.140–145 (2026-06-24) — #166 #175 phone mockup polish: emoji→lucide, white camera bg, Send a copy split into 2 steps — normal dropdown (top-right, fontSize 6) then zoomed dropdown (top-right, fontSize 8, "Send a copy" highlighted blue)
-// v1.4.130–143 (2026-06-24) — #155 #172 LINE QR send: QR button on DN, qrcode npm, download URL, 8-step phone mockup guide (home→camera→QR detect→Drive→menu normal→menu zoom→share→LINE), auto-opens on generate
-// v1.4.130 (2026-06-24) — #168 dashboard icon: NAV_ICONS to module level, remove duplicate ICON_MAP
-// v1.4.125–129 (2026-06-23) — nav restructure: สินค้า/ลูกค้า→ระบบ hub, OtherPage (ใบเสนอราคา→อื่นๆ), SettingsPage lazy load, emoji→lucide (#166), scroll fixes
-// v1.4.112–124 (2026-06-23) — list/UX: pagination 50/page, search box fixes, apiCall fetch() (#149), portrait split-button PDF (#150), topbar counter-zoom, BN list/cancelled, HR scope placeholder
-// v1.4.108–111 (2026-06-23) — #140 DN landscape multi-page PDF: maxRows=20, page-break dividers, hard-block, DETAIL_WARN 16→15u
-// v1.4.92–107 (2026-06-22/23) — #141 QuotationPage full build: form+history+live preview, ProductAutocomplete items, cache, success dialog, top-nav buttons
-// v1.4.69–91 (2026-06-19) — #111 useInvoiceForm shared hook; BN refinements: month auto-load, cache, breadcrumb, DateRangePicker, PDF on-demand, new-customer prompt
-// v1.4.53–68 (2026-06-18/19) — #93–#110 BillingNote core: view-based nav, BNCreateView split-pane, BNDetailView+popup+edit, print queue, combined PDF, History caching
-// v1.4.22–46 (2026-06-17/18) — #6 DN/TI soft cancel/restore; #71–#83 ProductAutocomplete free-text+portal+keyboard nav; ProductPage CRUD
+// v1.4.308 (2026-07-05) — #310c single BN create inline DN edit: expanding a not-yet-billed DN now shows "แก้ไขใบส่งของ" → reuses DNInlineEditor (#301) in place. On save updates the DN's total live in the row + footer + header + #310a left metric cards (via onDnEdited), clears the DN pdfUrl so re-print regenerates (#309), drops _dnStore (#282). Customer locked, date preserved; billed DNs stay read-only (#296). Threads products/sizes BillingNotePage→BNCreateView→BNCustomerPanel. Completes the #310 group
+// v1.4.307 (2026-07-05) — #326 BN create split-button dropdown now lists BOTH modes (สร้างแบบรวม → batch · สร้างทีละราย → single); #327 single BN create pre-fetches the selected customer's DN line items in PARALLEL on select (mirrors batch #251) so สินค้า counts appear at once + expand is instant instead of one-by-one round-trips (shows "…" while prefetching)
+// v1.4.306 (2026-07-05) — #310b (pass 2 of 2) single BN create right panel: added the "แก้ไขรายการ" edit-mode toggle (mirrors batch #252d) to BNCustomerPanel — off = clean DN list (all unbilled included), on = per-DN checkboxes + select-all appear, unchecked rows grey out with line-through and drop from the total, footer shows "· ข้าม N". Exclusions persist after exiting edit mode. #310b complete
+// v1.4.305 (2026-07-05) — #310b (pass 1 of 2) single BN create right panel (BNCustomerPanel): Design B refresh — header now shows DN count + customer total; DN table dropped the always-on checkbox column, added a สินค้า column (lazy getDNDetail → "สินค้า N รายการ") with click-to-expand line-item table (reuses dnCache). Scroll fix #325: removed the panel's fixed maxHeight + inner overflow so the whole panel scrolls in the right-column region (DN table no longer collapses to a sliver on fully-billed customers). Pass 2 = "แก้ไขรายการ" edit-mode toggle + exclusion checkboxes (mirror batch #252d)
+// v1.4.304 (2026-07-05) — #310a single BN create left-panel: added 3 summary metric cards (ลูกค้า/ใบส่งของ/รวม) above the customer list + widened the column 220→280px (Design B). Layout only — billing logic unchanged; #310b (right-panel refresh) + #310c (inline DN edit) next
+// v1.4.303 (2026-07-04) — #314 block editing a billed TI (mirror #296): TaxInvoiceDetail edit button guards on data.billed → alerts "ต้องยกเลิกใบวางบิลก่อน" instead of opening the editor, so editing a TI already on a BN-TI can't leave the parent BN-TI total/count stale
+// v1.4.302 (2026-07-04) — #318 redeploy trigger only (no code change): version bump to force a fresh gh-pages commit + new "pages build and deployment" run, to supersede a wedged/Queued Pages deploy that left the live site stuck on v1.4.297. Once live shows 1.4.302, re-enable ENFORCE_AUTH on both backends (#318)
+// v1.4.301 (2026-07-04) — #299e session-expiry UX: onAuthReject now shows a dedicated "เซสชันหมดอายุ / กรุณาเข้าสู่ระบบใหม่" modal with a single Google re-login button (one click satisfies the OAuth popup gesture) instead of a generic error code — a mid-session midnight-exp is benign re-auth, not a failure. Silent refresh intentionally not attempted (popup flow needs a user gesture). NOTE: only visible once #299b ENFORCE_AUTH is live
+// v1.4.300 (2026-07-04) — #299c frontend auth plumbing (needs backend #299a deployed to function): apiCall + tiApiCall migrated GET→POST with text/plain body {…params, action, token} (avoids GAS CORS preflight; also resolves #288 URL-length); shared session-token store in api.jsx (setAuthToken/getAuthToken/clearAuthToken, localStorage kc_token stamped to #244 midnight); App.jsx calls api.login after Google sign-in → stores token, mounts app only on success; setOnAuthReject → drops session + re-login on backend "unauthorized" (fires once #299b live); logout clears token. tiApi shares the same token (ignored by TICode until #299d). NOTE: GAS cross-origin POST behavior to confirm on first real deploy
+// v1.4.299 (2026-07-04) — #311 login error hardening: all 3 App.jsx failure paths (not-allowed / Google onError / userinfo fetch) now show ONE identical generic message "เกิดข้อผิดพลาด กรุณาลองใหม่ (รหัส NNN)" so an unauthorized user can't tell why login failed; the (รหัส NNN) is an internal-only diagnostic code (449 not-allowlisted · 491 sign-in failed · 492 userinfo error). Was: not-allowed path leaked the email + "ไม่มีสิทธิ์เข้าใช้งาน"
+// v1.4.298 (2026-07-04) — audit cleanup batch: #290 delete dead EditableList component (+ its Check/Pencil imports & 🗑 emoji); #291 folder-URL save uses styled ConfirmModal instead of native window.confirm (Settings); #306 BN-TI detail VAT label drops hardcoded "7%" → "ภาษีมูลค่าเพิ่ม" (BN-TI can mix per-TI frozen rates)
+// v1.4.297 (2026-07-03) — #292 single auth gate: main.jsx now renders <App/> directly (deleted the duplicate AuthWrapper + its ALLOWED_EMAILS + login screen). Fixes double-login on first sign-in (AuthWrapper stored kc_user without #244 _loginDate stamp, which App.jsx then rejected); ALLOWED_EMAILS now lives only in App.jsx
+// v1.4.296 (2026-07-03) — #309 inline DN edit now mirrors the DN page: on save clears the DN's pdfUrl/portraitUrl, and the batch "เปิด PDF" button regenerates the landscape PDF (api.generateDeliveryNoteLandscapePDF) when the url was cleared → re-print after an edit gives the fresh PDF
+// v1.4.295 (2026-07-03) — #301 edit DN inline from BN batch create: expand a not-yet-billed DN → "แก้ไขใบส่งของ" turns its item table into an in-place editor (reuses useInvoiceForm; customer locked; date preserved); save updates the row total + summary cards live and drops _dnStore cache. Threads products/sizes into BillingNotePage→BNBatchCreateView
+// v1.4.294 (2026-07-03) — #305 TI detail VAT% label uses the TI's frozen rate (data.vatRate from backend col T) instead of the global rate — old 7% TIs no longer show an "8%" label next to a 7% amount
+// v1.4.293 (2026-07-03) — #302 VAT propagation: SettingsPage keeps vatRate in settingsConfig cache (Settings no longer reverts to 7); KCFactory passes onConfigSaved→refreshVatRate so TI form/list update after a Settings save without app reload
+// v1.4.292 (2026-07-03) — #295c VAT single-source: TaxInvoicePage fed vatRate from config; TI form/detail label + list total (#285) use vatRate; Settings VAT (%) field
+// v1.4.289 (2026-07-03) — #296 block editing a billed DN (guard edit button like cancel); must cancel the BN first
+// v1.4.288 (2026-07-03) — #284 customer field-sync failures now surface a non-blocking alert (was silent .catch) in DN/BN/TI/BN-TI forms (4 spots)
+// v1.4.287 (2026-07-03) — #279 DN/TI list: stop sending search to backend (full range cached, client-side filtered) — fixes search-cache poisoning
+// v1.4.286 (2026-07-03) — Tier-1 audit batch: #287 null-name guard (utils+autocomplete), #283 NaN ‖0 guard (DN+TI detail), #289 zero-amount shows 0, #281 select-all counts unbilled only (BN+BN-TI), #293 UI font Sarabun→Prompt, #280 fmtDateThai handles yyyy-MM-dd + DN popup date, #282 _dnStore invalidated on DN edit
+// v1.4.283 (2026-07-03) — #276 fix hardcoded "26" BN year fallback: derive yy from current year in InvoicePage + BNTIPage (fallbacks + useState initial)
+// v1.4.281 (2026-07-03) — #273 fix silent DN/TI save when customer list fails to load: guardedSave no longer blocks when allCustomers empty; CustomerAutocomplete auto-retries once + shows visible error/retry
+// v1.4.280 (2026-07-03) — #184 DN list: add "สร้างเมื่อ" timestamp column (YYYY/MM/DD HH:mm:ss)
+// v1.4.279 (2026-07-03) — #272 fix React.Fragment → Fragment import in BNTIPage (BN-TI batch create crash)
+// v1.4.278 (2026-07-03) — #263 BN-TI create button: default to batch, dropdown for single (mirror BN #262)
+// v1.4.277 (2026-07-03) — #263 BN-TI batch create: mirrors BN batch flow (summary cards, review/edit modes, confirm dialog, batch print, all-done view)
+// v1.4.276 (2026-07-02) — #248 TI save button: Save icon for edit mode, Receipt for create. #232 TI list refresh button
+// v1.4.275 (2026-07-02) — #271 BN create (single+batch): address/phone from Config_Customers (source of truth), user edits preserved
+// v1.4.270–273 (2026-07-02) — #265–#268 list/detail polish: BN/BN-TI cache separation (#265), remove ฿ from tables (#266), 2-decimal alignment (#267), Thai date format (#268)
+// v1.4.253–268 (2026-07-02) — #251–#262 BN batch create: full UX redesign (summary cards, review/edit modes, confirm dialog), cached DN details, batch print with selection, scroll fix, default batch button
+// v1.4.233–252 (2026-06-30/07-01) — #226–#244 Reports redesign (SalesByCustomer filter+KPI+sparklines), BN list polish, sortable columns, BN batch create flow, TI 1/4-page dropdown, daily re-login, Drive folder settings
+// v1.4.169–182 (2026-06-29) — #211–#225 Phase 7 TI/BN-TI module extraction (tiApi+TIPage+BNTIPage+TISettingsPage), customer sync-back (#214), Reports Phase A (#221), breadcrumb+hotfixes
+// v1.4.160–167 (2026-06-26/27) — #190–#208 Phase 2–5 code reorganization: shared layer extraction, QT/Settings/DN+BN module split, TI removal, APP_VERSION to constants.jsx
+// v1.4.130–159 (2026-06-23/25) — #155–#183 LINE QR send+phone mockup, sticky headers, BN create billed-DN guards, customer onBlur, nav restructure, pagination, DN landscape multi-page
+// v1.4.69–129 (2026-06-18/23) — #93–#141 BN core (create/detail/edit/print/combined PDF), useInvoiceForm hook, QuotationPage full build, nav+UX polish
+// v1.4.22–68 (2026-06-17/19) — #6–#110 DN/TI cancel/restore, ProductAutocomplete, ProductPage CRUD, BillingNote foundation
 // ============================================================
 
 import React, { useState, useEffect, useRef } from "react";
@@ -178,6 +157,7 @@ export default function App({ userEmail, userName, onLogout }) {
   const handleViewChange = (label) => { setBreadcrumbSuffix(label ?? null); if (label) scrollToTop(); };
   const [products, setProducts]   = useState([]);
   const [sizes, setSizes]         = useState([]);
+  const [vatRate, setVatRate]     = useState(0.07); // #295c — from shared Config sheet
   const [configLoaded, setConfigLoaded] = useState(false);
   const [gsVersion, setGsVersion] = useState(null);
   const [fontScale, setFontScale] = useState(() => {
@@ -210,6 +190,7 @@ export default function App({ userEmail, userName, onLogout }) {
       else setProducts(["Product A", "Product B", "Product C", "Product D"]);
       if (cfg.sizes?.length)    setSizes(cfg.sizes);
       else setSizes(["S", "M", "L", "XL", "XXL", "XXXL"]);
+      if (typeof cfg.vatRate === "number" && cfg.vatRate > 0) setVatRate(cfg.vatRate); // #295c
       setConfigLoaded(true);
     }).catch(() => {
       setProducts(["Product A", "Product B", "Product C", "Product D"]);
@@ -218,6 +199,14 @@ export default function App({ userEmail, userName, onLogout }) {
     });
   }, []);
 
+  // #302 B — re-fetch vatRate after a Settings save so TI form/list pick up the new rate without an app reload
+  const refreshVatRate = () => {
+    if (SCRIPT_URL === "YOUR_APPS_SCRIPT_URL_HERE") return;
+    api.getConfig().then(cfg => {
+      if (typeof cfg.vatRate === "number" && cfg.vatRate > 0) setVatRate(cfg.vatRate);
+    }).catch(() => {});
+  };
+
   const sections = [...new Set(NAV.filter(n => n.section).map(n => n.section))];
 
   const renderPage = () => {
@@ -225,12 +214,12 @@ export default function App({ userEmail, userName, onLogout }) {
     switch (active) {
       case "home":       return <HomePage onNavigate={setActive} />;
       case "invoice":    return <DeliveryNotePage products={products} setProducts={setProducts} sizes={sizes} cache={cache} updateCache={updateCache} onViewChange={handleViewChange} goListRequest={goListRequest} />;
-      case "billing":    return <BillingNotePage cache={cache} updateCache={updateCache} goListRequest={goListRequest} onViewChange={handleViewChange} />;
-      case "tax-invoice":return <TaxInvoicePage cache={cache} updateCache={updateCache} onViewChange={handleViewChange} goListRequest={goListRequest} />;
+      case "billing":    return <BillingNotePage products={products} setProducts={setProducts} sizes={sizes} cache={cache} updateCache={updateCache} goListRequest={goListRequest} onViewChange={handleViewChange} />;
+      case "tax-invoice":return <TaxInvoicePage vatRate={vatRate} cache={cache} updateCache={updateCache} onViewChange={handleViewChange} goListRequest={goListRequest} />;
       case "bn-ti":      return <BillingNoteTIPage cache={cache} updateCache={updateCache} goListRequest={goListRequest} onViewChange={handleViewChange} />;
       case "other":      return <OtherPage products={products} sizes={sizes} cache={cache} updateCache={updateCache} onViewChange={handleViewChange} goListRequest={goListRequest} />;
       case "reports":    return <ReportsPage cache={cache} updateCache={updateCache} onViewChange={handleViewChange} goListRequest={goListRequest} />;
-      case "settings":   return <SettingsPage cache={cache} updateCache={updateCache} onViewChange={handleViewChange} goListRequest={goListRequest} />;
+      case "settings":   return <SettingsPage onConfigSaved={refreshVatRate} cache={cache} updateCache={updateCache} onViewChange={handleViewChange} goListRequest={goListRequest} />;
       default:           return <PlaceholderPage title={NAV.find(n => n.key === active)?.label} icon={NAV.find(n => n.key === active)?.icon} />;
     }
   };
@@ -255,7 +244,7 @@ export default function App({ userEmail, userName, onLogout }) {
   const isDevMode = SCRIPT_URL === "YOUR_APPS_SCRIPT_URL_HERE";
 
   return (
-    <div style={{ display: "flex", height: `${100/fontScale}vh`, fontFamily: "Sarabun, sans-serif" }}>
+    <div style={{ display: "flex", height: `${100/fontScale}vh`, fontFamily: "Prompt, sans-serif" }}>
       <style>{`html, body { margin: 0; padding: 0; overflow: hidden; } body { zoom: ${fontScale}; }`}</style>
 
       {/* Sidebar */}

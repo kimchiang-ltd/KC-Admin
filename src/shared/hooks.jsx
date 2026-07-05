@@ -72,9 +72,12 @@ export function useInvoiceForm({ initial, isEdit, products, detailAttr, maxRows 
       if (idx !== i || (it._cont && field !== "detail")) return it;
       const updated = { ...it, [field]: val };
       if (field === "qty" || field === "unitPrice") {
-        const q = parseFloat(field === "qty" ? val : it.qty) || 0;
-        const p = parseFloat(field === "unitPrice" ? val : it.unitPrice) || 0;
-        updated.amount = q * p || "";
+        const qtyRaw   = field === "qty"       ? val : it.qty;
+        const priceRaw = field === "unitPrice" ? val : it.unitPrice;
+        const q = parseFloat(qtyRaw) || 0;
+        const p = parseFloat(priceRaw) || 0;
+        // #289 — show 0 for a genuine zero (qty/price present); blank only when an input is empty
+        updated.amount = (String(qtyRaw).trim() !== "" && String(priceRaw).trim() !== "") ? q * p : "";
       }
       return updated;
     }));
@@ -117,7 +120,9 @@ export function useInvoiceForm({ initial, isEdit, products, detailAttr, maxRows 
   // sets saving state and calls the form-supplied doSave({ filled, cleanItems, skipLog }).
   const guardedSave = async (name, doSave) => {
     // #188 — delegate all customer validation to checkNameOnBlur; never run checks here
-    if (!isEdit && !custConfirmedRef.current && !newCustCheckedRef.current) {
+    // #273 — if the customer list failed/hasn't loaded (allCustomers empty), the check can't run;
+    // don't silently block save — skip the guard this round and let the save proceed.
+    if (!isEdit && !custConfirmedRef.current && !newCustCheckedRef.current && allCustomers.length > 0) {
       checkNameOnBlur(name);
       return;
     }
