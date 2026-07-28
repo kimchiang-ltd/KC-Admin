@@ -98,6 +98,11 @@ export const api = {
   generateQuotationPDF: (data) => apiCall("generateQuotationPDF", data),
   listQuotations:       ()     => apiCall("listQuotations"),
   loadQuotation:        (id)   => apiCall("loadQuotation", { rowId: id }),
+  // #345 — Generic Other Docs CRUD
+  listOtherDocs:  (type)       => apiCall("listOtherDocs", { type }),
+  loadOtherDoc:   (rowId)      => apiCall("loadOtherDoc",  { rowId }),
+  saveOtherDoc:   (data)       => apiCall("saveOtherDoc",  data),
+  deleteOtherDoc: (rowId, type) => apiCall("deleteOtherDoc", { rowId, type }),  // #346
   getVersion: () => apiCall("getVersion"),
   login: (accessToken) => apiCall("login", { accessToken }), // #299c/#299a — verify Google token → mint session token
   // Cancel / restore
@@ -108,4 +113,20 @@ export const api = {
   createCustomer:            (data)   => apiCall("createCustomer",             { data }),
   updateCustomer:            (originalName, data) => apiCall("updateCustomer", { originalName, data }),
   deleteCustomer:            (name)   => apiCall("deleteCustomer",             { name }),
+  // #356 — supplier CRUD (VAT Purchase)
+  getSuppliers:              (search) => apiCall("getSuppliers",               { search }),
+  createSupplier:            (data)   => apiCall("createSupplier",             { data }),
+  updateSupplier:            (originalName, data) => apiCall("updateSupplier", { originalName, data }),
+  deleteSupplier:            (name)   => apiCall("deleteSupplier",             { name }),
+  // #367b — expense supplier CRUD
+  getExpenseSuppliers:       ()       => apiCall("getExpenseSuppliers"),
+  createExpenseSupplier:     (params) => apiCall("createExpenseSupplier",      params),
+  updateExpenseSupplier:     (params) => apiCall("updateExpenseSupplier",      params),
+  deleteExpenseSupplier:     (params) => apiCall("deleteExpenseSupplier",      params),
+  // #369a — expense log periods summary
+  getExpenseLogPeriods:      ()       => apiCall("getExpenseLogPeriods"),
+  // #367c — expense log CRUD
+  getExpenseLog:             (period) => apiCall("getExpenseLog",              { period }),
+  saveExpenseEntry:          (data)   => apiCall("saveExpenseEntry",           data),
+  deleteExpenseEntry:        (id)     => apiCall("deleteExpenseEntry",         { id }),
 };

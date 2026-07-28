@@ -22,8 +22,15 @@ function TICustomerPage() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [similarWarning, setSimilarWarning] = useState(null);
+  const [actionError, setActionError] = useState(null);
   const formRef             = useRef(null);
   const similarConfirmedRef = useRef(false);
+
+  useEffect(() => {
+    if (!actionError) return;
+    const t = setTimeout(() => setActionError(null), 5000);
+    return () => clearTimeout(t);
+  }, [actionError]);
 
   const checkCPSimilarity = (nameVal) => {
     if (!nameVal.trim() || similarConfirmedRef.current) return;
@@ -38,13 +45,13 @@ function TICustomerPage() {
   const load = useCallback(async (q) => {
     setListLoading(true);
     try { setCustomers(await tiApi.getCustomers(q ?? "")); }
-    catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); }
+    catch (e) { setActionError("เกิดข้อผิดพลาด: " + e.message); }
     finally { setListLoading(false); }
   }, []);
 
   useEffect(() => { load(""); }, []);
 
-  const EMPTY = { name: "", address: "", phone: "", taxId: "", note: "" };
+  const EMPTY = { name: "", address: "", phone: "", taxId: "", note: "", branch: "" }; // #338b-TI +branch
 
   const doSave = async () => {
     setSimilarWarning(null);
@@ -54,12 +61,12 @@ function TICustomerPage() {
       else { await tiApi.updateCustomer(form.originalName, form.data); }
       setForm(null);
       await load(search);
-    } catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); }
+    } catch (e) { setActionError("เกิดข้อผิดพลาด: " + e.message); }
     finally { setSaving(false); }
   };
 
   const handleSave = async () => {
-    if (!form.data.name.trim()) { alert("กรุณากรอกชื่อลูกค้า"); return; }
+    if (!form.data.name.trim()) { setActionError("กรุณากรอกชื่อลูกค้า"); return; }
     if (form.mode === "add" && !similarConfirmedRef.current) {
       const similar = findSimilarCustomers(form.data.name, customers);
       if (similar.length > 0) { setSimilarWarning(similar); return; }
@@ -71,7 +78,7 @@ function TICustomerPage() {
   const handleDelete = async () => {
     setDeleteLoading(true);
     try { await tiApi.deleteCustomer(deleteTarget); setDeleteTarget(null); await load(search); }
-    catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); }
+    catch (e) { setActionError("เกิดข้อผิดพลาด: " + e.message); }
     finally { setDeleteLoading(false); }
   };
 
@@ -81,6 +88,12 @@ function TICustomerPage() {
 
   return (
     <div>
+      {actionError && (
+        <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, color: "#991B1B" }}>
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#991B1B", fontWeight: 600, fontSize: 15 }}>×</button>
+        </div>
+      )}
       <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span>👤 รายชื่อลูกค้า (ใบกำกับภาษี)</span>
         <Btn primary onClick={() => setForm({ mode: "add", data: { ...EMPTY } })}>+ เพิ่มลูกค้าใหม่</Btn>
@@ -110,17 +123,64 @@ function TICustomerPage() {
           ].map(({ key, label, placeholder }) => (
             <div key={key} style={{ marginBottom: 8 }}>
               <div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>{label}</div>
-              <input
-                value={form.data[key]}
-                onChange={e => {
-                  if (key === "name") similarConfirmedRef.current = false;
-                  setForm(f => ({ ...f, data: { ...f.data, [key]: e.target.value } }));
-                }}
-                onBlur={key === "name" ? () => { if (form.mode === "add") checkCPSimilarity(form.data.name); } : undefined}
-                placeholder={placeholder}
-                style={fldStyle} />
+              {key === "address" ? (
+                <textarea
+                  value={form.data[key]}
+                  onChange={e => { const v = e.target.value; if (v.split("\n").length <= 3) setForm(f => ({ ...f, data: { ...f.data, address: v } })); }}
+                  placeholder={placeholder}
+                  rows={2}
+                  style={{ ...fldStyle, resize: "vertical" }} />
+              ) : (
+                <input
+                  value={form.data[key]}
+                  onChange={e => {
+                    if (key === "name") similarConfirmedRef.current = false;
+                    setForm(f => ({ ...f, data: { ...f.data, [key]: e.target.value } }));
+                  }}
+                  onBlur={key === "name" ? () => { if (form.mode === "add") checkCPSimilarity(form.data.name); } : undefined}
+                  placeholder={placeholder}
+                  style={fldStyle} />
+              )}
             </div>
           ))}
+          {/* #338b-TI — สาขา (branch): "" = ไม่ระบุ, "00000" = สำนักงานใหญ่, "00001"+ = สาขาเลขที่ N */}
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>สาขา (สำหรับรายงานภาษีขาย)</div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <select
+                value={form.data.branch === "" ? "" : form.data.branch === "00000" ? "main" : "branch"}
+                onChange={e => {
+                  const v = e.target.value;
+                  const nb = v === "" ? "" : v === "main" ? "00000" : "00001";
+                  setForm(f => ({ ...f, data: { ...f.data, branch: nb } }));
+                }}
+                style={{ ...fldStyle, width: 180 }}>
+                <option value="">— ไม่ระบุ —</option>
+                <option value="main">สำนักงานใหญ่</option>
+                <option value="branch">สาขาเลขที่...</option>
+              </select>
+              {form.data.branch && form.data.branch !== "00000" && (
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={5}
+                  value={form.data.branch}
+                  onChange={e => {
+                    const v = e.target.value.replace(/\D/g, "").slice(0, 5);
+                    setForm(f => ({ ...f, data: { ...f.data, branch: v } }));
+                  }}
+                  onBlur={e => {
+                    const v = e.target.value.replace(/\D/g, "");
+                    if (v && v !== "00000") {
+                      const padded = ("00000" + v).slice(-5);
+                      setForm(f => ({ ...f, data: { ...f.data, branch: padded } }));
+                    }
+                  }}
+                  placeholder="00001"
+                  style={{ ...fldStyle, width: 90, fontFamily: "monospace", letterSpacing: "0.05em" }} />
+              )}
+            </div>
+          </div>
           <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
             <Btn primary onClick={handleSave} disabled={saving}>
               {saving ? <><Loader size={13}/> กำลังบันทึก...</> : "บันทึก"}
@@ -140,13 +200,14 @@ function TICustomerPage() {
                 <th style={thS}>ที่อยู่</th>
                 <th style={thS}>โทรศัพท์</th>
                 <th style={thS}>เลขภาษี</th>
+                <th style={thS}>สาขา</th>{/* #338b-TI */}
                 <th style={thS}>หมายเหตุ</th>
                 <th style={{ ...thS, width: 100 }}></th>
               </tr>
             </thead>
             <tbody>
               {customers.length === 0 ? (
-                <tr><td colSpan={6} style={{ padding: 32, textAlign: "center", color: C.muted }}>
+                <tr><td colSpan={7} style={{ padding: 32, textAlign: "center", color: C.muted }}>{/* #338b-TI: 6→7 cols */}
                   {search ? `ไม่พบลูกค้าที่ตรงกับ "${search}"` : "ยังไม่มีข้อมูลลูกค้า"}
                 </td></tr>
               ) : customers.map((c, i) => (
@@ -155,6 +216,10 @@ function TICustomerPage() {
                   <td style={{ ...tdS, color: C.muted }}>{c.address}</td>
                   <td style={tdS}>{c.phone}</td>
                   <td style={{ ...tdS, fontFamily: "monospace", fontSize: 12 }}>{c.taxId}</td>
+                  {/* #338b-TI — branch display: "" → dim "—" · "00000" → "สำนักงานใหญ่" · else → "สาขา NNNNN" */}
+                  <td style={{ ...tdS, fontSize: 12, color: !c.branch ? C.muted : undefined }}>
+                    {!c.branch ? "—" : c.branch === "00000" ? "สำนักงานใหญ่" : `สาขา ${c.branch}`}
+                  </td>
                   <td style={{ ...tdS, color: C.muted }}>{c.note}</td>
                   <td style={{ ...tdS, display: "flex", gap: 4, justifyContent: "flex-end" }}>
                     <button
@@ -206,7 +271,14 @@ function TIProductPage({ cache, updateCache }) {
   const [saving, setSaving]         = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [actionError, setActionError] = useState(null);
   const formRef = useRef(null);
+
+  useEffect(() => {
+    if (!actionError) return;
+    const t = setTimeout(() => setActionError(null), 5000);
+    return () => clearTimeout(t);
+  }, [actionError]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -215,7 +287,7 @@ function TIProductPage({ cache, updateCache }) {
       setItems(result);
       updateCache?.("tiProductList", result);
     }
-    catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); }
+    catch (e) { setActionError("เกิดข้อผิดพลาด: " + e.message); }
     finally { setLoading(false); }
   }, []);
 
@@ -228,7 +300,7 @@ function TIProductPage({ cache, updateCache }) {
   const visible = items.filter(it => it.type === tab);
 
   const handleSave = async () => {
-    if (!form.value.trim()) { alert("กรุณากรอกชื่อ"); return; }
+    if (!form.value.trim()) { setActionError("กรุณากรอกชื่อ"); return; }
     setSaving(true);
     try {
       if (form.mode === "add") {
@@ -239,7 +311,7 @@ function TIProductPage({ cache, updateCache }) {
       setForm(null);
       updateCache?.("tiProductList", null);
       await load();
-    } catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); }
+    } catch (e) { setActionError("เกิดข้อผิดพลาด: " + e.message); }
     finally { setSaving(false); }
   };
 
@@ -251,7 +323,7 @@ function TIProductPage({ cache, updateCache }) {
       updateCache?.("tiProductList", null);
       await load();
     }
-    catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); }
+    catch (e) { setActionError("เกิดข้อผิดพลาด: " + e.message); }
     finally { setDeleteLoading(false); }
   };
 
@@ -261,6 +333,12 @@ function TIProductPage({ cache, updateCache }) {
 
   return (
     <div>
+      {actionError && (
+        <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, color: "#991B1B" }}>
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#991B1B", fontWeight: 600, fontSize: 15 }}>×</button>
+        </div>
+      )}
       <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{ display: "flex", alignItems: "center", gap: 6 }}><Package size={16}/> จัดการสินค้า (ใบกำกับภาษี)</span>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>

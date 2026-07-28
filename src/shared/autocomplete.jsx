@@ -15,6 +15,7 @@ import { api } from './api.jsx';
 function CustomerAutocomplete({ value, onChange, onSelect, onCustomersLoaded, onBlur, style, apiOverride }) {
   const [customers, setCustomers] = useState([]);
   const [open, setOpen]           = useState(false);
+  const [loading, setLoading]     = useState(true);   // #324 — loading indicator while fetching customer list
   const [loadError, setLoadError] = useState(false); // #273 — surface a failed customer-list load
   const retriedRef = useRef(false);                  // #273 — auto-retry once before showing error
   const wrapRef = useRef(null);
@@ -23,13 +24,15 @@ function CustomerAutocomplete({ value, onChange, onSelect, onCustomersLoaded, on
   const loadCustomers = () => {
     const getCustomers = apiOverride?.getCustomers ?? api.getCustomers;
     setLoadError(false);
+    setLoading(true);
     getCustomers("").then(list => {
       const result = Array.isArray(list) ? list : [];
       setCustomers(result);
+      setLoading(false);
       if (onCustomersLoaded) onCustomersLoaded(result);
     }).catch(() => {
       if (!retriedRef.current) { retriedRef.current = true; setTimeout(loadCustomers, 1200); }
-      else setLoadError(true);
+      else { setLoadError(true); setLoading(false); }
     });
   };
 
@@ -65,6 +68,18 @@ function CustomerAutocomplete({ value, onChange, onSelect, onCustomersLoaded, on
             style={{ background: "none", border: `0.5px solid ${C.danger}`, color: C.danger, borderRadius: 4, padding: "1px 8px", fontSize: 11, cursor: "pointer" }}>
             ลองใหม่
           </button>
+        </div>
+      )}
+      {open && loading && customers.length === 0 && (
+        <div style={{
+          position: "absolute", top: "100%", left: 0, right: 0, zIndex: 200,
+          background: "white", border: `1px solid ${C.border}`, borderRadius: 4,
+          boxShadow: "0 4px 12px rgba(0,0,0,0.12)", padding: "10px 12px",
+          fontSize: 12, color: C.muted, display: "flex", alignItems: "center", gap: 6
+        }}>
+          <span style={{ display: "inline-block", width: 13, height: 13, border: `2px solid ${C.border}`, borderTopColor: C.primary, borderRadius: "50%", animation: "acSpin .6s linear infinite" }} />
+          กำลังโหลดรายชื่อลูกค้า...
+          <style>{`@keyframes acSpin{to{transform:rotate(360deg)}}`}</style>
         </div>
       )}
       {open && filtered.length > 0 && (

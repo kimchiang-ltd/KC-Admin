@@ -89,6 +89,15 @@ export function collapseItems(items) {
   return { filled, cleanItems: filled.map(({ _orig, _cont, ...it }) => it) };
 }
 
+// ── Number formatting ────────────────────────────────────
+
+export function fmtAmt(n) {
+  if (n == null || n === "") return "";
+  const num = typeof n === "string" ? parseFloat(n) : n;
+  if (isNaN(num)) return "";
+  return num.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 // ── Drive URL helper (#177) ───────────────────────────────
 export const toDownloadUrl = (driveUrl) => {
   const m = driveUrl.match(/\/file\/d\/([^/]+)/);

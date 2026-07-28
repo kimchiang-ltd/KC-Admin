@@ -12,7 +12,7 @@ import { FileSearch, ChevronLeft, FileText, QrCode, Smartphone, Loader } from "l
 import { api } from '../../shared/api.jsx';
 import { C, PAGE_SIZE } from '../../shared/constants.jsx';
 import { Btn, Paginator, INSTR_STEPS, renderPhoneScreen } from '../../shared/ui.jsx';
-import { toDownloadUrl } from '../../shared/utils.jsx';
+import { toDownloadUrl, fmtAmt } from '../../shared/utils.jsx';
 import { ProductAutocomplete } from '../../shared/autocomplete.jsx';
 
 // ── #141 QuotationPage ─────────────────────────────────────
@@ -23,7 +23,8 @@ function QuotationPage({ products, sizes, onViewChange, cache, updateCache }) {
   const rowRefs  = useRef([]);
 
   const [view,       setView_]      = useState("list");
-  const setView = (v, label) => { setView_(v); onViewChange?.(label ?? null); };
+  // #350 — when returning to list, keep "ใบเสนอราคา" in breadcrumb so อื่นๆ stays clickable
+  const setView = (v, label) => { setView_(v); onViewChange?.(v === "list" ? "ใบเสนอราคา" : (label ?? null)); };
 
   const QT_CACHE = "qtList";
   const [histLoad,   setHistLoad]   = useState(false);
@@ -100,7 +101,7 @@ function QuotationPage({ products, sizes, onViewChange, cache, updateCache }) {
       setEditRowId(res.rowId); setPdfUrl(res.pdfUrl || null); setError("");
       setView("form", qtNo(id));
       if (!company) api.getConfig().then(cfg => setCompany(cfg.company || {})).catch(() => {});
-    } catch (err) { alert(err.message); }
+    } catch (err) { setAlertMsg("เกิดข้อผิดพลาด: " + err.message); }
     setEditLoading(false);
   };
 
@@ -403,7 +404,7 @@ function QuotationPreview({ date, to, subject, items, remarks, signerName, compa
   const fmtPrice = n => {
     const v = parseFloat(n);
     if (isNaN(v) || !String(n).trim()) return "";
-    return v.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return fmtAmt(v);
   };
 
   const filled = items

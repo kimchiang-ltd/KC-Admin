@@ -6,11 +6,11 @@
 
 import { useState, useEffect, useRef, Fragment } from "react";
 import QRCode from "qrcode";
-import { AlertCircle, Check, CheckCircle, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, FileText, Loader, Pencil, Plus, Printer, QrCode, RefreshCw, Smartphone, Square } from "lucide-react";
+import { AlertCircle, Check, CheckCircle, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, FileText, Loader, Pencil, Plus, Printer, QrCode, RefreshCw, Save, Smartphone, Square, Trash2 } from "lucide-react";
 import { tiApi, bahtText } from "./tiApi.jsx";
 import { C, PAGE_SIZE } from "../../shared/constants.jsx";
 import { Btn, Badge, Spinner, ErrorBox, Paginator, ConfirmModal, CustomerFieldSyncModal, inputStyle, INSTR_STEPS, renderPhoneScreen } from "../../shared/ui.jsx";
-import { toDownloadUrl } from "../../shared/utils.jsx";
+import { toDownloadUrl, fmtAmt } from "../../shared/utils.jsx";
 import { DateRangePicker } from "../invoice/InvoicePage.jsx";
 
 const _tiStore = {};
@@ -42,7 +42,7 @@ function TIDetailPopup({ tiNo, onClose, cachedData, onCached }) {
           {data && (
             <div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 14, marginBottom: 14 }}>
-                {[["ลูกค้า", data.customer], ["วันที่", data.date], ["โทรศัพท์", data.phone || "—"], ["รวมเงิน", `${(data.grandTotal||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`]].map(([l, v]) => (
+                {[["ลูกค้า", data.customer], ["วันที่", data.date], ["โทรศัพท์", data.phone || "—"], ["รวมเงิน", `${fmtAmt(data.grandTotal||0)}`]].map(([l, v]) => (
                   <div key={l}><div style={{ fontSize: 11, color: C.muted, marginBottom: 2 }}>{l}</div><div style={{ fontSize: 13, fontWeight: 500 }}>{v}</div></div>
                 ))}
               </div>
@@ -62,23 +62,23 @@ function TIDetailPopup({ tiNo, onClose, cachedData, onCached }) {
                       <td style={{ padding: "7px 10px" }}>{it.desc}</td>
                       <td style={{ padding: "7px 10px", color: C.muted }}>{it.desc2}</td>
                       <td style={{ padding: "7px 10px", textAlign: "right" }}>{it.qty}</td>
-                      <td style={{ padding: "7px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{Number(it.unitPrice||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-                      <td style={{ padding: "7px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{Number(it.amount||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                      <td style={{ padding: "7px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtAmt(Number(it.unitPrice||0))}</td>
+                      <td style={{ padding: "7px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtAmt(Number(it.amount||0))}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr style={{ borderTop: `0.5px solid ${C.borderLight}` }}>
                     <td colSpan={5} style={{ padding: "7px 10px", textAlign: "right", color: C.muted }}>ยอดก่อนภาษี</td>
-                    <td style={{ padding: "7px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{(data.subtotal||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                    <td style={{ padding: "7px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtAmt(data.subtotal||0)}</td>
                   </tr>
                   <tr>
                     <td colSpan={5} style={{ padding: "7px 10px", textAlign: "right", color: C.muted }}>ภาษีมูลค่าเพิ่ม</td>
-                    <td style={{ padding: "7px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{(data.vatAmt||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                    <td style={{ padding: "7px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtAmt(data.vatAmt||0)}</td>
                   </tr>
                   <tr style={{ background: "#f0f4ff", borderTop: `1px solid ${C.border}` }}>
                     <td colSpan={5} style={{ padding: "9px 10px", textAlign: "right", fontWeight: 500 }}>รวมทั้งสิ้น</td>
-                    <td style={{ padding: "9px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: C.accent }}>{(data.grandTotal||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                    <td style={{ padding: "9px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: C.accent }}>{fmtAmt(data.grandTotal||0)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -123,6 +123,12 @@ function BNEditForm({ detail, onSave, onCancel }) {
   const [unbilled, setUnbilled]     = useState([]);
   const [unbilledLoading, setUBL]   = useState(false);
   const [saving, setSaving]         = useState(false);
+  const [actionError, setActionError] = useState(null);
+  useEffect(() => {
+    if (!actionError) return;
+    const t = setTimeout(() => setActionError(null), 5000);
+    return () => clearTimeout(t);
+  }, [actionError]);
   // #214 — per-field on-blur sync (lazy fetch customer record on first blur)
   const [syncDecisions, setSyncDecisions] = useState({});
   const [pendingField, setPendingField]   = useState(null);
@@ -185,12 +191,12 @@ function BNEditForm({ detail, onSave, onCancel }) {
         const update = { ...custRecord };
         const formValues = { address, phone };
         for (const f of yesFields) update[f] = formValues[f];
-        tiApi.updateCustomer(customer, update).catch(e => alert("บันทึกที่อยู่/เบอร์ลูกค้าลงระบบไม่สำเร็จ — " + e.message)); // #284
+        tiApi.updateCustomer(customer, update).catch(e => setActionError("บันทึกที่อยู่/เบอร์ลูกค้าลงระบบไม่สำเร็จ — " + e.message)); // #284
       }
       const displayDate = dateInput ? (() => { const p = dateInput.split("-"); return `${p[2]}/${p[1]}/${p[0]}`; })() : detail.date;
       onSave({ date: displayDate, customer, address, phone, invoices, count: invoices.length, total: invoices.reduce((s, inv) => s + (parseFloat(inv.total)||0), 0) });
     } catch (e) {
-      alert("เกิดข้อผิดพลาด: " + e.message);
+      setActionError("เกิดข้อผิดพลาด: " + e.message);
     } finally {
       setSaving(false);
     }
@@ -198,6 +204,12 @@ function BNEditForm({ detail, onSave, onCancel }) {
 
   return (
     <div>
+      {actionError && (
+        <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, color: "#991B1B" }}>
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#991B1B", fontWeight: 600, fontSize: 15 }}>×</button>
+        </div>
+      )}
       {pendingField && <CustomerFieldSyncModal name={customer} field={pendingField.field} oldValue={pendingField.oldValue} newValue={pendingField.newValue} onConfirm={handleFieldConfirm} onCancel={handleFieldSkip} />}
       <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, padding: 16, marginBottom: 14 }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 10 }}>
@@ -213,7 +225,7 @@ function BNEditForm({ detail, onSave, onCancel }) {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 10 }}>
           <div>
             <label style={{ fontSize: 11, color: C.muted, display: "block", marginBottom: 4 }}>ที่อยู่</label>
-            <input value={address} onChange={e => setAddress(e.target.value)} onBlur={() => checkFieldOnBlur('address', address)} placeholder="—" style={{ ...inputStyle, width: "100%" }} />
+            <textarea value={address} onChange={e => { const v = e.target.value; if (v.split("\n").length <= 3) setAddress(v); }} onBlur={() => checkFieldOnBlur('address', address)} placeholder="—" rows={2} style={{ ...inputStyle, width: "100%", resize: "vertical" }} />
           </div>
           <div>
             <label style={{ fontSize: 11, color: C.muted, display: "block", marginBottom: 4 }}>โทรศัพท์</label>
@@ -240,7 +252,7 @@ function BNEditForm({ detail, onSave, onCancel }) {
               <tr key={i} style={{ borderBottom: `0.5px solid ${C.borderLight}` }}>
                 <td style={{ padding: "8px 14px", color: C.accent, fontWeight: 500 }}>{inv.no}</td>
                 <td style={{ padding: "8px 14px", color: C.muted }}>{fmtDateThai(inv.date)}</td>
-                <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(inv.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtAmt(inv.total||0)}</td>
                 <td style={{ padding: "8px 14px", textAlign: "center" }}>
                   <button onClick={() => removeTI(inv.no)} style={{ background: "none", border: "none", color: C.danger, cursor: "pointer", fontSize: 18, lineHeight: 1 }} title="ลบออก">×</button>
                 </td>
@@ -251,7 +263,7 @@ function BNEditForm({ detail, onSave, onCancel }) {
             <tfoot>
               <tr style={{ borderTop: `0.5px solid ${C.border}`, background: "#f5f9f6" }}>
                 <td colSpan={2} style={{ padding: "7px 14px", fontSize: 11, color: C.muted }}>รวม {invoices.length} ฉบับ</td>
-                <td style={{ padding: "7px 14px", textAlign: "right", fontWeight: 600, color: C.accent, fontVariantNumeric: "tabular-nums" }}>{invoices.reduce((s, inv) => s+(parseFloat(inv.total)||0), 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                <td style={{ padding: "7px 14px", textAlign: "right", fontWeight: 600, color: C.accent, fontVariantNumeric: "tabular-nums" }}>{fmtAmt(invoices.reduce((s, inv) => s+(parseFloat(inv.total)||0), 0))}</td>
                 <td></td>
               </tr>
             </tfoot>
@@ -272,7 +284,7 @@ function BNEditForm({ detail, onSave, onCancel }) {
                 <tr key={i} style={{ borderBottom: `0.5px solid ${C.borderLight}` }}>
                   <td style={{ padding: "8px 14px", color: C.accent, fontWeight: 500 }}>{ti.no}</td>
                   <td style={{ padding: "8px 14px", color: C.muted }}>{fmtDateThai(ti.date)}</td>
-                  <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(ti.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                  <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtAmt(ti.total||0)}</td>
                   <td style={{ padding: "8px 14px", textAlign: "center" }}>
                     <Btn small onClick={() => addTI(ti)}><Plus size={11}/> เพิ่ม</Btn>
                   </td>
@@ -311,11 +323,17 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
   const [qrDataUrl, setQrDataUrl]         = useState("");
   const [showInstructions, setShowInstructions] = useState(false);
   const [instrStep, setInstrStep]         = useState(0);
+  const [actionError, setActionError] = useState(null);
   useEffect(() => {
     if (!showInstructions) { setInstrStep(0); return; }
     const iv = setInterval(() => setInstrStep(s => (s + 1) % INSTR_STEPS.length), 2500);
     return () => clearInterval(iv);
   }, [showInstructions]);
+  useEffect(() => {
+    if (!actionError) return;
+    const t = setTimeout(() => setActionError(null), 5000);
+    return () => clearTimeout(t);
+  }, [actionError]);
 
   const loadDetail = () => {
     if (cachedDetail) return;
@@ -330,7 +348,7 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
   const handleCancel = async () => {
     setCancelLoading(true);
     try { await tiApi.cancelBillingNote(bnNo); onSaved?.(); onBack(); }
-    catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); }
+    catch (e) { setActionError("เกิดข้อผิดพลาด: " + e.message); }
     finally { setCancelLoading(false); setShowCC(false); }
   };
 
@@ -346,7 +364,7 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
     try {
       const res = await tiApi.generateBillingNoteLandscapePDF(bnNo);
       if (res?.url) { setDetail(d => ({ ...d, landscapeUrl: res.url })); window.open(res.url, "_blank", "noopener,noreferrer"); }
-    } catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); }
+    } catch (e) { setActionError("เกิดข้อผิดพลาด: " + e.message); }
     finally { setLsLoading(false); }
   };
 
@@ -356,7 +374,7 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
     try {
       const res = await tiApi.generateBillingNotePortraitPDF(bnNo);
       if (res?.url) { setDetail(d => ({ ...d, pdfUrl: res.url })); window.open(res.url, "_blank", "noopener,noreferrer"); }
-    } catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); }
+    } catch (e) { setActionError("เกิดข้อผิดพลาด: " + e.message); }
     finally { setPtLoading(false); }
   };
 
@@ -371,7 +389,7 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
     try {
       const res = await tiApi.generateBillingNotePortraitPDF(bnNo);
       if (res?.url) { setDetail(d => ({ ...d, pdfUrl: res.url })); await generate(res.url); }
-    } catch (err) { alert("เกิดข้อผิดพลาด: " + err.message); }
+    } catch (err) { setActionError("เกิดข้อผิดพลาด: " + err.message); }
     finally { setQrLoading(false); }
   };
 
@@ -388,6 +406,12 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
 
   return (
     <div>
+      {actionError && (
+        <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, color: "#991B1B" }}>
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#991B1B", fontWeight: 600, fontSize: 15 }}>×</button>
+        </div>
+      )}
       {showCancelConfirm && <ConfirmModal message={`ยืนยันยกเลิกใบวางบิล ${bnNo}?`} confirmLabel="ยืนยันยกเลิก" onConfirm={handleCancel} onCancel={() => setShowCC(false)} loading={cancelLoading} enterConfirm />}
       {tiPopup && <TIDetailPopup tiNo={tiPopup} onClose={() => setTiPopup(null)} cachedData={tiCache[tiPopup]} onCached={(no, d) => setTiCache(prev => ({ ...prev, [no]: d }))} />}
       {showQr && qrUrl && (
@@ -446,12 +470,12 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
           <button onClick={onBack} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 3 }}><ChevronLeft size={14}/> รายการ</button>
           <span style={{ color: C.muted }}>›</span>
           <span style={{ fontSize: 14, fontWeight: 500 }}>{bnNo}</span>
-          {detail && <Badge type={detail.cancelled ? "warning" : "success"}>{detail.cancelled ? "ยกเลิก" : "ปกติ"}</Badge>}
+          {detail?.cancelled && <Badge type="warning">ยกเลิก</Badge>}
         </div>
         {detail && !detail.cancelled && (
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <Btn onClick={generateLandscape} disabled={lsLoading}>{lsLoading ? <Loader size={13}/> : <Printer size={14}/>} แบบพิมพ์</Btn>
-            <Btn onClick={generatePortrait} disabled={ptLoading}>{ptLoading ? <Loader size={13}/> : null} PDF</Btn>
+            <Btn onClick={generatePortrait} disabled={ptLoading}>{ptLoading ? <Loader size={13}/> : <FileText size={14}/>} PDF</Btn>
             <Btn onClick={handleQrBN} disabled={qrLoading}>{qrLoading ? <Loader size={13}/> : <QrCode size={14}/>} QR</Btn>
             <Btn primary onClick={() => setEditing(true)}><Pencil size={14}/> แก้ไข</Btn>
             <Btn danger onClick={() => setShowCC(true)} disabled={cancelLoading}>ยกเลิกใบนี้</Btn>
@@ -482,7 +506,7 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
               )}
             </div>
             <div style={{ display: "flex", gap: 20, padding: "10px 16px", background: "#f5f9f6", borderTop: `0.5px solid ${C.borderLight}`, alignItems: "center" }}>
-              <div><span style={{ fontSize: 11, color: C.muted }}>รวมเงิน </span><span style={{ fontWeight: 600, fontSize: 15, color: C.accent }}>{(detail.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>
+              <div><span style={{ fontSize: 11, color: C.muted }}>รวมเงิน </span><span style={{ fontWeight: 600, fontSize: 15, color: C.accent }}>{fmtAmt(detail.total||0)}</span></div>
               <div style={{ fontSize: 11, color: C.muted }}>{detail.count} ฉบับ</div>
             </div>
           </div>
@@ -506,7 +530,7 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
                     style={{ borderBottom: `0.5px solid ${C.borderLight}`, cursor: "pointer", background: hovered===i ? C.rowHover : "white" }}>
                     <td style={{ padding: "8px 14px", color: C.accent, fontWeight: 500 }}>{inv.no}</td>
                     <td style={{ padding: "8px 14px", color: C.muted }}>{fmtDateThai(inv.date)}</td>
-                    <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(inv.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                    <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtAmt(inv.total||0)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -514,7 +538,7 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
                 <tfoot>
                   <tr style={{ borderTop: `0.5px solid ${C.border}`, background: "#f5f9f6" }}>
                     <td colSpan={2} style={{ padding: "7px 14px", fontSize: 11, color: C.muted }}>รวม {detail.invoices.length} ฉบับ</td>
-                    <td style={{ padding: "7px 14px", textAlign: "right", fontWeight: 600, color: C.accent, fontVariantNumeric: "tabular-nums" }}>{(detail.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                    <td style={{ padding: "7px 14px", textAlign: "right", fontWeight: 600, color: C.accent, fontVariantNumeric: "tabular-nums" }}>{fmtAmt(detail.total||0)}</td>
                   </tr>
                 </tfoot>
               )}
@@ -537,7 +561,7 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick, onCreateSin
   const [cancelHovered, setCancelHovered] = useState(null);
   const [page, setPage]                   = useState(1);
   const [createDrop, setCreateDrop]       = useState(false);
-  const [sortCol, setSortCol]             = useState("bnNo"); // #233 sortable columns
+  const [sortCol, setSortCol]             = useState("tiMonth"); // #378 default sort by TI month (mirrors BN-DN)
   const [sortDir, setSortDir]             = useState("desc");
   useEffect(() => setPage(1), [search, dStart, dEnd]);
 
@@ -556,12 +580,33 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick, onCreateSin
     return true;
   });
 
+  // #378 — TI period label (mirrors BN-DN's dnPeriodLabel)
+  const THAI_M_SHORT = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+  const tiPeriodLabel = (invoices) => {
+    if (!invoices || invoices.length === 0) return "—";
+    const months = new Set();
+    invoices.forEach(inv => { if (!inv.date) return; const p = String(inv.date).split("/"); if (p.length === 3) months.add(+p[2] * 100 + +p[1]); });
+    if (months.size === 0) return "—";
+    const sorted = [...months].sort((a, b) => a - b);
+    const first = sorted[0], last = sorted[sorted.length - 1];
+    const fM = (first % 100) - 1, fY = Math.floor(first / 100);
+    if (sorted.length === 1) return THAI_M_SHORT[fM] + " " + fY;
+    const lM = (last % 100) - 1, lY = Math.floor(last / 100);
+    if (fY === lY) return THAI_M_SHORT[fM] + " – " + THAI_M_SHORT[lM] + " " + lY;
+    return THAI_M_SHORT[fM] + " " + fY + " – " + THAI_M_SHORT[lM] + " " + lY;
+  };
+  const tiMonthKey = bn => {
+    const dates = (bn.invoices || []).map(inv => { if (!inv.date) return 0; const p = String(inv.date).split("/"); return p.length === 3 ? +p[2] * 100 + +p[1] : 0; }).filter(Boolean);
+    return dates.length > 0 ? Math.min(...dates) : 0;
+  };
+
   // #233 — sort helpers
   const parseDateDMY = d => { if (!d) return 0; const p = String(d).split("/"); return p.length === 3 ? +p[2] * 10000 + +p[1] * 100 + +p[0] : 0; };
   const sortFn = (a, b) => {
     let va, vb;
     switch (sortCol) {
       case "bnNo":     va = a.bnNo || ""; vb = b.bnNo || ""; break;
+      case "tiMonth":  va = tiMonthKey(a); vb = tiMonthKey(b); break;
       case "date":     va = parseDateDMY(a.date); vb = parseDateDMY(b.date); break;
       case "customer": va = (a.customer || "").toLowerCase(); vb = (b.customer || "").toLowerCase(); break;
       case "count":    va = a.count || 0; vb = b.count || 0; break;
@@ -582,15 +627,16 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick, onCreateSin
     <tr onClick={() => onRowClick(bn)} onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)}
       style={{ background: isHov ? C.rowHover : "white", borderBottom: `0.5px solid ${C.borderLight}`, cursor: "pointer" }}>
       <td style={{ padding: "9px 14px", color: C.accent, fontWeight: 500 }}>{bn.bnNo}</td>
+      <td style={{ padding: "9px 14px", fontWeight: 500, fontSize: 11.5 }}>{tiPeriodLabel(bn.invoices)}</td>
       <td style={{ padding: "9px 14px", color: C.muted }}>{fmtDateThai(bn.date)}</td>
       <td style={{ padding: "9px 14px" }}>{bn.customer}</td>
       <td style={{ padding: "9px 14px" }}>{bn.count} ฉบับ</td>
-      <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(bn.total || 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtAmt(bn.total || 0)}</td>
     </tr>
   );
 
   const cols = [
-    { key: "bnNo", label: "เลขที่ BN" }, { key: "date", label: "วันที่ออก" }, { key: "customer", label: "ชื่อลูกค้า" },
+    { key: "bnNo", label: "เลขที่ใบวางบิล" }, { key: "tiMonth", label: "เดือนที่เปิดใบกำกับภาษี" }, { key: "date", label: "วันที่ออก" }, { key: "customer", label: "ชื่อลูกค้า" },
     { key: "count", label: "จำนวนบิล" }, { key: "total", label: "รวมเงิน", align: "right" },
   ];
   const sortArrow = (col) => sortCol === col ? (sortDir === "asc" ? " ▲" : " ▼") : "";
@@ -599,7 +645,7 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick, onCreateSin
       <tr>
         {cols.map((c, i) => (
           <th key={i} onClick={c.key ? () => handleSort(c.key) : undefined}
-            style={{ padding: "8px 14px", textAlign: c.align || "left", color: sortCol === c.key ? C.accent : C.muted, fontWeight: sortCol === c.key ? 600 : 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, background: "#fafafa", position: "sticky", top: 70, zIndex: 1, cursor: c.key ? "pointer" : "default", userSelect: "none", whiteSpace: "nowrap" }}>
+            style={{ padding: "8px 14px", textAlign: c.align || "left", color: sortCol === c.key ? C.accent : C.muted, fontWeight: sortCol === c.key ? 600 : 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, background: "#fafafa", position: "sticky", top: 70, zIndex: 2, boxShadow: "0 1px 0 rgba(0,0,0,0.06)", cursor: c.key ? "pointer" : "default", userSelect: "none", whiteSpace: "nowrap" }}>
             {c.label}{c.key ? sortArrow(c.key) : ""}
           </th>
         ))}
@@ -620,7 +666,7 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick, onCreateSin
     <div>
       <div style={{ position: "sticky", top: -18, zIndex: 10, background: C.pageBg }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 10 }}>
-          <div style={{ fontSize: 16, fontWeight: 500 }}><ClipboardList size={15}/> ใบวางบิล</div>
+          <div style={{ fontSize: 16, fontWeight: 500 }}><ClipboardList size={15}/> ใบวางบิล (VAT)</div>
           {onCreateBatch && (
             <div style={{ position: "relative", display: "inline-flex" }}>
               <button onClick={() => { onCreateBatch(); }} style={{ background: C.accent, color: "white", border: "none", borderRadius: "6px 0 0 6px", padding: "6px 14px", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
@@ -633,6 +679,11 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick, onCreateSin
                 <>
                   <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setCreateDrop(false)} />
                   <div style={{ position: "absolute", right: 0, top: "100%", marginTop: 4, background: "white", border: `1px solid ${C.border}`, borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.12)", zIndex: 50, minWidth: 180, overflow: "hidden" }}>
+                    {/* #376b — dropdown lists BOTH modes (matching BN #326) */}
+                    <div onClick={() => { setCreateDrop(false); onCreateBatch(); }} style={{ padding: "9px 14px", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, borderBottom: `0.5px solid ${C.borderLight}` }}
+                      onMouseEnter={e => e.currentTarget.style.background = C.rowHover} onMouseLeave={e => e.currentTarget.style.background = "white"}>
+                      <Plus size={13}/> สร้างแบบรวม
+                    </div>
                     <div onClick={() => { setCreateDrop(false); onCreateSingle(); }} style={{ padding: "9px 14px", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
                       onMouseEnter={e => e.currentTarget.style.background = C.rowHover} onMouseLeave={e => e.currentTarget.style.background = "white"}>
                       <Plus size={13}/> สร้างทีละราย
@@ -660,7 +711,7 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick, onCreateSin
               {thead}
               <tbody>
                 {active.length === 0 ? (
-                  <tr><td colSpan={5} style={{ padding: 32, textAlign: "center", color: C.muted, fontSize: 13 }}>ไม่พบข้อมูล</td></tr>
+                  <tr><td colSpan={6} style={{ padding: 32, textAlign: "center", color: C.muted, fontSize: 13 }}>ไม่พบข้อมูล</td></tr>
                 ) : pagedBN.map((bn, i) => (
                   <BNRow key={i} bn={bn} i={i} isHov={hovered === i} setHov={setHovered} />
                 ))}
@@ -737,7 +788,7 @@ function BNDetailMiniPopup({ bnNo, onClose, onCancelled }) {
           {data && (
             <>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 10, marginBottom: 12 }}>
-                {[["ลูกค้า", data.customer], ["วันที่", data.date], ["จำนวน", `${data.count} ฉบับ`], ["รวมเงิน", `${(data.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`]].map(([l, v]) => (
+                {[["ลูกค้า", data.customer], ["วันที่", data.date], ["จำนวน", `${data.count} ฉบับ`], ["รวมเงิน", `${fmtAmt(data.total||0)}`]].map(([l, v]) => (
                   <div key={l}><div style={{ fontSize: 10, color: C.muted, marginBottom: 1 }}>{l}</div><div style={{ fontSize: 12, fontWeight: 500 }}>{v}</div></div>
                 ))}
               </div>
@@ -755,7 +806,7 @@ function BNDetailMiniPopup({ bnNo, onClose, onCancelled }) {
                     <tr key={i} style={{ borderBottom: `0.5px solid ${C.borderLight}` }}>
                       <td style={{ padding: "7px 10px", color: C.accent, fontWeight: 500 }}>{inv.no}</td>
                       <td style={{ padding: "7px 10px", color: C.muted }}>{fmtDateThai(inv.date)}</td>
-                      <td style={{ padding: "7px 10px", textAlign: "right", fontWeight: 500 }}>{(parseFloat(inv.total)||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                      <td style={{ padding: "7px 10px", textAlign: "right", fontWeight: 500 }}>{fmtAmt(parseFloat(inv.total)||0)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -787,7 +838,7 @@ function BNDetailMiniPopup({ bnNo, onClose, onCancelled }) {
 
 // ── BN Customer Panel ──────────────────────────────────────
 
-function BNCustomerPanel({ cust, nextBnNo, onConfirm }) {
+function BNCustomerPanel({ cust, nextBnNo, onConfirm, onTiEdited }) {
   const today = new Date().toISOString().slice(0, 10);
   const [bnDate, setBnDate]   = useState(today);
   const [confirming, setConf] = useState(false);
@@ -795,16 +846,37 @@ function BNCustomerPanel({ cust, nextBnNo, onConfirm }) {
   const [rows, setRows]       = useState(
     (cust.invoices || []).map((inv, i) => ({ ...inv, idx: i, checked: !inv.bnNo }))
   );
-  const [tiPopup, setTiPopup] = useState(null);
-  const [tiCache, setTiCache] = useState({});
-  const [bnPopup, setBnPopup] = useState(null);
-  const [address, setAddress] = useState(cust.address || "");
-  const [phone, setPhone]     = useState(cust.phone || "");
+  const [tiCache, setTiCache]     = useState({});
+  const [editMode, setEditMode]   = useState(false); // #376b — gate checkboxes behind edit mode
+  const [bnPopup, setBnPopup]     = useState(null);
+  const [address, setAddress]     = useState(cust.address || "");
+  const [phone, setPhone]         = useState(cust.phone || "");
+  const [expandedTi, setExpandedTi] = useState(null);   // #308 — inline TI detail expand
+  const [tiLoading, setTiLoading]   = useState(null);
+  const [prefetching, setPrefetching] = useState(false); // #308 — parallel TI-detail prefetch
+  const [editingTi, setEditingTi]   = useState(null);   // #308 — inline TI editor
 
   useEffect(() => {
-    setBnDate(today); setError("");
+    setBnDate(today); setError(""); setExpandedTi(null); setEditMode(false); setEditingTi(null);
     setRows((cust.invoices || []).map((inv, i) => ({ ...inv, idx: i, checked: !inv.bnNo })));
     setAddress(cust.address || ""); setPhone(cust.phone || "");
+  }, [cust.customer]);
+
+  // #308 — pre-fetch TI line items in parallel on customer select (mirrors BN #327)
+  useEffect(() => {
+    const nos = (cust.invoices || []).map(inv => inv.no).filter(no => !tiCache[no]);
+    if (nos.length === 0) return;
+    let cancelled = false;
+    setPrefetching(true);
+    Promise.all(nos.map(no => tiApi.getTIDetail(no).then(d => [no, d]).catch(() => null)))
+      .then(results => {
+        if (cancelled) return;
+        const add = {};
+        results.forEach(r => { if (r) add[r[0]] = r[1]; });
+        if (Object.keys(add).length) setTiCache(prev => ({ ...prev, ...add }));
+      })
+      .finally(() => { if (!cancelled) setPrefetching(false); });
+    return () => { cancelled = true; };
   }, [cust.customer]);
 
   const toggleRow = (idx) => setRows(prev => prev.map(r => r.idx === idx && !r.bnNo ? { ...r, checked: !r.checked } : r));
@@ -812,6 +884,17 @@ function BNCustomerPanel({ cust, nextBnNo, onConfirm }) {
     const unbilled = rows.filter(r => !r.bnNo);
     const allChecked = unbilled.length > 0 && unbilled.every(r => r.checked);
     setRows(prev => prev.map(r => r.bnNo ? r : { ...r, checked: !allChecked }));
+  };
+
+  // #308 — lazy-load a TI's line items for สินค้า count + inline expand
+  const toggleTiDetail = async (tiNo) => {
+    setEditingTi(null);
+    if (expandedTi === tiNo) { setExpandedTi(null); return; }
+    setExpandedTi(tiNo);
+    if (tiCache[tiNo]) return;
+    setTiLoading(tiNo);
+    try { const d = await tiApi.getTIDetail(tiNo); setTiCache(prev => ({ ...prev, [tiNo]: d })); } catch (_) {}
+    finally { setTiLoading(null); }
   };
 
   const selectedRows = rows.filter(r => r.checked);
@@ -830,10 +913,17 @@ function BNCustomerPanel({ cust, nextBnNo, onConfirm }) {
   };
 
   return (
-    <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>
-      <div style={{ padding: "10px 14px", background: "#fafafa", borderBottom: `0.5px solid ${C.border}`, display: "flex", alignItems: "center", gap: 8 }}>
+    <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+      <div style={{ padding: "10px 14px", background: "#fafafa", borderBottom: `0.5px solid ${C.border}`, display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
         <span style={{ fontSize: 13, fontWeight: 500 }}>{cust.customer}</span>
         <span style={{ fontSize: 11, color: C.accent, background: "#e3f0ff", padding: "1px 8px", borderRadius: 10, fontWeight: 500 }}>{nextBnNo}</span>
+        {rows.some(r => !r.bnNo) && (
+          <span style={{ marginLeft: "auto" }}>
+            <Btn small onClick={() => setEditMode(!editMode)} style={editMode ? { background: "#eef2ff", border: `1px solid ${C.accent}`, color: C.accent } : {}}>
+              <Pencil size={12}/> {editMode ? "เสร็จสิ้น" : "แก้ไขรายการ"}
+            </Btn>
+          </span>
+        )}
       </div>
       {(cust.invoices || []).some(inv => inv.bnNo) && (() => {
         const bnGroups = {};
@@ -855,7 +945,7 @@ function BNCustomerPanel({ cust, nextBnNo, onConfirm }) {
       })()}
       <div style={{ padding: "8px 14px", borderBottom: `0.5px solid ${C.borderLight}`, display: "grid", gridTemplateColumns: "60px 1fr", gap: "6px 10px", alignItems: "center" }}>
         <span style={{ fontSize: 11, color: C.muted }}>ที่อยู่</span>
-        <input value={address} onChange={e => setAddress(e.target.value)} placeholder="—" style={{ ...inputStyle, width: "100%", fontSize: 11 }} />
+        <textarea value={address} onChange={e => { const v = e.target.value; if (v.split("\n").length <= 3) setAddress(v); }} placeholder="—" rows={2} style={{ ...inputStyle, width: "100%", fontSize: 11, resize: "vertical" }} />
         <span style={{ fontSize: 11, color: C.muted }}>โทรศัพท์</span>
         <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="—" style={{ ...inputStyle, width: "100%", fontSize: 11 }} />
       </div>
@@ -866,53 +956,114 @@ function BNCustomerPanel({ cust, nextBnNo, onConfirm }) {
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
         <thead>
           <tr>
-            <th style={{ padding: "7px 14px", width: 32, background: "#fafafa", borderBottom: `0.5px solid ${C.border}` }}>
-              <input type="checkbox" checked={(() => { const u = rows.filter(r => !r.bnNo); return u.length > 0 && u.every(r => r.checked); })()} onChange={toggleAll} />
-            </th>
-            {["เลขที่ TI", "วันที่", "รวมเงิน"].map((h, i) => (
-              <th key={i} style={{ padding: "7px 14px", textAlign: i===2?"right":"left", color: C.muted, fontWeight: 500, fontSize: 11, background: "#fafafa", borderBottom: `0.5px solid ${C.border}` }}>{h}</th>
+            {editMode && (
+              <th style={{ padding: "7px 14px", width: 32, background: "#fafafa", borderBottom: `0.5px solid ${C.border}` }}>
+                <input type="checkbox" checked={(() => { const u = rows.filter(r => !r.bnNo); return u.length > 0 && u.every(r => r.checked); })()} onChange={toggleAll} />
+              </th>
+            )}
+            {["เลขที่ TI", "วันที่", "สินค้า", "รวมเงิน"].map((h, i) => (
+              <th key={i} style={{ padding: "7px 14px", textAlign: i===3?"right":"left", color: C.muted, fontWeight: 500, fontSize: 11, background: "#fafafa", borderBottom: `0.5px solid ${C.border}` }}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
+          {rows.map((row) => {
+            const det       = tiCache[row.no];
+            const itemCount = det && det.items ? det.items.length : null;
+            const isExp     = expandedTi === row.no;
+            const excluded = editMode && !row.bnNo && !row.checked;
+            return (
             <Fragment key={row.idx}>
-              <tr style={{ borderBottom: row.bnNo ? "none" : `0.5px solid ${C.borderLight}`, background: row.bnNo ? "#fafafa" : (row.checked ? "white" : "#fafafa"), opacity: row.bnNo ? 0.5 : (row.checked ? 1 : 0.55) }}>
-                <td style={{ padding: "8px 14px", opacity: row.bnNo ? 1 : undefined }}>
-                  <input type="checkbox" checked={row.checked} disabled={!!row.bnNo} onChange={() => toggleRow(row.idx)} style={{ cursor: row.bnNo ? "not-allowed" : "pointer" }} />
-                </td>
-                <td style={{ padding: "8px 14px" }}>
-                  <span onClick={() => setTiPopup(row.no)} style={{ color: row.bnNo ? C.muted : C.accent, fontWeight: 500, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" }}>{row.no}</span>
+              <tr onClick={() => toggleTiDetail(row.no)} style={{ borderBottom: row.bnNo ? "none" : `0.5px solid ${C.borderLight}`, background: row.bnNo ? "#fafafa" : "white", opacity: row.bnNo ? 0.5 : (excluded ? 0.4 : 1), cursor: "pointer" }}>
+                {editMode && (
+                  <td style={{ padding: "8px 14px" }} onClick={e => e.stopPropagation()}>
+                    <input type="checkbox" checked={row.checked} disabled={!!row.bnNo} onChange={() => toggleRow(row.idx)} style={{ cursor: row.bnNo ? "not-allowed" : "pointer" }} />
+                  </td>
+                )}
+                <td style={{ padding: "8px 14px", textDecoration: excluded ? "line-through" : "none" }}>
+                  <span style={{ color: row.bnNo ? C.muted : C.accent, fontWeight: 500 }}>{row.no}</span>
                 </td>
                 <td style={{ padding: "8px 14px", color: C.muted }}>{fmtDateThai(row.date)}</td>
-                <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(parseFloat(row.total)||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                <td style={{ padding: "8px 14px", color: C.muted, fontSize: 11 }}>
+                  {(tiLoading === row.no || (prefetching && itemCount == null)) ? "…" : itemCount != null ? `สินค้า ${itemCount} รายการ ${isExp ? "▼" : "▸"}` : "ดู ▸"}
+                </td>
+                <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtAmt(parseFloat(row.total)||0)}</td>
               </tr>
+              {isExp && (
+                <tr>
+                  <td colSpan={editMode ? 5 : 4} style={{ padding: 0, borderBottom: `0.5px solid ${C.borderLight}`, background: "#fafafa" }}>
+                    <div style={{ padding: "8px 12px 12px" }} onClick={e => e.stopPropagation()}>
+                      {!det && <div style={{ fontSize: 11, color: C.muted, padding: "4px 0" }}>กำลังโหลด…</div>}
+                      {det && det.items && editingTi !== row.no && (
+                        <>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                            <thead>
+                              <tr>{["รายการ", "ขนาด", "จำนวน", "หน่วยละ", "จำนวนเงิน"].map((h, hi) => (
+                                <th key={hi} style={{ padding: "4px 10px", textAlign: hi>=2?"right":"left", color: C.muted, fontWeight: 500 }}>{h}</th>
+                              ))}</tr>
+                            </thead>
+                            <tbody>
+                              {(det.items || []).map((it, ii) => (
+                                <tr key={ii}>
+                                  <td style={{ padding: "4px 10px" }}>{it.desc || ""}</td>
+                                  <td style={{ padding: "4px 10px", color: C.muted }}>{it.desc2 || ""}</td>
+                                  <td style={{ padding: "4px 10px", textAlign: "right" }}>{it.qty || ""}</td>
+                                  <td style={{ padding: "4px 10px", textAlign: "right" }}>{it.unitPrice !== "" && it.unitPrice != null ? fmtAmt(Number(it.unitPrice||0)) : ""}</td>
+                                  <td style={{ padding: "4px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtAmt(Number(it.amount||0))}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          {!row.bnNo && (
+                            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+                              <button onClick={() => setEditingTi(row.no)} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: C.accent, border: `0.5px solid ${C.accent}`, borderRadius: 4, padding: "4px 10px", background: "none", cursor: "pointer" }}>
+                                <Pencil size={11}/> แก้ไขใบกำกับภาษี
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      )}
+                      {det && editingTi === row.no && (
+                        <TIInlineEditor tiData={det}
+                          onCancel={() => setEditingTi(null)}
+                          onSaved={(u) => {
+                            setTiCache(prev => ({ ...prev, [row.no]: { ...(prev[row.no] || {}), items: u.items, subtotal: u.subtotal, vatAmt: u.vatAmt, grandTotal: u.grandTotal, pdfUrl: "" } }));
+                            setRows(prev => prev.map(r => r.no === row.no ? { ...r, total: u.grandTotal } : r));
+                            onTiEdited?.(row.no, u.grandTotal);
+                            setEditingTi(null);
+                          }} />
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )}
               {row.bnNo && (
                 <tr style={{ borderBottom: `0.5px solid ${C.borderLight}` }}>
-                  <td colSpan={4} style={{ padding: 0 }}>
+                  <td colSpan={editMode ? 5 : 4} style={{ padding: 0 }}>
                     <div style={{ background: "#fff8e1", borderTop: `0.5px solid #fac775`, padding: "5px 10px 5px 36px", fontSize: 10, color: "#633806", display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
                       <AlertCircle size={11} style={{ color: "#854f0b", flexShrink: 0, marginLeft: -20 }}/>
                       {row.no} อยู่ใน {row.bnNo} แล้ว — ถ้าต้องการรวม TI นี้ ให้
-                      <span onClick={() => setBnPopup(row.bnNo)} style={{ color: C.accent, fontWeight: 500, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" }}>ยกเลิก {row.bnNo} →</span>
+                      <span onClick={(e) => { e.stopPropagation(); setBnPopup(row.bnNo); }} style={{ color: C.accent, fontWeight: 500, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" }}>ยกเลิก {row.bnNo} →</span>
                     </div>
                   </td>
                 </tr>
               )}
             </Fragment>
-          ))}
+          );})}
         </tbody>
-        <tfoot>
-          <tr style={{ borderTop: `0.5px solid ${C.border}`, background: "#f5f9f6" }}>
-            <td colSpan={3} style={{ padding: "7px 14px", fontSize: 11, color: C.muted }}>รวม {selectedRows.length} ฉบับ</td>
-            <td style={{ padding: "7px 14px", textAlign: "right", fontWeight: 600, color: C.accent, fontVariantNumeric: "tabular-nums" }}>{grandTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-          </tr>
-        </tfoot>
       </table>
-      {error && <div style={{ padding: "8px 14px" }}><ErrorBox msg={error} /></div>}
-      <div style={{ padding: "10px 14px", display: "flex", justifyContent: "flex-end" }}>
-        <Btn primary onClick={handleConfirm} disabled={confirming || selectedRows.length === 0}>
-          {confirming ? <><Loader size={13}/> กำลังสร้าง...</> : <><Check size={13}/> ออกใบวางบิล</>}
-        </Btn>
+      {/* #376a — sticky footer: total + create button always visible */}
+      <div style={{ flexShrink: 0, borderTop: `1px solid ${C.border}`, background: "#f5f9f6" }}>
+        <div style={{ padding: "7px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span style={{ fontSize: 11, color: C.muted }}>รวม {selectedRows.length} ฉบับ{(() => { const ex = rows.filter(r => !r.bnNo && !r.checked).length; return editMode && ex > 0 ? ` · ข้าม ${ex}` : ""; })()}</span>
+          <span style={{ fontWeight: 600, color: C.accent, fontVariantNumeric: "tabular-nums" }}>{fmtAmt(grandTotal)}</span>
+        </div>
+        {error && <div style={{ padding: "4px 14px 8px" }}><ErrorBox msg={error} /></div>}
+        <div style={{ padding: "6px 14px 10px", display: "flex", justifyContent: "flex-end" }}>
+          <Btn primary onClick={handleConfirm} disabled={confirming || selectedRows.length === 0}>
+            {confirming ? <><Loader size={13}/> กำลังสร้าง...</> : <><Check size={13}/> ออกใบวางบิล</>}
+          </Btn>
+        </div>
       </div>
       {tiPopup && (
         <TIDetailPopup
@@ -932,6 +1083,116 @@ function BNCustomerPanel({ cust, nextBnNo, onConfirm }) {
           }}
         />
       )}
+    </div>
+  );
+}
+
+// ── TI Inline Editor (#308) — edit TI items in-place within BNCustomerPanel ──
+
+function TIInlineEditor({ tiData, onSaved, onCancel }) {
+  const [items, setItems]   = useState(() => (tiData.items || []).map(it => ({ ...it, _orig: true })));
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState("");
+
+  const updateItem = (idx, field, val) => setItems(prev => prev.map((it, i) => {
+    if (i !== idx) return it;
+    const next = { ...it, [field]: val };
+    if (field === "qty" || field === "unitPrice") {
+      next.amount = String((parseFloat(next.qty) || 0) * (parseFloat(next.unitPrice) || 0));
+    }
+    return next;
+  }));
+
+  const removeAt = (idx) => setItems(prev => { const n = prev.filter((_, i) => i !== idx); return n.length ? n : [{ desc: "", desc2: "", qty: "", unitPrice: "", amount: "" }]; });
+  const addRow   = () => setItems(prev => [...prev, { desc: "", desc2: "", qty: "", unitPrice: "", amount: "" }]);
+
+  const filled   = items.filter(it => it.desc || it.qty || it.unitPrice);
+  const subtotal = filled.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0);
+  const vatRate  = tiData.vatRate ?? 7;
+  const vatAmt   = Math.round(subtotal * vatRate / 100 * 100) / 100;
+  const gt       = subtotal + vatAmt;
+
+  const save = async () => {
+    if (filled.length === 0) { setError("ไม่มีรายการสินค้า"); return; }
+    setSaving(true); setError("");
+    try {
+      const cleanItems = filled.map(({ _orig, ...rest }) => rest);
+      const logAdded   = filled.filter(it => !it._orig).length;
+      const logDeleted = (tiData.items || []).filter(orig => !items.some(it => it._orig && it.desc === orig.desc && it.qty === orig.qty)).map(it => [it.desc, it.desc2, it.qty].filter(Boolean).join(" "));
+      const payload = {
+        date: tiData.date, name: tiData.customer || tiData.name, address: tiData.address || "",
+        taxId: tiData.taxId || "", phone: tiData.phone || "", invoiceRef: tiData.invoiceRef || "",
+        items: cleanItems, subtotal, vatAmt, grandTotal: gt,
+        _logAdded: logAdded, _logDeleted: logDeleted,
+      };
+      await tiApi.updateTaxInvoice(tiData.id || tiData.tiNo, payload);
+      onSaved({ items: cleanItems, subtotal, vatAmt, grandTotal: gt });
+    } catch (e) { setError(e.message); }
+    finally { setSaving(false); }
+  };
+
+  const cell = (idx, field, align) => (
+    <input value={items[idx][field] ?? ""} onChange={e => updateItem(idx, field, e.target.value)}
+      style={{ width: "100%", border: `0.5px solid ${C.border}`, borderRadius: 4, background: "white", fontSize: 11.5, padding: "4px 6px", outline: "none", textAlign: align || "left", boxSizing: "border-box" }} />
+  );
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: C.muted, marginBottom: 8 }}>
+        <Save size={12}/> แก้ไขรายการสินค้า — "{tiData.customer || tiData.name}"
+      </div>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5, marginBottom: 8 }}>
+        <thead>
+          <tr style={{ background: C.sidebar }}>
+            {["#", "รายการ", "ขนาด", "จำนวน", "หน่วยละ", "จำนวนเงิน", ""].map((h, hi) => (
+              <th key={hi} style={{ padding: "6px 8px", color: "white", fontWeight: 500, textAlign: (hi >= 3 && hi <= 5) ? "right" : "left", fontSize: 10.5, width: hi === 6 ? 34 : undefined }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((it, ri) => (
+            <tr key={ri} style={{ background: ri % 2 === 0 ? "white" : "#f5f7ff", borderBottom: `0.5px solid ${C.borderLight}` }}>
+              <td style={{ padding: "4px 6px", color: C.muted, textAlign: "center" }}>{ri + 1}</td>
+              <td style={{ padding: "4px 6px" }}>{cell(ri, "desc", "left")}</td>
+              <td style={{ padding: "4px 6px", width: 74 }}>{cell(ri, "desc2", "left")}</td>
+              <td style={{ padding: "4px 6px", width: 72 }}>{cell(ri, "qty", "right")}</td>
+              <td style={{ padding: "4px 6px", width: 86 }}>{cell(ri, "unitPrice", "right")}</td>
+              <td style={{ padding: "4px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtAmt(Number(it.amount || 0))}</td>
+              <td style={{ padding: "4px 6px", textAlign: "center" }}>
+                <button aria-label="ลบแถว" onClick={() => removeAt(ri)} style={{ border: "none", background: "none", cursor: "pointer", color: C.danger, display: "inline-flex" }}><Trash2 size={13}/></button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr style={{ background: "#eef2ff" }}>
+            <td colSpan={5} style={{ padding: "5px 8px", textAlign: "right", fontSize: 11, color: C.muted }}>ยอดก่อน VAT</td>
+            <td style={{ padding: "5px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtAmt(subtotal)}</td>
+            <td></td>
+          </tr>
+          <tr style={{ background: "#eef2ff" }}>
+            <td colSpan={5} style={{ padding: "5px 8px", textAlign: "right", fontSize: 11, color: C.muted }}>VAT {vatRate}%</td>
+            <td style={{ padding: "5px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtAmt(vatAmt)}</td>
+            <td></td>
+          </tr>
+          <tr style={{ background: "#eef2ff", borderTop: `1px solid ${C.border}` }}>
+            <td colSpan={5} style={{ padding: "7px 8px", textAlign: "right", fontWeight: 500 }}>ยอดรวม</td>
+            <td style={{ padding: "7px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: C.accent }}>{fmtAmt(gt)}</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+      {error && <div style={{ color: C.danger, fontSize: 11.5, marginBottom: 6 }}>{error}</div>}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <button onClick={addRow}
+          style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, color: C.accent, border: `0.5px dashed ${C.accent}`, borderRadius: 4, padding: "5px 10px", background: "none", cursor: "pointer" }}>
+          <Plus size={12}/> เพิ่มรายการ
+        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Btn small onClick={onCancel} disabled={saving}>ยกเลิก</Btn>
+          <Btn small primary onClick={save} disabled={saving}>{saving ? <Loader size={12}/> : <Check size={12}/>} บันทึก</Btn>
+        </div>
+      </div>
     </div>
   );
 }
@@ -960,6 +1221,12 @@ function BNTIBatchCreateView({ onBack }) {
   const [batchPrintFormat, setBatchPrintFormat] = useState("portrait");
   const [printMode, setPrintMode] = useState(false);
   const [printSel, setPrintSel] = useState(new Set());
+  const [actionError, setActionError] = useState(null);
+  useEffect(() => {
+    if (!actionError) return;
+    const t = setTimeout(() => setActionError(null), 5000);
+    return () => clearTimeout(t);
+  }, [actionError]);
 
   const handleSearch = async (mArg = month, yArg = year) => {
     setLoading(true); setError("");
@@ -1101,7 +1368,7 @@ function BNTIBatchCreateView({ onBack }) {
               {failCount === 0 ? "สร้างใบวางบิลสำเร็จทั้งหมด" : `สำเร็จ ${successCount} ราย · ไม่สำเร็จ ${failCount} ราย`}
             </div>
             <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
-              สร้าง {successCount} ใบวางบิล · รวม {totalTIsCreated} ฉบับ TI · ยอดรวม {totalAmount.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
+              สร้าง {successCount} ใบวางบิล · รวม {totalTIsCreated} ฉบับ TI · ยอดรวม {fmtAmt(totalAmount)}
             </div>
           </div>
         </div>
@@ -1111,7 +1378,7 @@ function BNTIBatchCreateView({ onBack }) {
             <thead>
               <tr style={{ background: "#f0f4f8" }}>
                 <th style={{ padding: "8px 14px", textAlign: "left", fontSize: 11, fontWeight: 500, color: C.muted }}>ลูกค้า</th>
-                <th style={{ padding: "8px 14px", textAlign: "left", fontSize: 11, fontWeight: 500, color: C.muted }}>เลขที่ BN</th>
+                <th style={{ padding: "8px 14px", textAlign: "left", fontSize: 11, fontWeight: 500, color: C.muted }}>เลขที่ใบวางบิล</th>
                 <th style={{ padding: "8px 14px", textAlign: "center", fontSize: 11, fontWeight: 500, color: C.muted }}>สถานะ</th>
                 <th style={{ padding: "8px 14px", textAlign: "center", fontSize: 11, fontWeight: 500, color: C.muted }}>PDF</th>
               </tr>
@@ -1161,7 +1428,7 @@ function BNTIBatchCreateView({ onBack }) {
                     document.body.appendChild(a); a.click(); document.body.removeChild(a);
                   }
                   try { await tiApi.markBillingNotesPrinted(bnNos); } catch (_) {}
-                } catch (err) { alert("พิมพ์ไม่สำเร็จ: " + err.message); }
+                } catch (err) { setActionError("พิมพ์ไม่สำเร็จ: " + err.message); }
                 finally { setBatchPrinting(false); }
               }} disabled={batchPrinting}>
                 {batchPrinting ? <Loader size={13}/> : <Printer size={13}/>} {batchPrinting ? "กำลังสร้าง..." : `พิมพ์ทั้งหมด (${successCount})`}
@@ -1192,6 +1459,12 @@ function BNTIBatchCreateView({ onBack }) {
   // ── Main review / All-done ──
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+      {actionError && (
+        <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, color: "#991B1B", flexShrink: 0 }}>
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#991B1B", fontWeight: 600, fontSize: 15 }}>×</button>
+        </div>
+      )}
       {/* top bar + summary cards */}
       <div style={{ flexShrink: 0, paddingBottom: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
@@ -1229,8 +1502,8 @@ function BNTIBatchCreateView({ onBack }) {
             <div style={{ background: C.cardBg, border: `0.5px solid ${hasExclusions ? C.accent : C.border}`, borderRadius: 10, padding: "14px 20px" }}>
               <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>ยอดรวม</div>
               {hasExclusions && selTotal < allTotal
-                ? <div><div style={{ fontSize: 26, fontWeight: 500, color: C.accent }}>{selTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div><div style={{ fontSize: 11, color: C.muted, textDecoration: "line-through" }}>{allTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>
-                : <div style={{ fontSize: 26, fontWeight: 500, color: C.accent }}>{allTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+                ? <div><div style={{ fontSize: 26, fontWeight: 500, color: C.accent }}>{fmtAmt(selTotal)}</div><div style={{ fontSize: 11, color: C.muted, textDecoration: "line-through" }}>{fmtAmt(allTotal)}</div></div>
+                : <div style={{ fontSize: 26, fontWeight: 500, color: C.accent }}>{fmtAmt(allTotal)}</div>
               }
             </div>
           </div>
@@ -1290,7 +1563,7 @@ function BNTIBatchCreateView({ onBack }) {
               </div>
               <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 10, padding: "14px 20px" }}>
                 <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>ยอดรวม</div>
-                <div style={{ fontSize: 26, fontWeight: 500, color: C.accent }}>{allAmount.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+                <div style={{ fontSize: 26, fontWeight: 500, color: C.accent }}>{fmtAmt(allAmount)}</div>
               </div>
             </div>
 
@@ -1315,7 +1588,7 @@ function BNTIBatchCreateView({ onBack }) {
                       </th>
                     )}
                     <th style={{ padding: "8px 16px", textAlign: "left", fontSize: 11, fontWeight: 500, color: C.muted }}>ลูกค้า</th>
-                    <th style={{ padding: "8px 14px", textAlign: "left", fontSize: 11, fontWeight: 500, color: C.muted }}>เลขที่ BN</th>
+                    <th style={{ padding: "8px 14px", textAlign: "left", fontSize: 11, fontWeight: 500, color: C.muted }}>เลขที่ใบวางบิล</th>
                     <th style={{ padding: "8px 14px", textAlign: "center", fontSize: 11, fontWeight: 500, color: C.muted }}>จำนวน TI</th>
                     <th style={{ padding: "8px 16px", textAlign: "right", fontSize: 11, fontWeight: 500, color: C.muted }}>ยอดรวม</th>
                   </tr>
@@ -1336,7 +1609,7 @@ function BNTIBatchCreateView({ onBack }) {
                         <td style={{ padding: "8px 16px", fontWeight: 500 }}>{cust.customer}</td>
                         <td style={{ padding: "8px 14px", color: C.accent }}>{bnNo}</td>
                         <td style={{ padding: "8px 14px", textAlign: "center", color: C.muted }}>{tiCount}</td>
-                        <td style={{ padding: "8px 16px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{amount.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                        <td style={{ padding: "8px 16px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtAmt(amount)}</td>
                       </tr>
                     );
                   })}
@@ -1370,7 +1643,7 @@ function BNTIBatchCreateView({ onBack }) {
                     }
                     try { await tiApi.markBillingNotesPrinted(bnNos); } catch (_) {}
                     exitPrintMode();
-                  } catch (err) { alert("พิมพ์ไม่สำเร็จ: " + err.message); }
+                  } catch (err) { setActionError("พิมพ์ไม่สำเร็จ: " + err.message); }
                   finally { setBatchPrinting(false); }
                 }} disabled={batchPrinting || printSel.size === 0}>
                   {batchPrinting ? <Loader size={13}/> : <Printer size={13}/>} {batchPrinting ? "กำลังสร้าง..." : `พิมพ์ที่เลือก (${printSel.size})`}
@@ -1413,7 +1686,7 @@ function BNTIBatchCreateView({ onBack }) {
                     <ChevronDown size={14} style={{ color: C.muted, flexShrink: 0, transform: isExpanded ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s" }}/>
                     <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 500, textDecoration: excluded ? "line-through" : "none" }}>{cust.customer}</div>
                     <span style={{ fontSize: 12, color: C.muted, whiteSpace: "nowrap" }}>{unbilled.length} ฉบับ</span>
-                    <span style={{ fontSize: 12, fontWeight: 500, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{custTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+                    <span style={{ fontSize: 12, fontWeight: 500, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{fmtAmt(custTotal)}</span>
                   </div>
 
                   {/* TI list (expanded) */}
@@ -1457,7 +1730,7 @@ function BNTIBatchCreateView({ onBack }) {
                                     {isTiExp && tiItemCount != null && <span style={{ fontSize: 10.5, color: C.muted, fontWeight: 400, marginLeft: 8 }}>{tiItemCount} รายการ ▼</span>}
                                   </td>
                                   <td style={{ padding: "6px 14px", color: C.muted }}>{fmtDateThai(inv.date)}</td>
-                                  <td style={{ padding: "6px 16px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{(parseFloat(inv.total) || 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                                  <td style={{ padding: "6px 16px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtAmt(parseFloat(inv.total) || 0)}</td>
                                 </tr>
                                 {isTiExp && (
                                   <tr>
@@ -1481,15 +1754,15 @@ function BNTIBatchCreateView({ onBack }) {
                                                     <td style={{ padding: "5px 8px" }}>{it.desc}</td>
                                                     <td style={{ padding: "5px 8px", color: C.muted }}>{it.desc2}</td>
                                                     <td style={{ padding: "5px 8px", textAlign: "right" }}>{it.qty}</td>
-                                                    <td style={{ padding: "5px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{Number(it.unitPrice||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-                                                    <td style={{ padding: "5px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{Number(it.amount||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                                                    <td style={{ padding: "5px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtAmt(Number(it.unitPrice||0))}</td>
+                                                    <td style={{ padding: "5px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtAmt(Number(it.amount||0))}</td>
                                                   </tr>
                                                 ))}
                                               </tbody>
                                               <tfoot>
                                                 <tr style={{ background: "#eef2ff", borderTop: `1px solid ${C.border}` }}>
                                                   <td colSpan={5} style={{ padding: "7px 8px", textAlign: "right", fontWeight: 500 }}>รวมทั้งสิ้น</td>
-                                                  <td style={{ padding: "7px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: C.accent }}>{(tiData.grandTotal||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                                                  <td style={{ padding: "7px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: C.accent }}>{fmtAmt(tiData.grandTotal||0)}</td>
                                                 </tr>
                                               </tfoot>
                                             </table>
@@ -1531,7 +1804,7 @@ function BNTIBatchCreateView({ onBack }) {
             <div style={{ fontSize: 13, lineHeight: 1.8, marginBottom: 20 }}>
               <div>ลูกค้า: <strong>{selectedCustomers.length} ราย</strong></div>
               <div>ใบกำกับภาษี: <strong>{totalTIs} ฉบับ</strong></div>
-              <div>ยอดรวม: <strong style={{ color: C.accent }}>{grandTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</strong></div>
+              <div>ยอดรวม: <strong style={{ color: C.accent }}>{fmtAmt(grandTotal)}</strong></div>
               {editMode && selectedCustomers.length < pendingCustomers.length && (
                 <div style={{ marginTop: 8, padding: "8px 12px", background: "#fff8e6", borderRadius: 6, fontSize: 12, color: "#946200" }}>
                   ข้าม {pendingCustomers.length - selectedCustomers.length} ราย: {pendingCustomers.filter(c => !c.checked).map(c => c.customer).join(", ")}
@@ -1593,6 +1866,13 @@ function BNCreateView({ onBack }) {
   const [tiCacheBN, setTiCacheBN]     = useState({});
   const [monthCache, setMonthCache]   = useState({});
   const [ptLoading, setPtLoading]     = useState(false);
+  const [configCustomers, setConfigCustomers] = useState([]); // #376b — for address/phone enrichment
+  const [actionError, setActionError] = useState(null);
+  useEffect(() => {
+    if (!actionError) return;
+    const t = setTimeout(() => setActionError(null), 5000);
+    return () => clearTimeout(t);
+  }, [actionError]);
 
   const goMonth = (dir) => {
     let m = month + dir, y = year;
@@ -1631,17 +1911,20 @@ function BNCreateView({ onBack }) {
         }
       } catch (_) {}
       const mapped = (Array.isArray(data) ? data : []).map(cust => {
-        if (cust.generated) {
-          const billedInv = (cust.invoices || []).find(inv => inv.bnNo);
+        // #376b — enrich with TI customer master address/phone
+        const cfg = configCustomers.find(c => c.name === cust.customer);
+        const enriched = { ...cust, address: cfg ? cfg.address || "" : cust.address || "", phone: cfg ? cfg.phone || "" : cust.phone || "" };
+        if (enriched.generated) {
+          const billedInv = (enriched.invoices || []).find(inv => inv.bnNo);
           const bnNo = billedInv ? billedInv.bnNo : null;
           const rec  = bnNo ? bnByNo[bnNo] : null;
-          return { ...cust, generated: true, createdBnNo: bnNo,
+          return { ...enriched, generated: true, createdBnNo: bnNo,
             createdDate:  rec ? rec.date  : null,
-            createdCount: rec ? rec.count : (cust.invoices || []).length,
+            createdCount: rec ? rec.count : (enriched.invoices || []).length,
             createdTotal: rec ? rec.total : 0,
             createdPdfUrl: rec ? rec.pdfUrl : null };
         }
-        return { ...cust, generated: false, createdBnNo: null, createdPdfUrl: null };
+        return { ...enriched, generated: false, createdBnNo: null, createdPdfUrl: null };
       });
       setCustomers(mapped);
       setSearched(true);
@@ -1661,6 +1944,8 @@ function BNCreateView({ onBack }) {
   };
 
   useEffect(() => { handleSearch(); }, []);
+  // #376b — fetch TI customers once on mount for address/phone enrichment
+  useEffect(() => { tiApi.getCustomers("").then(list => setConfigCustomers(list || [])).catch(() => {}); }, []);
 
   const handleConfirm = (result) => {
     setCustomers(prev => prev.map((c, i) => {
@@ -1696,7 +1981,7 @@ function BNCreateView({ onBack }) {
         setCustomers(prev => prev.map((c, i) => i === selectedIdx ? { ...c, createdPdfUrl: res.url } : c));
         window.open(res.url, "_blank", "noopener,noreferrer");
       }
-    } catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); }
+    } catch (e) { setActionError("เกิดข้อผิดพลาด: " + e.message); }
     finally { setPtLoading(false); }
   };
 
@@ -1732,6 +2017,12 @@ function BNCreateView({ onBack }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+      {actionError && (
+        <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, color: "#991B1B", flexShrink: 0 }}>
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#991B1B", fontWeight: 600, fontSize: 15 }}>×</button>
+        </div>
+      )}
       <div style={{ flexShrink: 0, padding: "0 0 10px 0" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
           <button onClick={onBack} style={{ background: "none", border: `0.5px solid ${C.border}`, borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", color: C.muted, display: "flex", alignItems: "center", gap: 4 }}>
@@ -1780,7 +2071,7 @@ function BNCreateView({ onBack }) {
                   </div>
                   {cust.generated && cust.createdBnNo
                     ? <div style={{ fontSize: 10, color: C.accent }}>{cust.createdBnNo}</div>
-                    : <div style={{ fontSize: 10, color: C.muted }}>{cust.invoices.length} ฉบับ · {total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>}
+                    : <div style={{ fontSize: 10, color: C.muted }}>{cust.invoices.length} ฉบับ · {fmtAmt(total)}</div>}
                 </div>
               );
             })}
@@ -1794,6 +2085,7 @@ function BNCreateView({ onBack }) {
                 cust={selectedCust}
                 nextBnNo={nextBnNo}
                 onConfirm={handleConfirm}
+                onTiEdited={(tiNo, newTotal) => setCustomers(prev => prev.map((c, i) => i === selectedIdx ? { ...c, invoices: (c.invoices || []).map(v => v.no === tiNo ? { ...v, total: newTotal } : v) } : c))}
               />
             )}
             {selectedCust && selectedCust.generated && (
@@ -1806,10 +2098,10 @@ function BNCreateView({ onBack }) {
                 <div style={{ padding: "12px 14px", display: "flex", gap: 24, flexWrap: "wrap", fontSize: 12 }}>
                   <div><div style={{ color: C.muted, fontSize: 11, marginBottom: 2 }}>วันที่</div><div>{selectedCust.createdDate || "-"}</div></div>
                   <div><div style={{ color: C.muted, fontSize: 11, marginBottom: 2 }}>จำนวนบิล</div><div>{selectedCust.createdCount} ฉบับ</div></div>
-                  <div><div style={{ color: C.muted, fontSize: 11, marginBottom: 2 }}>รวมเงิน</div><div style={{ fontWeight: 600, color: C.accent }}>{(selectedCust.createdTotal||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>
+                  <div><div style={{ color: C.muted, fontSize: 11, marginBottom: 2 }}>รวมเงิน</div><div style={{ fontWeight: 600, color: C.accent }}>{fmtAmt(selectedCust.createdTotal||0)}</div></div>
                   <div style={{ alignSelf: "flex-end" }}>
                     <Btn small onClick={handleGenBnPdf} disabled={ptLoading}>
-                      {ptLoading ? <Loader size={13}/> : null} PDF
+                      {ptLoading ? <Loader size={13}/> : <FileText size={13}/>} PDF
                     </Btn>
                   </div>
                 </div>
@@ -1824,7 +2116,7 @@ function BNCreateView({ onBack }) {
                               <span onClick={() => setTiPopup(inv.no)} style={{ color: C.accent, fontWeight: 500, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" }}>{inv.no}</span>
                             </td>
                             <td style={{ padding: "7px 14px", color: C.muted }}>{fmtDateThai(inv.date)}</td>
-                            <td style={{ padding: "7px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(parseFloat(inv.total)||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                            <td style={{ padding: "7px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtAmt(parseFloat(inv.total)||0)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1874,7 +2166,7 @@ function BNCreateView({ onBack }) {
                       <th style={{ padding: "5px 12px", width: 32, background: "#fafafa", borderBottom: `0.5px solid ${C.border}` }}>
                         <input type="checkbox" checked={printQueue.every(q=>q.checked)} onChange={toggleAllPrint}/>
                       </th>
-                      {["เลขที่ BN","ลูกค้า","ฉบับ","รวมเงิน"].map((h, i) => (
+                      {["เลขที่ใบวางบิล","ลูกค้า","ฉบับ","รวมเงิน"].map((h, i) => (
                         <th key={i} style={{ padding: "5px 12px", textAlign: i===3?"right":"left", color: C.muted, fontWeight: 500, fontSize: 11, background: "#fafafa", borderBottom: `0.5px solid ${C.border}` }}>{h}</th>
                       ))}
                     </tr>
@@ -1890,7 +2182,7 @@ function BNCreateView({ onBack }) {
                         </td>
                         <td style={{ padding: "6px 12px", fontSize: 11 }}>{q.customer}</td>
                         <td style={{ padding: "6px 12px", fontSize: 11 }}>{q.count}</td>
-                        <td style={{ padding: "6px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(q.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                        <td style={{ padding: "6px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtAmt(q.total||0)}</td>
                       </tr>
                     ))}
                   </tbody>

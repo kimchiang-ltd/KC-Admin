@@ -12,8 +12,10 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { ChevronLeft, ChevronRight, Search, TrendingUp, Users, PieChart, BarChart3, RefreshCw } from "lucide-react";
 import { api } from "../../shared/api.jsx";
+import { tiApi } from "../../modules/ti/tiApi.jsx";
 import { C } from "../../shared/constants.jsx";
 import { Btn, Spinner, ErrorBox } from "../../shared/ui.jsx";
+import { fmtAmt } from "../../shared/utils.jsx";
 import { DateRangePicker } from "../invoice/InvoicePage.jsx";
 
 const THAI_MONTHS_SHORT = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
@@ -126,40 +128,56 @@ function SalesByCustomerReport({ cache, updateCache, expanded, setExpanded }) {
   const { start: fetch12Start, end: fetch12End } = rangeFromAnchor(anchor, 12);
   const fetch12Key = "report-sales-by-customer_" + fetch12Start + "_" + fetch12End;
 
+  // TI cache keys (parallel to DN)
+  const TI_PREFIX      = "report-ti-sales_";
+  const tiCacheKey     = TI_PREFIX + startDate + "_" + endDate;
+  const prevTiCacheKey = TI_PREFIX + prevStartDate + "_" + prevEndDate;
+  const tiFetch12Key   = TI_PREFIX + fetch12Start + "_" + fetch12End;
+
   // Find a broader cached range that covers the requested dates
   const PREFIX = "report-sales-by-customer_";
-  const findCovering = useCallback((start, end) => {
+  const findCoveringBy = useCallback((prefix, start, end) => {
     for (const key of Object.keys(cache)) {
-      if (!key.startsWith(PREFIX)) continue;
-      const parts = key.slice(PREFIX.length).split("_");
+      if (!key.startsWith(prefix)) continue;
+      const parts = key.slice(prefix.length).split("_");
       if (parts.length !== 2) continue;
       const [cs, ce] = parts;
       if (cs <= start && ce >= end) {
-        return cache[key].filter(dn => dn.date >= start && dn.date <= end);
+        return cache[key].filter(d => d.date >= start && d.date <= end);
       }
     }
     return null;
   }, [cache]);
+  const findCovering   = useCallback((s, e) => findCoveringBy(PREFIX, s, e),   [findCoveringBy]);
+  const findCoveringTI = useCallback((s, e) => findCoveringBy(TI_PREFIX, s, e), [findCoveringBy]);
 
   // Derive from broader cache or use exact cache
   const dns     = cache[cacheKey] || findCovering(startDate, endDate) || [];
   const prevDns = cache[prevCacheKey] || findCovering(prevStartDate, prevEndDate) || [];
+  const tis     = cache[tiCacheKey] || findCoveringTI(startDate, endDate) || [];
+  const prevTis = cache[prevTiCacheKey] || findCoveringTI(prevStartDate, prevEndDate) || [];
 
   const load = useCallback(async (force) => {
-    const has12 = !force && (cache[fetch12Key] || findCovering(fetch12Start, fetch12End));
-    const hasPrev = !force && (cache[prevCacheKey] || findCovering(prevStartDate, prevEndDate));
-    if (has12 && hasPrev) return;
+    const has12    = !force && (cache[fetch12Key] || findCovering(fetch12Start, fetch12End));
+    const hasPrev  = !force && (cache[prevCacheKey] || findCovering(prevStartDate, prevEndDate));
+    const hasTI12  = !force && (cache[tiFetch12Key] || findCoveringTI(fetch12Start, fetch12End));
+    const hasTIPrev = !force && (cache[prevTiCacheKey] || findCoveringTI(prevStartDate, prevEndDate));
+    if (has12 && hasPrev && hasTI12 && hasTIPrev) return;
     setLoading(true); setError("");
     try {
-      const [d, pd] = await Promise.all([
-        !has12 ? api.getDeliveryNotes(fetch12Start, fetch12End, "") : null,
-        !hasPrev ? api.getDeliveryNotes(prevStartDate, prevEndDate, "") : null,
+      const [d, pd, ti, pti] = await Promise.all([
+        !has12    ? api.getDeliveryNotes(fetch12Start, fetch12End, "") : null,
+        !hasPrev  ? api.getDeliveryNotes(prevStartDate, prevEndDate, "") : null,
+        !hasTI12  ? tiApi.getTaxInvoices(fetch12Start, fetch12End) : null,
+        !hasTIPrev ? tiApi.getTaxInvoices(prevStartDate, prevEndDate) : null,
       ]);
-      if (d != null) updateCache(fetch12Key, Array.isArray(d) ? d : []);
-      if (pd != null) updateCache(prevCacheKey, Array.isArray(pd) ? pd : []);
+      if (d != null)   updateCache(fetch12Key, Array.isArray(d) ? d : []);
+      if (pd != null)  updateCache(prevCacheKey, Array.isArray(pd) ? pd : []);
+      if (ti != null)  updateCache(tiFetch12Key, Array.isArray(ti) ? ti : []);
+      if (pti != null) updateCache(prevTiCacheKey, Array.isArray(pti) ? pti : []);
     } catch (e) { setError("โหลดไม่สำเร็จ: " + e.message); }
     finally { setLoading(false); }
-  }, [anchor, prevStartDate, prevEndDate, cache, findCovering]);
+  }, [anchor, prevStartDate, prevEndDate, cache, findCovering, findCoveringTI]);
 
   useEffect(() => { load(false); }, [load]);
 
@@ -167,15 +185,20 @@ function SalesByCustomerReport({ cache, updateCache, expanded, setExpanded }) {
   const months = monthRange(startDate, endDate);
   const byCustomer = (() => {
     const map = new Map();
-    for (const dn of dns) {
-      const key = (dn.name || "—").trim();
-      const mKey = dnMonthKey(dn.date);
-      const total = parseFloat(dn.total) || 0;
+    const addEntry = (key, date, total, entry) => {
+      const mKey = dnMonthKey(date);
       if (!map.has(key)) map.set(key, { name: key, perMonth: {}, grandTotal: 0, dns: [] });
       const row = map.get(key);
       if (mKey) row.perMonth[mKey] = (row.perMonth[mKey] || 0) + total;
       row.grandTotal += total;
-      row.dns.push(dn);
+      row.dns.push(entry);
+    };
+    for (const dn of dns) {
+      addEntry((dn.name || "—").trim(), dn.date, parseFloat(dn.total) || 0, dn);
+    }
+    for (const ti of tis) {
+      const key = ((ti.name || "—").trim()) + " (VAT)";
+      addEntry(key, ti.date, parseFloat(ti.grandTotal) || 0, { ...ti, total: ti.grandTotal });
     }
     return Array.from(map.values()).sort((a, b) => b.grandTotal - a.grandTotal);
   })();
@@ -189,13 +212,17 @@ function SalesByCustomerReport({ cache, updateCache, expanded, setExpanded }) {
   const grandTotal = byCustomer.reduce((s, c) => s + c.grandTotal, 0);
   const maxTotal = Math.max(...byCustomer.map(c => c.grandTotal), 1);
 
-  const fmtBaht = (v) => v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtBaht0 = (v) => Math.round(v).toLocaleString("en-US");
   const kfmt = (n) => { if (n >= 1e6) return (n / 1e6).toFixed(2) + "M"; if (n >= 1e3) return Math.round(n / 1e3).toLocaleString("en-US") + "k"; return String(Math.round(n)); };
 
   // #226b — Previous period aggregation for KPI deltas
-  const prevGrandTotal = prevDns.reduce((s, dn) => s + (parseFloat(dn.total) || 0), 0);
-  const prevCustomerCount = new Set(prevDns.map(dn => (dn.name || "—").trim())).size;
+  const prevGrandTotal = prevDns.reduce((s, dn) => s + (parseFloat(dn.total) || 0), 0)
+    + prevTis.reduce((s, ti) => s + (parseFloat(ti.grandTotal) || 0), 0);
+  const prevCustomerSet = new Set([
+    ...prevDns.map(dn => (dn.name || "—").trim()),
+    ...prevTis.map(ti => ((ti.name || "—").trim()) + " (VAT)"),
+  ]);
+  const prevCustomerCount = prevCustomerSet.size;
 
   // #226d — Previous period per-customer totals (for customer insight MoM)
   const prevByCustomer = (() => {
@@ -203,6 +230,11 @@ function SalesByCustomerReport({ cache, updateCache, expanded, setExpanded }) {
     for (const dn of prevDns) {
       const key = (dn.name || "—").trim();
       const total = parseFloat(dn.total) || 0;
+      map.set(key, (map.get(key) || 0) + total);
+    }
+    for (const ti of prevTis) {
+      const key = ((ti.name || "—").trim()) + " (VAT)";
+      const total = parseFloat(ti.grandTotal) || 0;
       map.set(key, (map.get(key) || 0) + total);
     }
     return map;
@@ -333,6 +365,8 @@ function SalesByCustomerReport({ cache, updateCache, expanded, setExpanded }) {
       {expanded && (() => {
         const cust = byCustomer.find(c => c.name === expanded);
         if (!cust) return null;
+        const isTI = expanded.endsWith(" (VAT)");
+        const docLabel = isTI ? "TI" : "DN";
         const rank = byCustomer.indexOf(cust) + 1;
         const prevTotal = prevByCustomer.get(cust.name) || 0;
         const mom = pctDelta(cust.grandTotal, prevTotal);
@@ -366,7 +400,7 @@ function SalesByCustomerReport({ cache, updateCache, expanded, setExpanded }) {
                   </div>
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 27, fontWeight: 700, color: "#0f172a", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{fmtBaht(cust.grandTotal)}</div>
+                  <div style={{ fontSize: 27, fontWeight: 700, color: "#0f172a", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{fmtAmt(cust.grandTotal)}</div>
                   <div style={{ display: "flex", alignItems: "center", gap: 7, justifyContent: "flex-end", marginTop: 7 }}>
                     {mom != null && (
                       <span style={{
@@ -407,8 +441,8 @@ function SalesByCustomerReport({ cache, updateCache, expanded, setExpanded }) {
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                   {[
-                    { label: "จำนวน DN", value: String(dnCount) + " ใบ", sub: rangeLabel, color: "#0f172a" },
-                    { label: "ยอดเฉลี่ยต่อใบ", value: fmtBaht0(avgPerDN), sub: "ต่อ DN", color: "#0f172a" },
+                    { label: "จำนวน " + docLabel, value: String(dnCount) + " ใบ", sub: rangeLabel, color: "#0f172a" },
+                    { label: "ยอดเฉลี่ยต่อใบ", value: fmtBaht0(avgPerDN), sub: "ต่อ " + docLabel, color: "#0f172a" },
                     { label: "วางบิลแล้ว", value: billedPct.toFixed(0) + "%", sub: `${billedCount} จาก ${dnCount} ใบ`, color: billedPct >= 80 ? "#15803d" : billedPct >= 50 ? "#ea580c" : "#b91c1c" },
                     { label: "เดือนสูงสุด", value: bestMonthLabel, sub: fmtBaht0(monthValues[bestIdx] || 0), color: "#1d4ed8" },
                   ].map((s, i) => (
@@ -425,14 +459,14 @@ function SalesByCustomerReport({ cache, updateCache, expanded, setExpanded }) {
             {/* ── DN List ── */}
             <div style={S.card}>
               <div style={{ padding: "18px 22px 16px", borderBottom: "1px solid #eef2f7" }}>
-                <div style={{ fontSize: 15.5, fontWeight: 700, color: "#0f172a" }}>รายการ DN</div>
+                <div style={{ fontSize: 15.5, fontWeight: 700, color: "#0f172a" }}>รายการ {docLabel}</div>
                 <div style={{ fontSize: 12.5, color: "#94a3b8", marginTop: 2 }}>{dnCount} ใบ · {rangeLabel}</div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "140px 120px 1fr 150px 140px", alignItems: "center", ...S.headerRow }}>
-                <div>เลขที่ DN</div><div>วันที่</div><div>รายละเอียด</div><div style={{ textAlign: "right" }}>ยอด ฿</div><div style={{ textAlign: "right" }}>สถานะ BN</div>
+                <div>เลขที่ {docLabel}</div><div>วันที่</div><div>รายละเอียด</div><div style={{ textAlign: "right" }}>ยอด ฿</div><div style={{ textAlign: "right" }}>สถานะ BN</div>
               </div>
               {sortedDns.length === 0 ? (
-                <div style={{ padding: 40, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>ไม่มี DN ในช่วงเวลานี้</div>
+                <div style={{ padding: 40, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>ไม่มี {docLabel} ในช่วงเวลานี้</div>
               ) : sortedDns.map((dn, i) => {
                 const billed = (dn.bnNo || "").trim();
                 return (
@@ -440,7 +474,7 @@ function SalesByCustomerReport({ cache, updateCache, expanded, setExpanded }) {
                     <span style={{ color: "#2563eb", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{dn.id}</span>
                     <span style={{ color: "#475569", fontVariantNumeric: "tabular-nums" }}>{dn.date}</span>
                     <span style={{ color: "#64748b", fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{dn.items?.[0]?.desc || "—"}</span>
-                    <span style={{ textAlign: "right", color: "#0f172a", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{fmtBaht(parseFloat(dn.total) || 0)}</span>
+                    <span style={{ textAlign: "right", color: "#0f172a", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{fmtAmt(parseFloat(dn.total) || 0)}</span>
                     <span style={{ textAlign: "right" }}>
                       <span style={{
                         display: "inline-flex", alignItems: "center", padding: "3px 10px", borderRadius: 6,
@@ -455,7 +489,7 @@ function SalesByCustomerReport({ cache, updateCache, expanded, setExpanded }) {
               {sortedDns.length > 0 && (
                 <div style={{ display: "grid", gridTemplateColumns: "140px 120px 1fr 150px 140px", alignItems: "center", ...S.footerRow }}>
                   <div /><div /><div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>รวม {dnCount} ใบ</div>
-                  <div style={{ textAlign: "right", fontSize: 16, fontWeight: 700, color: "#1d4ed8", fontVariantNumeric: "tabular-nums" }}>{fmtBaht(cust.grandTotal)}</div>
+                  <div style={{ textAlign: "right", fontSize: 16, fontWeight: 700, color: "#1d4ed8", fontVariantNumeric: "tabular-nums" }}>{fmtAmt(cust.grandTotal)}</div>
                   <div style={{ textAlign: "right", fontSize: 12, color: "#64748b" }}>{billedCount}/{dnCount} วางบิลแล้ว</div>
                 </div>
               )}
@@ -486,7 +520,7 @@ function SalesByCustomerReport({ cache, updateCache, expanded, setExpanded }) {
                   sub: "ราย active",
                 },
                 {
-                  label: "ลูกค้าสูงสุด", icon: <PieChart size={17} />,
+                  label: "ยอดขายสูงสุด", icon: <PieChart size={17} />,
                   iconBg: "#fff7ed", iconColor: "#ea580c",
                   value: topCustomer?.name || "—",
                   delta: 1, deltaLabel: topShare.toFixed(1) + "%",
@@ -571,7 +605,7 @@ function SalesByCustomerReport({ cache, updateCache, expanded, setExpanded }) {
                         <div style={{ height: "100%", width: barWidth, borderRadius: 6, background: top3 ? "linear-gradient(90deg,#1d4ed8,#3b82f6)" : "#93b4f5", transition: "width 0.3s ease" }} />
                       </div>
                     </div>
-                    <div style={{ textAlign: "right", fontSize: 14, fontWeight: 600, color: "#0f172a", fontVariantNumeric: "tabular-nums" }}>{fmtBaht(row.grandTotal)}</div>
+                    <div style={{ textAlign: "right", fontSize: 14, fontWeight: 600, color: "#0f172a", fontVariantNumeric: "tabular-nums" }}>{fmtAmt(row.grandTotal)}</div>
                     <div style={{ textAlign: "right", fontSize: 13, fontWeight: 500, color: "#64748b", fontVariantNumeric: "tabular-nums" }}>{share.toFixed(1)}%</div>
                   </div>
                 );
@@ -583,7 +617,7 @@ function SalesByCustomerReport({ cache, updateCache, expanded, setExpanded }) {
                   <div />
                   <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>ยอดขายรวมทั้งหมด</div>
                   <div />
-                  <div style={{ textAlign: "right", fontSize: 16, fontWeight: 700, color: "#1d4ed8", fontVariantNumeric: "tabular-nums" }}>{fmtBaht(grandTotal)}</div>
+                  <div style={{ textAlign: "right", fontSize: 16, fontWeight: 700, color: "#1d4ed8", fontVariantNumeric: "tabular-nums" }}>{fmtAmt(grandTotal)}</div>
                   <div style={{ textAlign: "right", fontSize: 13, fontWeight: 600, color: "#64748b", fontVariantNumeric: "tabular-nums" }}>100%</div>
                 </div>
               )}
@@ -634,7 +668,7 @@ function SalesByCustomerReport({ cache, updateCache, expanded, setExpanded }) {
                           );
                         })}
                         <div style={{ display: "flex", justifyContent: "center" }}><Sparkline series={sparkSeries} color={sparkColor} /></div>
-                        <div style={{ textAlign: "right", fontSize: 14, fontWeight: 600, color: "#0f172a", fontVariantNumeric: "tabular-nums" }}>{fmtBaht(row.grandTotal)}</div>
+                        <div style={{ textAlign: "right", fontSize: 14, fontWeight: 600, color: "#0f172a", fontVariantNumeric: "tabular-nums" }}>{fmtAmt(row.grandTotal)}</div>
                       </div>
                     );
                   })}
@@ -648,7 +682,7 @@ function SalesByCustomerReport({ cache, updateCache, expanded, setExpanded }) {
                         <div key={i} style={{ textAlign: "right", fontSize: 12.5, fontWeight: 700, color: "#334155", fontVariantNumeric: "tabular-nums" }}>{v ? fmtBaht0(v) : "—"}</div>
                       ))}
                       <div />
-                      <div style={{ textAlign: "right", fontSize: 16, fontWeight: 700, color: "#1d4ed8", fontVariantNumeric: "tabular-nums" }}>{fmtBaht(grandTotal)}</div>
+                      <div style={{ textAlign: "right", fontSize: 16, fontWeight: 700, color: "#1d4ed8", fontVariantNumeric: "tabular-nums" }}>{fmtAmt(grandTotal)}</div>
                     </div>
                   )}
                 </div>

@@ -6,15 +6,19 @@
 // Pattern matches SettingsPage (HubCard grid + BackHeader + onViewChange/goListRequest)
 
 import React, { useState, useEffect } from "react";
-import { BarChart2, ChevronLeft, Users, ClipboardList } from "lucide-react";
+import { BarChart2, ChevronLeft, Users, ClipboardList, FileSpreadsheet, Receipt } from "lucide-react";
 import { C } from "../../shared/constants.jsx";
 import { SalesByCustomerReport } from "./SalesByCustomerReport.jsx";
 import { UnbilledDNReport } from "./UnbilledDNReport.jsx";
+import { BNSalesExport } from "./BNSalesExport.jsx";
+import { VatSalesReport } from "./VatSalesReport.jsx";
 
 const VIEW_LABELS = {
   hub: null,
   "sales-by-customer": "ยอดขายตามลูกค้า",
-  "unbilled-dn": "DN ที่ยังไม่วางบิล",
+  "unbilled-dn": "ใบส่งของที่ยังไม่วางบิล",
+  "bn-sales-export": "รายงานยอดขายรายเดือน",
+  "vat-sales": "รายงานภาษีขาย",
 };
 
 function ReportsPage({ cache, updateCache, onViewChange, goListRequest }) {
@@ -31,13 +35,13 @@ function ReportsPage({ cache, updateCache, onViewChange, goListRequest }) {
   useEffect(() => { if (goListRequest) { setCustomerDetail(null); setRView("hub"); } }, [goListRequest]);
 
   const HubCard = ({ icon, label, desc, color, bg, onClick }) => (
-    <div onClick={onClick} style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, padding: "20px 16px", cursor: "pointer", textAlign: "center" }}
+    <div onClick={onClick} style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, padding: "20px 12px 16px", width: 140, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 10, textAlign: "center" }}
       onMouseEnter={e => e.currentTarget.style.borderColor = C.accent}
       onMouseLeave={e => e.currentTarget.style.borderColor = C.border}>
-      <div style={{ width: 44, height: 44, borderRadius: 8, background: bg, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 10px", color }}>
+      <div style={{ width: 44, height: 44, borderRadius: 8, background: bg, display: "flex", alignItems: "center", justifyContent: "center", color }}>
         {icon}
       </div>
-      <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 3, wordBreak: "keep-all" }}>{label}</div>
       <div style={{ fontSize: 11, color: C.muted }}>{desc}</div>
     </div>
   );
@@ -67,9 +71,11 @@ function ReportsPage({ cache, updateCache, onViewChange, goListRequest }) {
       <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
         <BarChart2 size={18} /> รายงาน
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-        <HubCard icon={<Users size={20}/>} label="ยอดขายตามลูกค้า" desc="รวมยอดขาย DN ของแต่ละลูกค้า" bg="#E6F1FB" color="#185FA5" onClick={() => setRView("sales-by-customer")} />
-        <HubCard icon={<ClipboardList size={20}/>} label="DN ที่ยังไม่วางบิล" desc="DN ที่ยังไม่ได้อยู่ในใบวางบิล" bg="#FAEEDA" color="#854F0B" onClick={() => setRView("unbilled-dn")} />
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+        <HubCard icon={<Users size={20}/>} label="ยอดขายตามลูกค้า" desc="รวมยอดขายใบส่งของของแต่ละลูกค้า" bg="#E6F1FB" color="#185FA5" onClick={() => setRView("sales-by-customer")} />
+        <HubCard icon={<ClipboardList size={20}/>} label="ใบส่งของที่ยังไม่วางบิล" desc="ดูรายการใบส่งของที่ยังไม่ได้รวมเข้าใบวางบิล" bg="#FAEEDA" color="#854F0B" onClick={() => setRView("unbilled-dn")} />
+        <HubCard icon={<FileSpreadsheet size={20}/>} label="รายงานยอดขายรายเดือน" desc="พิมพ์ A4 หรือ Excel" bg="#E8F5E9" color="#2E7D32" onClick={() => setRView("bn-sales-export")} />
+        <HubCard icon={<Receipt size={20}/>} label="รายงานภาษีขาย" desc="ภ.พ.30 รายเดือน" bg="#EEEDFE" color="#534AB7" onClick={() => setRView("vat-sales")} />
       </div>
     </div>
   );
@@ -83,8 +89,22 @@ function ReportsPage({ cache, updateCache, onViewChange, goListRequest }) {
 
   if (rView === "unbilled-dn") return (
     <div>
-      <BackHeader title="DN ที่ยังไม่วางบิล" />
+      <BackHeader title="ใบส่งของที่ยังไม่วางบิล" />
       <UnbilledDNReport cache={cache} updateCache={updateCache} />
+    </div>
+  );
+
+  if (rView === "bn-sales-export") return (
+    <div>
+      <BackHeader title="รายงานยอดขายรายเดือน" />
+      <BNSalesExport cache={cache} updateCache={updateCache} />
+    </div>
+  );
+
+  if (rView === "vat-sales") return (
+    <div>
+      <BackHeader title="รายงานภาษีขาย" />
+      <VatSalesReport cache={cache} updateCache={updateCache} />
     </div>
   );
 

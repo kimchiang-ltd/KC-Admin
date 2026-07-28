@@ -3,10 +3,7 @@ import { useGoogleLogin } from '@react-oauth/google'
 import KCFactory from './KCFactory.jsx'
 import { api, setAuthToken, clearAuthToken, setOnAuthReject } from './shared/api.jsx' // #299c
 
-const ALLOWED_EMAILS = [
-  'kimchiang.ltd@gmail.com',
-  'chanavi.pp@gmail.com',
-]
+// #312 — ALLOWED_EMAILS removed; backend Allowlist sheet is sole authority
 
 // #244 — force re-login once per calendar day (resets at local midnight, not a rolling 24h window)
 const todayStr = () => new Date().toDateString()
@@ -38,7 +35,7 @@ export default function App() {
 
   // #311 — every login failure shows ONE identical generic message; the trailing (รหัส NNN)
   // is an internal diagnostic code, meaningless to outsiders. Map (known only to us):
-  //   449 = email authenticated but NOT on the allowlist (client filter OR backend login reject)
+  //   449 = email authenticated but NOT on the backend Allowlist sheet
   //   491 = Google sign-in failed / cancelled (onError)
   //   492 = userinfo lookup threw / network error
   //   (mid-session expiry no longer shows a code — it routes to the #299e session-expired modal)
@@ -50,21 +47,17 @@ export default function App() {
           headers: { Authorization: 'Bearer ' + tokenResponse.access_token }
         })
         const profile = await res.json()
-        if (ALLOWED_EMAILS.includes(profile.email)) {
-          // #299c — mint a backend session token; only mount the app if it succeeds
-          const auth = await api.login(tokenResponse.access_token)
-          if (!auth || !auth.success || !auth.token) {
-            setError('เกิดข้อผิดพลาด กรุณาลองใหม่ (รหัส 449)')
-          } else {
-            setAuthToken(auth.token)
-            const stamped = { ...profile, _loginDate: todayStr() } // #244
-            setUser(stamped)
-            localStorage.setItem('kc_user', JSON.stringify(stamped))
-            setError('')
-            setSessionExpired(false) // #299e — clear expired state on successful re-login
-          }
-        } else {
+        // #312 — backend Allowlist sheet is sole authority (no client-side filter)
+        const auth = await api.login(tokenResponse.access_token)
+        if (!auth || !auth.success || !auth.token) {
           setError('เกิดข้อผิดพลาด กรุณาลองใหม่ (รหัส 449)')
+        } else {
+          setAuthToken(auth.token)
+          const stamped = { ...profile, _loginDate: todayStr() } // #244
+          setUser(stamped)
+          localStorage.setItem('kc_user', JSON.stringify(stamped))
+          setError('')
+          setSessionExpired(false) // #299e — clear expired state on successful re-login
         }
       } catch(e) {
         setError('เกิดข้อผิดพลาด กรุณาลองใหม่ (รหัส 492)')
@@ -107,7 +100,7 @@ export default function App() {
       <div style={{ background:'white', borderRadius:12, padding:40, width:360, textAlign:'center', boxShadow:'0 4px 24px rgba(0,0,0,0.08)' }}>
         <div style={{ width:48, height:48, background:'#032d60', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:18, color:'white', margin:'0 auto 16px' }}>KC</div>
         <div style={{ fontSize:20, fontWeight:600, marginBottom:4 }}>KC Admin</div>
-        <div style={{ fontSize:13, color:'#6b6b6b', marginBottom:32 }}>ระบบจัดการเอกสาร</div>
+        <div style={{ fontSize:13, color:'#6b6b6b', marginBottom:32 }}>ระบบบริหารจัดการโรงงาน</div>
         {error && (
           <div style={{ background:'#fdecea', color:'#c23934', padding:'10px 14px', borderRadius:6, fontSize:12, marginBottom:16 }}>
             {error}

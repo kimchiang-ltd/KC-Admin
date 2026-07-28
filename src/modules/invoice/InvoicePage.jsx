@@ -3,7 +3,7 @@
 // ============================================================
 // Phase 5 (#208) — extracted from KCFactory.jsx v1.4.165 (2026-06-27)
 // DeliveryNoteForm, DeliveryNoteDetail, DateRangePicker, DeliveryNotePage
-// BNPreviewModal, DNDetailPopup, BNEditForm, BNDetailView, BNListView,
+// DNDetailPopup, BNEditForm, BNDetailView, BNListView,
 // BNDetailMiniPopup, BNCustomerPanel, BNCreateView, BillingNotePage
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
@@ -11,7 +11,7 @@ import QRCode from "qrcode";
 import { FileText, ClipboardList, Calendar, Check, CheckCircle, Square, Pencil, Save, Search, RefreshCw, Loader, Plus, Trash2, ChevronLeft, ChevronRight, ChevronDown, Printer, QrCode, Smartphone, AlertCircle, Eye } from "lucide-react";
 import { api } from '../../shared/api.jsx';
 import { C, SECTION_COLORS, PAGE_SIZE, ITEMS_COUNT, DN_MAX_ROWS, emptyItem, DESC_MAX, DETAIL_WARN, DETAIL_MAX, SIMILARITY_THRESHOLD, DN_ZERO_WIDTH, DESC_MAX_DN_L, DETAIL_WARN_DN_L, DETAIL_MAX_DN_L } from '../../shared/constants.jsx';
-import { descWidth, descWidthV2, getDescText, customerSimilarity, findSimilarCustomers, collapseItems, toDownloadUrl } from '../../shared/utils.jsx';
+import { descWidth, descWidthV2, getDescText, customerSimilarity, findSimilarCustomers, collapseItems, toDownloadUrl, fmtAmt } from '../../shared/utils.jsx';
 import { useInvoiceForm, initInvoiceItems } from '../../shared/hooks.jsx';
 import { Badge, Btn, inputStyle, SectionTitle, Spinner, ErrorBox, Paginator, ConfirmModal, CustomerFieldSyncModal, INSTR_STEPS, renderPhoneScreen } from '../../shared/ui.jsx';
 import { CustomerAutocomplete, ProductAutocomplete } from '../../shared/autocomplete.jsx';
@@ -33,6 +33,14 @@ function DeliveryNoteForm({ initial, onSave, onCancel, isEdit, products, setProd
   } = useInvoiceForm({ initial, isEdit, products, detailAttr: "data-detail-idx", maxRows: DN_MAX_ROWS });
 
   const total = items.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0);
+
+  // #338 — inline error banner
+  const [actionError, setActionError] = useState(null);
+  useEffect(() => {
+    if (!actionError) return;
+    const t = setTimeout(() => setActionError(null), 5000);
+    return () => clearTimeout(t);
+  }, [actionError]);
 
   // #214 — per-field on-blur customer sync (iii-soft: cache "yes" only; "no" doesn't suppress re-prompt)
   const [syncDecisions, setSyncDecisions] = useState({}); // { address: 'yes', phone: 'yes', ... }
@@ -72,7 +80,7 @@ function DeliveryNoteForm({ initial, onSave, onCancel, isEdit, products, setProd
         const update = { ...record };
         const formValues = { address, phone };
         for (const f of yesFields) update[f] = formValues[f];
-        api.updateCustomer(name, update).catch(e => alert("บันทึกที่อยู่/เบอร์ลูกค้าลงระบบไม่สำเร็จ — " + e.message)); // #284
+        api.updateCustomer(name, update).catch(e => setActionError("บันทึกที่อยู่/เบอร์ลูกค้าลงระบบไม่สำเร็จ — " + e.message)); // #284
       }
     }
     onSave({ ...payload, id: result.invoiceNo || initial?.id, pdfUrl: result.pdfUrl || initial?.pdfUrl });
@@ -80,6 +88,12 @@ function DeliveryNoteForm({ initial, onSave, onCancel, isEdit, products, setProd
 
   return (
     <>
+    {actionError && (
+      <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, color: "#991B1B" }}>
+        <span>{actionError}</span>
+        <button onClick={() => setActionError(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#991B1B", fontWeight: 600, fontSize: 15 }}>×</button>
+      </div>
+    )}
     {pendingField && <CustomerFieldSyncModal name={name} field={pendingField.field} oldValue={pendingField.oldValue} newValue={pendingField.newValue} onConfirm={handleFieldConfirm} onCancel={handleFieldSkip} />}
     {pendingDelete !== null && <ConfirmModal message="ยืนยันลบ?" onConfirm={() => { removeRow(pendingDelete); setPendingDelete(null); }} onCancel={() => setPendingDelete(null)} enterConfirm />}
     {/* #135 — "ใช่ ใช้ชื่อนี้" auto-fills name/address/phone from matched customer; "ไม่ ใช้ชื่อที่พิมพ์" proceeds with typed name */}
@@ -216,7 +230,7 @@ function DeliveryNoteForm({ initial, onSave, onCancel, isEdit, products, setProd
                   <td style={{ padding: "3px 6px" }}>{!it._cont && cellInput(i, "qty", "right")}</td>
                   <td style={{ padding: "3px 6px" }}>{!it._cont && cellInput(i, "unitPrice", "right")}</td>
                   <td style={{ padding: "4px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: it.amount ? C.text : C.muted }}>
-                    {!it._cont && (it.amount ? Number(it.amount).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) : "—")}
+                    {!it._cont && (it.amount ? fmtAmt(Number(it.amount)) : "—")}
                   </td>
                 </tr>
                 );
@@ -224,7 +238,7 @@ function DeliveryNoteForm({ initial, onSave, onCancel, isEdit, products, setProd
               })}
               <tr style={{ background: "#f0f4ff", borderTop: `1px solid ${C.border}` }}>
                 <td colSpan={7} style={{ padding: "8px 10px", textAlign: "right", fontWeight: 500 }}>ยอดรวม</td>
-                <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500, color: C.accent, fontSize: 13 }}>{total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500, color: C.accent, fontSize: 13 }}>{fmtAmt(total)}</td>
               </tr>
             </tbody>
           </table>
@@ -266,11 +280,17 @@ function DeliveryNoteDetail({ invoice, onBack, onSaved, products, setProducts, s
   const [qrDataUrl, setQrDataUrl]                 = useState("");
   const [showInstructions, setShowInstructions]   = useState(false);
   const [instrStep, setInstrStep]                 = useState(0);
+  const [actionError, setActionError] = useState(null);
   useEffect(() => {
     if (!showInstructions) { setInstrStep(0); return; }
     const iv = setInterval(() => setInstrStep(s => (s + 1) % INSTR_STEPS.length), 2500);
     return () => clearInterval(iv);
   }, [showInstructions]);
+  useEffect(() => {
+    if (!actionError) return;
+    const t = setTimeout(() => setActionError(null), 5000);
+    return () => clearTimeout(t);
+  }, [actionError]);
 
   const handleSave = (updated) => {
     setData({ ...data, ...updated, pdfUrl: "", portraitUrl: "" }); // clear so both PDFs regenerate after edit
@@ -299,7 +319,7 @@ function DeliveryNoteDetail({ invoice, onBack, onSaved, products, setProducts, s
         a.href = result.pdfUrl; a.target = "_blank"; a.rel = "noopener noreferrer";
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
       }
-    } catch (err) { alert("เกิดข้อผิดพลาด: " + err.message); }
+    } catch (err) { setActionError("เกิดข้อผิดพลาด: " + err.message); }
     finally { setLsLoading(false); }
   };
 
@@ -322,7 +342,7 @@ function DeliveryNoteDetail({ invoice, onBack, onSaved, products, setProducts, s
         a.href = result.pdfUrl; a.target = "_blank"; a.rel = "noopener noreferrer";
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
       }
-    } catch (err) { alert("เกิดข้อผิดพลาด: " + err.message); }
+    } catch (err) { setActionError("เกิดข้อผิดพลาด: " + err.message); }
     finally { setPtLoading(false); }
   };
 
@@ -341,20 +361,20 @@ function DeliveryNoteDetail({ invoice, onBack, onSaved, products, setProducts, s
         setData(d => ({ ...d, portraitUrl: result.pdfUrl }));
         await generate(result.pdfUrl);
       }
-    } catch (err) { alert("เกิดข้อผิดพลาด: " + err.message); }
+    } catch (err) { setActionError("เกิดข้อผิดพลาด: " + err.message); }
     finally { setQrLoading(false); }
   };
 
   const handleCancelInvoice = async () => {
     setCancelLoading(true);
     try { await api.cancelDeliveryNote(data.id); onSaved?.(); onBack(); }
-    catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); }
+    catch (e) { setActionError("เกิดข้อผิดพลาด: " + e.message); }
     finally { setCancelLoading(false); setShowCancelConfirm(false); }
   };
   const handleRestoreInvoice = async () => {
     setCancelLoading(true);
     try { await api.restoreDeliveryNote(data.id); onSaved?.(); onBack(); }
-    catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); }
+    catch (e) { setActionError("เกิดข้อผิดพลาด: " + e.message); }
     finally { setCancelLoading(false); }
   };
 
@@ -372,6 +392,12 @@ function DeliveryNoteDetail({ invoice, onBack, onSaved, products, setProducts, s
   const filledItems = (data.items || []).filter(it => it.desc || it.desc2 || it.detail || it.qty || it.amount);
   return (
     <div>
+      {actionError && (
+        <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, color: "#991B1B" }}>
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#991B1B", fontWeight: 600, fontSize: 15 }}>×</button>
+        </div>
+      )}
       {showCancelConfirm && <ConfirmModal message={`ยืนยันยกเลิก ${data.id}?`} confirmLabel="ยืนยันยกเลิก" onConfirm={handleCancelInvoice} onCancel={() => setShowCancelConfirm(false)} loading={cancelLoading} enterConfirm />}
       {showQr && qrUrl && (
         <>
@@ -462,8 +488,8 @@ function DeliveryNoteDetail({ invoice, onBack, onSaved, products, setProducts, s
                 )}
               </div>
               <Btn onClick={handleQr} disabled={qrLoading}>{qrLoading ? <Loader size={13}/> : <QrCode size={14}/>} QR</Btn>
-              <Btn primary onClick={() => { if (data.billed) { alert(`ใบส่งของนี้อยู่ใน ${data.bnNo || "BN"} แล้ว\nกรุณายกเลิก BN นั้นก่อนแก้ไข`); return; } setEditing(true); }}><Pencil size={14}/> แก้ไข</Btn>
-              <Btn danger onClick={() => { if (data.billed) { alert(`ใบส่งของนี้อยู่ใน ${data.bnNo || "BN"} แล้ว\nกรุณายกเลิก BN นั้นก่อน`); return; } setShowCancelConfirm(true); }} disabled={cancelLoading}>ยกเลิกใบนี้</Btn>
+              <Btn primary onClick={() => { if (data.billed) { setActionError(`ใบส่งของนี้อยู่ใน ${data.bnNo || "BN"} แล้ว — กรุณายกเลิก BN นั้นก่อนแก้ไข`); return; } setEditing(true); }}><Pencil size={14}/> แก้ไข</Btn>
+              <Btn danger onClick={() => { if (data.billed) { setActionError(`ใบส่งของนี้อยู่ใน ${data.bnNo || "BN"} แล้ว — กรุณายกเลิก BN นั้นก่อน`); return; } setShowCancelConfirm(true); }} disabled={cancelLoading}>ยกเลิกใบนี้</Btn>
             </>
           )}
         </div>
@@ -496,13 +522,13 @@ function DeliveryNoteDetail({ invoice, onBack, onSaved, products, setProducts, s
                   <td style={{ padding: "8px 12px", color: C.muted }}>{it.desc2}</td>
                   <td style={{ padding: "8px 12px", color: C.muted }}>{it.detail}</td>
                   <td style={{ padding: "8px 12px", textAlign: "right" }}>{it.qty}</td>
-                  <td style={{ padding: "8px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{Number(it.unitPrice||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-                  <td style={{ padding: "8px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{Number(it.amount||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                  <td style={{ padding: "8px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtAmt(Number(it.unitPrice||0))}</td>
+                  <td style={{ padding: "8px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtAmt(Number(it.amount||0))}</td>
                 </tr>
               ))}
               <tr style={{ background: "#f0f4ff", borderTop: `1px solid ${C.border}` }}>
                 <td colSpan={6} style={{ padding: "10px 12px", textAlign: "right", fontWeight: 500 }}>ยอดรวมทั้งสิ้น</td>
-                <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500, color: C.accent, fontSize: 14 }}>{(data.total || 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500, color: C.accent, fontSize: 14 }}>{fmtAmt(data.total || 0)}</td>
               </tr>
             </tbody>
           </table>
@@ -649,7 +675,7 @@ function DeliveryNotePage({ products, setProducts, sizes, cache, updateCache, on
     try {
       const data = await api.getCancelledDeliveryNotes(cancelSearch);
       setCancelledList(Array.isArray(data) ? data : []);
-    } catch (err) { alert("เกิดข้อผิดพลาด: " + err.message); }
+    } catch (err) { setError("เกิดข้อผิดพลาด: " + err.message); }
     finally { setCancelLoading(false); }
   }, [cancelSearch]);
 
@@ -699,7 +725,7 @@ function DeliveryNotePage({ products, setProducts, sizes, cache, updateCache, on
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
                   <tr>{["เลขที่ใบส่งของ", "วันที่", "ชื่อลูกค้า", "รายการ", "ยอดรวม", "สถานะ", "สร้างเมื่อ"].map((h, i) => (
-                    <th key={i} style={{ padding: "8px 14px", textAlign: i === 4 ? "right" : "left", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, background: "#fafafa", position: "sticky", top: 70, zIndex: 1 }}>{h}</th>
+                    <th key={i} style={{ padding: "8px 14px", textAlign: i === 4 ? "right" : "left", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, background: "#fafafa", position: "sticky", top: 70, zIndex: 2, boxShadow: "0 1px 0 rgba(0,0,0,0.06)" }}>{h}</th>
                   ))}</tr>
                 </thead>
                 <tbody>
@@ -718,7 +744,7 @@ function DeliveryNotePage({ products, setProducts, sizes, cache, updateCache, on
                       <td style={{ padding: "9px 14px", color: C.muted, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {(inv.items || []).filter(it => it.desc).map(it => it.desc + (it.desc2 ? " " + it.desc2 : "")).join(", ")}
                       </td>
-                      <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(inv.total || 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                      <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtAmt(inv.total || 0)}</td>
                       <td style={{ padding: "9px 14px" }}><Badge success={inv.billed}>{inv.billed ? "วางบิลแล้ว" : "รอวางบิล"}</Badge></td>
                       <td style={{ padding: "9px 14px", color: C.muted, fontSize: 11, whiteSpace: "nowrap" }}>{inv.createdAt || "—"}</td>
                     </tr>
@@ -767,7 +793,7 @@ function DeliveryNotePage({ products, setProducts, sizes, cache, updateCache, on
                             {inv.date ? new Date(inv.date).toLocaleDateString("th-TH", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
                           </td>
                           <td style={{ padding: "9px 14px" }}>{inv.name}</td>
-                          <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(inv.total || 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                          <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtAmt(inv.total || 0)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -799,203 +825,6 @@ function DeliveryNotePage({ products, setProducts, sizes, cache, updateCache, on
           <DeliveryNoteForm onSave={handleSaveNew} onCancel={() => setView("list", null)} products={products} setProducts={setProducts} sizes={sizes} />
         </div>
       )}
-    </div>
-  );
-}
-
-// ── BN Preview Modal ───────────────────────────────────────
-
-function BNPreviewModal({ customer, onClose, onConfirm, nextBnNo }) {
-  const today = new Date().toISOString().slice(0, 10);
-  const [bnDate, setBnDate]   = useState(today);
-  const [address, setAddress] = useState(customer.address || "");
-  const [dueDate, setDueDate] = useState("");
-  const [saving, setSaving]   = useState(false);
-  const [error, setError]     = useState("");
-  const [format, setFormat]   = useState("portrait");
-  const [rows, setRows]       = useState(
-    customer.invoices.map((inv, i) => ({ ...inv, idx: i, checked: true }))
-  );
-
-  const addRow    = () => setRows([...rows, { no: "", date: "", total: "", idx: Date.now(), checked: true }]);
-  const removeRow = (idx) => setRows(rows.filter(r => r.idx !== idx));
-  const updateRow = (idx, field, val) => setRows(rows.map(r => r.idx === idx ? { ...r, [field]: val } : r));
-  const toggleRow = (idx) => setRows(rows.map(r => r.idx === idx ? { ...r, checked: !r.checked } : r));
-
-  const selectedRows = rows.filter(r => r.checked);
-  const grandTotal   = selectedRows.reduce((s, r) => s + (parseFloat(r.total) || 0), 0);
-  const baht         = Math.floor(grandTotal);
-  const satang       = Math.round((grandTotal - baht) * 100);
-
-  // Compute invoice date range from selected rows for the API
-  const getDateRange = () => {
-    const dates = selectedRows.map(r => r.date).filter(Boolean).map(d => {
-      // handle dd/MM/yyyy
-      if (d.includes("/")) {
-        const [dd, mm, yyyy] = d.split("/");
-        return new Date(`${yyyy}-${mm.padStart(2,"0")}-${dd.padStart(2,"0")}`);
-      }
-      return new Date(d);
-    }).filter(d => !isNaN(d));
-    if (!dates.length) return { start: "", end: "" };
-    const min = new Date(Math.min(...dates));
-    const max = new Date(Math.max(...dates));
-    return {
-      start: min.toISOString().slice(0, 10),
-      end:   max.toISOString().slice(0, 10),
-    };
-  };
-
-  const handleConfirm = async () => {
-    setSaving(true);
-    setError("");
-    try {
-      const invoices = selectedRows.map(r => ({ dnNo: r.no, dnDate: r.date, amount: r.total }));
-      const result = await api.confirmBN(customer.customer, nextBnNo, invoices, bnDate, address, customer.phone || "", format);
-      onConfirm({ bnDate, address, dueDate, rows: selectedRows, grandTotal, bnNo: result.bnNo, pdfUrl: result.pdfUrl });
-    } catch (err) {
-      setError(err.message);
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "flex-start", justifyContent: "center", overflowY: "auto", padding: "20px 0" }}>
-      <div style={{ background: "white", borderRadius: 10, width: 680, margin: "auto", overflow: "hidden" }}>
-
-        <div style={{ padding: "14px 20px", borderBottom: `0.5px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", background: C.sidebar }}>
-          <div style={{ color: "white", fontWeight: 500, fontSize: 14 }}>
-            <><ClipboardList size={14}/> ตัวอย่างใบวางบิล — {customer.customer}</>
-          </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <span style={{ color: "rgba(255,255,255,0.6)", fontSize: 12 }}>{nextBnNo}</span>
-            <button onClick={onClose} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "white", borderRadius: 4, padding: "4px 10px", cursor: "pointer", fontSize: 12 }}>✕ ปิด</button>
-          </div>
-        </div>
-
-        <div style={{ padding: "14px 20px", borderBottom: `0.5px solid ${C.border}`, background: "#f8f9ff" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr 1fr", gap: 10 }}>
-            <div>
-              <div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>วันที่ออกบิล</div>
-              <input type="date" value={bnDate} onChange={e => setBnDate(e.target.value)} style={{ ...inputStyle, width: "100%" }} />
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ที่อยู่</div>
-              <input value={address} onChange={e => setAddress(e.target.value)} placeholder="ที่อยู่ลูกค้า" style={{ ...inputStyle, width: "100%" }} />
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>วันครบกำหนดชำระ</div>
-              <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={{ ...inputStyle, width: "100%" }} />
-            </div>
-          </div>
-          <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 11, color: C.muted }}>รูปแบบ:</span>
-            {["portrait", "landscape"].map(f => (
-              <button key={f} onClick={() => setFormat(f)}
-                style={{ fontSize: 11, padding: "3px 10px", borderRadius: 4, cursor: "pointer", border: `1px solid ${format === f ? C.accent : C.border}`, background: format === f ? C.accent : "white", color: format === f ? "white" : C.text, fontWeight: format === f ? 500 : 400 }}>
-                {f === "portrait" ? <><FileText size={12}/> PDF</> : <><Printer size={12}/> แบบพิมพ์</>}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div style={{ padding: "20px 24px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-            <div>
-              <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.5px" }}>KC</div>
-              <div style={{ fontSize: 11, color: C.muted }}>หจก. โรงงานกิมเชียง</div>
-            </div>
-            <div style={{ textAlign: "right", fontSize: 12 }}>
-              <div style={{ color: C.muted, fontSize: 11 }}>เลขที่</div>
-              <div style={{ fontWeight: 500, color: C.accent }}>{nextBnNo}</div>
-            </div>
-          </div>
-
-          <div style={{ background: "#555", color: "white", padding: "8px 14px", borderRadius: 4, marginBottom: 14, fontSize: 14, fontWeight: 500 }}>
-            ใบวางบิล &nbsp;<span style={{ fontSize: 11, fontWeight: 400, opacity: 0.8 }}>Billing Note</span>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14, fontSize: 12 }}>
-            <div style={{ display: "flex", gap: 8 }}><span style={{ color: C.muted, minWidth: 40 }}>นาม</span><span style={{ fontWeight: 500 }}>{customer.customer}</span></div>
-            <div style={{ display: "flex", gap: 8 }}><span style={{ color: C.muted, minWidth: 40 }}>ที่อยู่</span><span>{address || "—"}</span></div>
-          </div>
-
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, marginBottom: 8 }}>
-            <thead>
-              <tr style={{ background: "#f0f4ff" }}>
-                {["", "✓", "#", "เลขที่บิล", "วันที่บิล", "วันครบกำหนด", "บาท", "สต."].map((h, i) => (
-                  <th key={i} style={{ padding: "6px 8px", textAlign: i >= 6 ? "right" : "left", fontWeight: 500, fontSize: 11, color: C.muted, borderBottom: `0.5px solid ${C.border}` }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, i) => {
-                const total  = parseFloat(row.total) || 0;
-                const b      = Math.floor(total);
-                const s      = Math.round((total - b) * 100);
-                return (
-                  <tr key={row.idx} style={{ background: row.checked ? "white" : "#fafafa", borderBottom: `0.5px solid ${C.borderLight}` }}>
-                    <td style={{ padding: "4px 4px", textAlign: "center", width: 24 }}>
-                      <button onClick={() => removeRow(row.idx)} style={{ background: "none", border: "none", cursor: "pointer", color: C.muted, fontSize: 13, padding: "0 2px", lineHeight: 1 }} title="ลบแถว">✕</button>
-                    </td>
-                    <td style={{ padding: "4px 8px", textAlign: "center" }}>
-                      <input type="checkbox" checked={row.checked} onChange={() => toggleRow(row.idx)} style={{ cursor: "pointer" }} />
-                    </td>
-                    <td style={{ padding: "4px 8px", textAlign: "center", color: C.muted, fontSize: 11 }}>{i + 1}</td>
-                    <td style={{ padding: "4px 8px" }}>
-                      <input value={row.no} onChange={e => updateRow(row.idx, "no", e.target.value)}
-                        style={{ border: "none", background: "transparent", fontSize: 12, width: "100%", outline: "none" }}
-                        onFocus={e => e.target.style.outline = `1px solid ${C.accent}`}
-                        onBlur={e => e.target.style.outline = "none"} />
-                    </td>
-                    <td style={{ padding: "4px 8px", textAlign: "center" }}>
-                      <input value={row.date} onChange={e => updateRow(row.idx, "date", e.target.value)}
-                        style={{ border: "none", background: "transparent", fontSize: 12, width: "100%", textAlign: "center", outline: "none" }}
-                        onFocus={e => e.target.style.outline = `1px solid ${C.accent}`}
-                        onBlur={e => e.target.style.outline = "none"} />
-                    </td>
-                    <td style={{ padding: "4px 8px", textAlign: "center", color: C.muted, fontSize: 11 }}>
-                      {dueDate ? new Date(dueDate).toLocaleDateString("th-TH", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
-                    </td>
-                    <td style={{ padding: "4px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
-                      <input value={row.total} onChange={e => updateRow(row.idx, "total", e.target.value)}
-                        style={{ border: "none", background: "transparent", fontSize: 12, width: "100%", textAlign: "right", fontFamily: "monospace", outline: "none" }}
-                        onFocus={e => e.target.style.outline = `1px solid ${C.accent}`}
-                        onBlur={e => e.target.style.outline = "none"} />
-                    </td>
-                    <td style={{ padding: "4px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: s > 0 ? C.text : C.muted }}>
-                      {s > 0 ? String(s).padStart(2, "0") : ""}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-
-          <button onClick={addRow} style={{ fontSize: 11, color: C.accent, background: "none", border: `0.5px dashed ${C.accent}`, borderRadius: 4, padding: "4px 12px", cursor: "pointer", marginBottom: 12, width: "100%" }}>
-            + เพิ่มแถว
-          </button>
-
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "#f0f4ff", borderRadius: 6, marginBottom: 8 }}>
-            <div style={{ fontSize: 12, color: C.muted }}>รวม <strong style={{ color: C.text }}>{selectedRows.length}</strong> ฉบับ</div>
-            <div style={{ fontVariantNumeric: "tabular-nums", fontWeight: 500, fontSize: 15, color: C.accent }}>
-              รวมเงิน {baht.toLocaleString()}{satang > 0 ? "." + String(satang).padStart(2, "0") : ""}
-            </div>
-          </div>
-        </div>
-
-        {error && <div style={{ margin: "0 20px 8px" }}><ErrorBox msg={error} /></div>}
-
-        <div style={{ padding: "12px 20px", borderTop: `0.5px solid ${C.border}`, background: "#fafafa", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 11, color: C.muted }}>{selectedRows.length} บิล · {baht.toLocaleString()} · {nextBnNo}</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Btn onClick={onClose}>ยกเลิก</Btn>
-            <Btn primary onClick={handleConfirm} disabled={saving || selectedRows.length === 0}>
-              {saving ? <><Loader size={13}/> กำลังสร้าง PDF...</> : <><Check size={13}/> ยืนยันและสร้าง PDF</>}
-            </Btn>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -1033,7 +862,7 @@ function DNDetailPopup({ dnNo, onClose, cachedData, onCached }) {
           {data && (
             <div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 14, marginBottom: 14 }}>
-                {[["ลูกค้า", data.customer], ["วันที่", fmtDateThai(data.date)], ["โทรศัพท์", data.phone || "—"], ["รวมเงิน", `${(data.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`]].map(([l, v]) => (
+                {[["ลูกค้า", data.customer], ["วันที่", fmtDateThai(data.date)], ["โทรศัพท์", data.phone || "—"], ["รวมเงิน", fmtAmt(data.total||0)]].map(([l, v]) => (
                   <div key={l}><div style={{ fontSize: 11, color: C.muted, marginBottom: 2 }}>{l}</div><div style={{ fontSize: 13, fontWeight: 500 }}>{v}</div></div>
                 ))}
               </div>
@@ -1053,15 +882,15 @@ function DNDetailPopup({ dnNo, onClose, cachedData, onCached }) {
                       <td style={{ padding: "7px 10px" }}>{it.desc}</td>
                       <td style={{ padding: "7px 10px", color: C.muted }}>{it.desc2}</td>
                       <td style={{ padding: "7px 10px", textAlign: "right" }}>{it.qty}</td>
-                      <td style={{ padding: "7px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{Number(it.unitPrice||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-                      <td style={{ padding: "7px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{Number(it.amount||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                      <td style={{ padding: "7px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtAmt(Number(it.unitPrice||0))}</td>
+                      <td style={{ padding: "7px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtAmt(Number(it.amount||0))}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr style={{ background: "#f0f4ff", borderTop: `1px solid ${C.border}` }}>
                     <td colSpan={5} style={{ padding: "9px 10px", textAlign: "right", fontWeight: 500 }}>ยอดรวม</td>
-                    <td style={{ padding: "9px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: C.accent }}>{(data.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                    <td style={{ padding: "9px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: C.accent }}>{fmtAmt(data.total||0)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -1086,7 +915,9 @@ function DNDetailPopup({ dnNo, onClose, cachedData, onCached }) {
 function BNEditForm({ detail, onSave, onCancel }) {
   function toInputDate(s) {
     if (!s) return "";
-    const p = String(s).split("/");
+    const str = String(s);
+    if (str.includes("-")) return str; // yyyy-MM-dd already
+    const p = str.split("/");
     return p.length === 3 ? `${p[2]}-${p[1]}-${p[0]}` : "";
   }
   const [dateInput, setDateInput]   = useState(toInputDate(detail.date));
@@ -1097,6 +928,12 @@ function BNEditForm({ detail, onSave, onCancel }) {
   const [unbilled, setUnbilled]     = useState([]);
   const [unbilledLoading, setUBL]   = useState(false);
   const [saving, setSaving]         = useState(false);
+  const [actionError, setActionError] = useState(null);
+  useEffect(() => {
+    if (!actionError) return;
+    const t = setTimeout(() => setActionError(null), 5000);
+    return () => clearTimeout(t);
+  }, [actionError]);
   // #214 — per-field on-blur sync (lazy fetch customer record on first blur)
   const [syncDecisions, setSyncDecisions] = useState({});
   const [pendingField, setPendingField]   = useState(null);
@@ -1160,12 +997,12 @@ function BNEditForm({ detail, onSave, onCancel }) {
         const update = { ...custRecord };
         const formValues = { address, phone };
         for (const f of yesFields) update[f] = formValues[f];
-        api.updateCustomer(customer, update).catch(e => alert("บันทึกที่อยู่/เบอร์ลูกค้าลงระบบไม่สำเร็จ — " + e.message)); // #284
+        api.updateCustomer(customer, update).catch(e => setActionError("บันทึกที่อยู่/เบอร์ลูกค้าลงระบบไม่สำเร็จ — " + e.message)); // #284
       }
-      const displayDate = dateInput ? (() => { const p = dateInput.split("-"); return `${p[2]}/${p[1]}/${p[0]}`; })() : detail.date;
+      const displayDate = dateInput || detail.date; // #392 — send yyyy-MM-dd directly
       onSave({ date: displayDate, customer, address, phone, invoices, count: invoices.length, total: invoices.reduce((s, inv) => s + (parseFloat(inv.total)||0), 0) });
     } catch (e) {
-      alert("เกิดข้อผิดพลาด: " + e.message);
+      setActionError("เกิดข้อผิดพลาด: " + e.message);
     } finally {
       setSaving(false);
     }
@@ -1173,6 +1010,12 @@ function BNEditForm({ detail, onSave, onCancel }) {
 
   return (
     <div>
+      {actionError && (
+        <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, color: "#991B1B" }}>
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#991B1B", fontWeight: 600, fontSize: 15 }}>×</button>
+        </div>
+      )}
       {pendingField && <CustomerFieldSyncModal name={customer} field={pendingField.field} oldValue={pendingField.oldValue} newValue={pendingField.newValue} onConfirm={handleFieldConfirm} onCancel={handleFieldSkip} />}
       <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, padding: 16, marginBottom: 14 }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 10 }}>
@@ -1216,7 +1059,7 @@ function BNEditForm({ detail, onSave, onCancel }) {
               <tr key={i} style={{ borderBottom: `0.5px solid ${C.borderLight}` }}>
                 <td style={{ padding: "8px 14px", color: C.accent, fontWeight: 500 }}>{inv.no}</td>
                 <td style={{ padding: "8px 14px", color: C.muted }}>{fmtDateThai(inv.date)}</td>
-                <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(inv.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtAmt(inv.total||0)}</td>
                 <td style={{ padding: "8px 14px", textAlign: "center" }}>
                   <button onClick={() => removeDN(inv.no)} style={{ background: "none", border: "none", color: C.danger, cursor: "pointer", fontSize: 18, lineHeight: 1 }} title="ลบออก">×</button>
                 </td>
@@ -1227,7 +1070,7 @@ function BNEditForm({ detail, onSave, onCancel }) {
             <tfoot>
               <tr style={{ borderTop: `0.5px solid ${C.border}`, background: "#f5f9f6" }}>
                 <td colSpan={2} style={{ padding: "7px 14px", fontSize: 11, color: C.muted }}>รวม {invoices.length} ฉบับ</td>
-                <td style={{ padding: "7px 14px", textAlign: "right", fontWeight: 600, color: C.accent, fontVariantNumeric: "tabular-nums" }}>{invoices.reduce((s, inv) => s+(parseFloat(inv.total)||0), 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                <td style={{ padding: "7px 14px", textAlign: "right", fontWeight: 600, color: C.accent, fontVariantNumeric: "tabular-nums" }}>{fmtAmt(invoices.reduce((s, inv) => s+(parseFloat(inv.total)||0), 0))}</td>
                 <td></td>
               </tr>
             </tfoot>
@@ -1248,7 +1091,7 @@ function BNEditForm({ detail, onSave, onCancel }) {
                 <tr key={i} style={{ borderBottom: `0.5px solid ${C.borderLight}` }}>
                   <td style={{ padding: "8px 14px", color: C.accent, fontWeight: 500 }}>{dn.no}</td>
                   <td style={{ padding: "8px 14px", color: C.muted }}>{fmtDateThai(dn.date)}</td>
-                  <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(dn.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                  <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtAmt(dn.total||0)}</td>
                   <td style={{ padding: "8px 14px", textAlign: "center" }}>
                     <Btn small onClick={() => addDN(dn)}><Plus size={11}/> เพิ่ม</Btn>
                   </td>
@@ -1288,11 +1131,17 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
   const [qrDataUrl, setQrDataUrl]         = useState("");
   const [showInstructions, setShowInstructions] = useState(false);
   const [instrStep, setInstrStep]         = useState(0);
+  const [actionError, setActionError] = useState(null);
   useEffect(() => {
     if (!showInstructions) { setInstrStep(0); return; }
     const iv = setInterval(() => setInstrStep(s => (s + 1) % INSTR_STEPS.length), 2500);
     return () => clearInterval(iv);
   }, [showInstructions]);
+  useEffect(() => {
+    if (!actionError) return;
+    const t = setTimeout(() => setActionError(null), 5000);
+    return () => clearTimeout(t);
+  }, [actionError]);
 
   const loadDetail = () => {
     if (cachedDetail) return; // use cache
@@ -1307,7 +1156,7 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
   const handleCancel = async () => {
     setCancelLoading(true);
     try { await api.cancelBillingNote(bnNo); onSaved?.(); onBack(); }
-    catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); }
+    catch (e) { setActionError("เกิดข้อผิดพลาด: " + e.message); }
     finally { setCancelLoading(false); setShowCC(false); }
   };
 
@@ -1325,7 +1174,7 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
     try {
       const res = await api.generateBillingNoteLandscapePDF(bnNo);
       if (res?.url) { setDetail(d => ({ ...d, landscapeUrl: res.url })); window.open(res.url, "_blank", "noopener,noreferrer"); }
-    } catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); }
+    } catch (e) { setActionError("เกิดข้อผิดพลาด: " + e.message); }
     finally { setLsLoading(false); }
   };
 
@@ -1335,7 +1184,7 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
     try {
       const res = await api.generateBillingNotePortraitPDF(bnNo);
       if (res?.url) { setDetail(d => ({ ...d, pdfUrl: res.url })); window.open(res.url, "_blank", "noopener,noreferrer"); }
-    } catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); }
+    } catch (e) { setActionError("เกิดข้อผิดพลาด: " + e.message); }
     finally { setPtLoading(false); }
   };
 
@@ -1350,7 +1199,7 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
     try {
       const res = await api.generateBillingNotePortraitPDF(bnNo);
       if (res?.url) { setDetail(d => ({ ...d, pdfUrl: res.url })); await generate(res.url); }
-    } catch (err) { alert("เกิดข้อผิดพลาด: " + err.message); }
+    } catch (err) { setActionError("เกิดข้อผิดพลาด: " + err.message); }
     finally { setQrLoading(false); }
   };
 
@@ -1381,6 +1230,12 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
 
   return (
     <div>
+      {actionError && (
+        <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, color: "#991B1B" }}>
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#991B1B", fontWeight: 600, fontSize: 15 }}>×</button>
+        </div>
+      )}
       {showCancelConfirm && <ConfirmModal message={`ยืนยันยกเลิกใบวางบิล ${bnNo}?`} confirmLabel="ยืนยันยกเลิก" onConfirm={handleCancel} onCancel={() => setShowCC(false)} loading={cancelLoading} enterConfirm />}
       {showQr && qrUrl && (
         <>
@@ -1479,7 +1334,7 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
               )}
             </div>
             <div style={{ display: "flex", gap: 20, padding: "10px 16px", background: "#f5f9f6", borderTop: `0.5px solid ${C.borderLight}`, alignItems: "center" }}>
-              <div><span style={{ fontSize: 11, color: C.muted }}>รวมเงิน </span><span style={{ fontWeight: 600, fontSize: 15, color: C.accent }}>{(detail.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>
+              <div><span style={{ fontSize: 11, color: C.muted }}>รวมเงิน </span><span style={{ fontWeight: 600, fontSize: 15, color: C.accent }}>{fmtAmt(detail.total||0)}</span></div>
               <div style={{ fontSize: 11, color: C.muted }}>{detail.count} ฉบับ</div>
             </div>
           </div>
@@ -1510,7 +1365,7 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
                           <ChevronDown size={12} style={{ verticalAlign: "middle", marginRight: 4, transform: isExp ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s" }}/>{inv.no}
                         </td>
                         <td style={{ padding: "8px 14px", color: C.muted }}>{fmtDateThai(inv.date)}</td>
-                        <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(inv.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                        <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtAmt(inv.total||0)}</td>
                       </tr>
                       {isExp && (
                         <tr>
@@ -1534,15 +1389,15 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
                                           <td style={{ padding: "5px 8px" }}>{it.desc}</td>
                                           <td style={{ padding: "5px 8px", color: C.muted }}>{it.desc2}</td>
                                           <td style={{ padding: "5px 8px", textAlign: "right" }}>{it.qty}</td>
-                                          <td style={{ padding: "5px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{Number(it.unitPrice||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-                                          <td style={{ padding: "5px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{Number(it.amount||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                                          <td style={{ padding: "5px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtAmt(Number(it.unitPrice||0))}</td>
+                                          <td style={{ padding: "5px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtAmt(Number(it.amount||0))}</td>
                                         </tr>
                                       ))}
                                     </tbody>
                                     <tfoot>
                                       <tr style={{ background: "#eef2ff", borderTop: `1px solid ${C.border}` }}>
                                         <td colSpan={5} style={{ padding: "7px 8px", textAlign: "right", fontWeight: 500 }}>ยอดรวม</td>
-                                        <td style={{ padding: "7px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: C.accent }}>{(dnData.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                                        <td style={{ padding: "7px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: C.accent }}>{fmtAmt(dnData.total||0)}</td>
                                       </tr>
                                     </tfoot>
                                   </table>
@@ -1568,7 +1423,7 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
                 <tfoot>
                   <tr style={{ borderTop: `0.5px solid ${C.border}`, background: "#f5f9f6" }}>
                     <td colSpan={2} style={{ padding: "7px 14px", fontSize: 11, color: C.muted }}>รวม {detail.invoices.length} ฉบับ</td>
-                    <td style={{ padding: "7px 14px", textAlign: "right", fontWeight: 600, color: C.accent, fontVariantNumeric: "tabular-nums" }}>{(detail.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                    <td style={{ padding: "7px 14px", textAlign: "right", fontWeight: 600, color: C.accent, fontVariantNumeric: "tabular-nums" }}>{fmtAmt(detail.total||0)}</td>
                   </tr>
                 </tfoot>
               )}
@@ -1582,7 +1437,7 @@ function BNDetailView({ bnNo, onBack, onSaved, cachedDetail, onDetailCached }) {
 
 // ── BN List View ───────────────────────────────────────────
 
-// #228 — compute DN period label from invoices dates (dd/MM/yyyy)
+// #228/#392 — compute DN period label from invoices dates (yyyy-MM-dd)
 const THAI_M_SHORT = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 function dnPeriodLabel(invoices) {
   if (!invoices || invoices.length === 0) return "—";
@@ -1590,8 +1445,8 @@ function dnPeriodLabel(invoices) {
   let minY = 9999, maxY = 0;
   invoices.forEach(inv => {
     if (!inv.date) return;
-    const p = String(inv.date).split("/");
-    if (p.length === 3) { const m = +p[1], y = +p[2]; months.add(y * 100 + m); if (y < minY) minY = y; if (y > maxY) maxY = y; }
+    const p = String(inv.date).split("-");
+    if (p.length === 3) { const m = +p[1], y = +p[0]; months.add(y * 100 + m); if (y < minY) minY = y; if (y > maxY) maxY = y; }
   });
   if (months.size === 0) return "—";
   const sorted = [...months].sort((a, b) => a - b);
@@ -1639,9 +1494,8 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick, onCreateSin
       // Check if any DN in this BN falls within the filter range
       const invDates = (bn.invoices || []).map(inv => {
         if (!inv.date) return null;
-        const p = String(inv.date).split("/");
-        return p.length === 3 ? new Date(+p[2], +p[1]-1, +p[0]) : null;
-      }).filter(Boolean);
+        return new Date(inv.date); // #392 — yyyy-MM-dd
+      }).filter(d => d && !isNaN(d));
       if (invDates.length === 0) return false;
       const earliest = new Date(Math.min(...invDates));
       const latest   = new Date(Math.max(...invDates));
@@ -1652,9 +1506,9 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick, onCreateSin
   });
 
   // #233 — sort helpers
-  const parseDateDMY = d => { if (!d) return 0; const p = String(d).split("/"); return p.length === 3 ? +p[2] * 10000 + +p[1] * 100 + +p[0] : 0; };
+  const parseDate = d => { if (!d) return 0; const p = String(d).split("-"); return p.length === 3 ? +p[0] * 10000 + +p[1] * 100 + +p[2] : 0; }; // #392
   const dnMonthKey = bn => {
-    const dates = (bn.invoices || []).map(inv => { if (!inv.date) return 0; const p = String(inv.date).split("/"); return p.length === 3 ? +p[2] * 100 + +p[1] : 0; }).filter(Boolean);
+    const dates = (bn.invoices || []).map(inv => { if (!inv.date) return 0; const p = String(inv.date).split("-"); return p.length === 3 ? +p[0] * 100 + +p[1] : 0; }).filter(Boolean);
     return dates.length > 0 ? Math.min(...dates) : 0;
   };
   const sortFn = (a, b) => {
@@ -1662,7 +1516,7 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick, onCreateSin
     switch (sortCol) {
       case "bnNo":     va = a.bnNo || ""; vb = b.bnNo || ""; break;
       case "dnMonth":  va = dnMonthKey(a); vb = dnMonthKey(b); break;
-      case "date":     va = parseDateDMY(a.date); vb = parseDateDMY(b.date); break;
+      case "date":     va = parseDate(a.date); vb = parseDate(b.date); break;
       case "customer": va = (a.customer || "").toLowerCase(); vb = (b.customer || "").toLowerCase(); break;
       case "count":    va = a.count || 0; vb = b.count || 0; break;
       case "total":    va = a.total || 0; vb = b.total || 0; break;
@@ -1686,12 +1540,12 @@ function BNListView({ bnList, loading, error, onRefresh, onRowClick, onCreateSin
       <td style={{ padding: "9px 14px", color: C.muted }}>{fmtDateThai(bn.date)}</td>
       <td style={{ padding: "9px 14px" }}>{bn.customer}</td>
       <td style={{ padding: "9px 14px" }}>{bn.count} ฉบับ</td>
-      <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(bn.total || 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtAmt(bn.total || 0)}</td>
     </tr>
   );
 
   const cols = [
-    { key: "bnNo", label: "เลขที่ BN" }, { key: "dnMonth", label: "เดือน DN" }, { key: "date", label: "วันที่ออก" },
+    { key: "bnNo", label: "เลขที่ใบวางบิล" }, { key: "dnMonth", label: "เดือนที่เปิดใบส่งของ" }, { key: "date", label: "วันที่ออก" },
     { key: "customer", label: "ชื่อลูกค้า" }, { key: "count", label: "จำนวนบิล" }, { key: "total", label: "รวมเงิน", align: "right" },
   ];
   const sortArrow = (col) => sortCol === col ? (sortDir === "asc" ? " ▲" : " ▼") : "";
@@ -1846,7 +1700,7 @@ function BNDetailMiniPopup({ bnNo, onClose, onCancelled }) {
           {data && (
             <>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 10, marginBottom: 12 }}>
-                {[["ลูกค้า", data.customer], ["วันที่", data.date], ["จำนวน", `${data.count} ฉบับ`], ["รวมเงิน", `${(data.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`]].map(([l, v]) => (
+                {[["ลูกค้า", data.customer], ["วันที่", data.date], ["จำนวน", `${data.count} ฉบับ`], ["รวมเงิน", fmtAmt(data.total||0)]].map(([l, v]) => (
                   <div key={l}><div style={{ fontSize: 10, color: C.muted, marginBottom: 1 }}>{l}</div><div style={{ fontSize: 12, fontWeight: 500 }}>{v}</div></div>
                 ))}
               </div>
@@ -1864,7 +1718,7 @@ function BNDetailMiniPopup({ bnNo, onClose, onCancelled }) {
                     <tr key={i} style={{ borderBottom: `0.5px solid ${C.borderLight}` }}>
                       <td style={{ padding: "7px 10px", color: C.accent, fontWeight: 500 }}>{inv.no}</td>
                       <td style={{ padding: "7px 10px", color: C.muted }}>{fmtDateThai(inv.date)}</td>
-                      <td style={{ padding: "7px 10px", textAlign: "right", fontWeight: 500 }}>{(parseFloat(inv.total)||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                      <td style={{ padding: "7px 10px", textAlign: "right", fontWeight: 500 }}>{fmtAmt(parseFloat(inv.total)||0)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1990,7 +1844,7 @@ function BNCustomerPanel({ cust, nextBnNo, products, sizes, onConfirm, onCreatin
           )}
         </div>
         <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>
-          {(cust.invoices || []).length} ใบส่งของ · รวม {(cust.invoices || []).reduce((s, inv) => s + (parseFloat(inv.total) || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          {(cust.invoices || []).length} ใบส่งของ · รวม {fmtAmt((cust.invoices || []).reduce((s, inv) => s + (parseFloat(inv.total) || 0), 0))}
         </div>
       </div>
       {/* #182 — BN ที่สร้างแล้วในเดือนนี้ */}
@@ -2060,7 +1914,7 @@ function BNCustomerPanel({ cust, nextBnNo, products, sizes, onConfirm, onCreatin
                   <td style={{ padding: "8px 14px", color: C.muted, fontSize: 11 }}>
                     {(dnLoading === row.no || (prefetching && itemCount == null)) ? "…" : itemCount != null ? `สินค้า ${itemCount} รายการ ${isExp ? "▼" : "▸"}` : "ดู ▸"}
                   </td>
-                  <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(parseFloat(row.total)||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                  <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtAmt(parseFloat(row.total)||0)}</td>
                 </tr>
                 {isExp && (
                   <tr>
@@ -2081,8 +1935,8 @@ function BNCustomerPanel({ cust, nextBnNo, products, sizes, onConfirm, onCreatin
                                     <td style={{ padding: "4px 10px" }}>{it.desc || ""}</td>
                                     <td style={{ padding: "4px 10px", color: C.muted }}>{it.desc2 || ""}</td>
                                     <td style={{ padding: "4px 10px", textAlign: "right" }}>{it.qty || ""}</td>
-                                    <td style={{ padding: "4px 10px", textAlign: "right" }}>{it.unitPrice !== "" && it.unitPrice != null ? Number(it.unitPrice||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) : ""}</td>
-                                    <td style={{ padding: "4px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{Number(it.amount||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                                    <td style={{ padding: "4px 10px", textAlign: "right" }}>{it.unitPrice !== "" && it.unitPrice != null ? fmtAmt(Number(it.unitPrice||0)) : ""}</td>
+                                    <td style={{ padding: "4px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtAmt(Number(it.amount||0))}</td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -2133,7 +1987,7 @@ function BNCustomerPanel({ cust, nextBnNo, products, sizes, onConfirm, onCreatin
       <div style={{ flexShrink: 0, borderTop: `1px solid ${C.border}`, background: "#f5f9f6" }}>
         <div style={{ padding: "7px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span style={{ fontSize: 11, color: C.muted }}>รวม {selectedRows.length} ฉบับ{(() => { const ex = rows.filter(r => !r.bnNo && !r.checked).length; return editMode && ex > 0 ? ` · ข้าม ${ex}` : ""; })()}</span>
-          <span style={{ fontWeight: 600, color: C.accent, fontVariantNumeric: "tabular-nums" }}>{grandTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+          <span style={{ fontWeight: 600, color: C.accent, fontVariantNumeric: "tabular-nums" }}>{fmtAmt(grandTotal)}</span>
         </div>
         {error && <div style={{ padding: "4px 14px 8px" }}><ErrorBox msg={error} /></div>}
         <div style={{ padding: "6px 14px 10px", display: "flex", justifyContent: "flex-end" }}>
@@ -2225,7 +2079,7 @@ function DNInlineEditor({ dnData, products, sizes, onSaved, onCancel }) {
               <td style={{ padding: "4px 6px", width: 74 }}>{cell(absIdx, "desc2", "left")}</td>
               <td style={{ padding: "4px 6px", width: 72 }}>{cell(absIdx, "qty", "right")}</td>
               <td style={{ padding: "4px 6px", width: 86 }}>{cell(absIdx, "unitPrice", "right")}</td>
-              <td style={{ padding: "4px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{Number(it.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              <td style={{ padding: "4px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtAmt(Number(it.amount || 0))}</td>
               <td style={{ padding: "4px 6px", textAlign: "center" }}>
                 <button aria-label="ลบแถว" onClick={() => removeAt(absIdx)} style={{ border: "none", background: "none", cursor: "pointer", color: C.danger, display: "inline-flex" }}><Trash2 size={13}/></button>
               </td>
@@ -2235,7 +2089,7 @@ function DNInlineEditor({ dnData, products, sizes, onSaved, onCancel }) {
         <tfoot>
           <tr style={{ background: "#eef2ff", borderTop: `1px solid ${C.border}` }}>
             <td colSpan={5} style={{ padding: "7px 8px", textAlign: "right", fontWeight: 500 }}>ยอดรวม</td>
-            <td style={{ padding: "7px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: C.accent }}>{total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            <td style={{ padding: "7px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: C.accent }}>{fmtAmt(total)}</td>
             <td></td>
           </tr>
         </tfoot>
@@ -2280,6 +2134,9 @@ function BNBatchCreateView({ onBack, products, setProducts, sizes }) {
   const [printMode, setPrintMode] = useState(false); // #259 — all-done print selection toggle
   const [printSel, setPrintSel] = useState(new Set()); // #259 — selected BN numbers for printing
   const [configCustomers, setConfigCustomers] = useState([]); // #271
+  const [actionError, setActionError] = useState(null);
+
+  useEffect(() => { if (!actionError) return; const t = setTimeout(() => setActionError(null), 5000); return () => clearTimeout(t); }, [actionError]);
 
   // #271 — fetch Config_Customers once on mount
   useEffect(() => { api.getCustomers().then(list => setConfigCustomers(list || [])).catch(() => {}); }, []);
@@ -2386,7 +2243,7 @@ function BNBatchCreateView({ onBack, products, setProducts, sizes }) {
         setDnCache(prev => ({ ...prev, [dnNo]: { ...(prev[dnNo] || {}), pdfUrl: res.pdfUrl } }));
         openUrl(res.pdfUrl);
       }
-    } catch (e) { alert("สร้าง PDF ไม่สำเร็จ: " + e.message); }
+    } catch (e) { setActionError("สร้าง PDF ไม่สำเร็จ: " + e.message); }
     finally { setPdfGenDn(null); }
   };
 
@@ -2436,6 +2293,12 @@ function BNBatchCreateView({ onBack, products, setProducts, sizes }) {
     const totalAmount = results.filter(r => r.success).reduce((s, r) => s + (r.amount || 0), 0);
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+        {actionError && (
+          <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, color: "#991B1B" }}>
+            <span>{actionError}</span>
+            <button onClick={() => setActionError(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#991B1B", fontWeight: 600, fontSize: 15 }}>×</button>
+          </div>
+        )}
         <div style={{ flexShrink: 0, paddingBottom: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
             <button onClick={onBack} style={{ background: "none", border: `0.5px solid ${C.border}`, borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", color: C.muted, display: "flex", alignItems: "center", gap: 4 }}>
@@ -2450,7 +2313,7 @@ function BNBatchCreateView({ onBack, products, setProducts, sizes }) {
               {failCount === 0 ? "สร้างใบวางบิลสำเร็จทั้งหมด" : `สำเร็จ ${successCount} ราย · ไม่สำเร็จ ${failCount} ราย`}
             </div>
             <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
-              สร้าง {successCount} ใบวางบิล · รวม {totalDNsCreated} ฉบับ DN · ยอดรวม {totalAmount.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
+              สร้าง {successCount} ใบวางบิล · รวม {totalDNsCreated} ฉบับ DN · ยอดรวม {fmtAmt(totalAmount)}
             </div>
           </div>
         </div>
@@ -2461,7 +2324,7 @@ function BNBatchCreateView({ onBack, products, setProducts, sizes }) {
             <thead>
               <tr style={{ background: "#f0f4f8" }}>
                 <th style={{ padding: "8px 14px", textAlign: "left", fontSize: 11, fontWeight: 500, color: C.muted }}>ลูกค้า</th>
-                <th style={{ padding: "8px 14px", textAlign: "left", fontSize: 11, fontWeight: 500, color: C.muted }}>เลขที่ BN</th>
+                <th style={{ padding: "8px 14px", textAlign: "left", fontSize: 11, fontWeight: 500, color: C.muted }}>เลขที่ใบวางบิล</th>
                 <th style={{ padding: "8px 14px", textAlign: "center", fontSize: 11, fontWeight: 500, color: C.muted }}>สถานะ</th>
                 <th style={{ padding: "8px 14px", textAlign: "center", fontSize: 11, fontWeight: 500, color: C.muted }}>PDF</th>
               </tr>
@@ -2513,7 +2376,7 @@ function BNBatchCreateView({ onBack, products, setProducts, sizes }) {
                     document.body.appendChild(a); a.click(); document.body.removeChild(a);
                   }
                   try { await api.markBillingNotesPrinted(bnNos); } catch (_) {}
-                } catch (err) { alert("พิมพ์ไม่สำเร็จ: " + err.message); }
+                } catch (err) { setActionError("พิมพ์ไม่สำเร็จ: " + err.message); }
                 finally { setBatchPrinting(false); }
               }} disabled={batchPrinting}>
                 {batchPrinting ? <Loader size={13}/> : <Printer size={13}/>} {batchPrinting ? "กำลังสร้าง..." : `พิมพ์ทั้งหมด (${successCount})`}
@@ -2544,6 +2407,12 @@ function BNBatchCreateView({ onBack, products, setProducts, sizes }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+      {actionError && (
+        <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, color: "#991B1B" }}>
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#991B1B", fontWeight: 600, fontSize: 15 }}>×</button>
+        </div>
+      )}
       {/* #252a — top bar + summary cards */}
       <div style={{ flexShrink: 0, paddingBottom: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
@@ -2582,8 +2451,8 @@ function BNBatchCreateView({ onBack, products, setProducts, sizes }) {
             <div style={{ background: C.cardBg, border: `0.5px solid ${hasExclusions ? C.accent : C.border}`, borderRadius: 10, padding: "14px 20px" }}>
               <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>ยอดรวม</div>
               {hasExclusions && selTotal < allTotal
-                ? <div><div style={{ fontSize: 26, fontWeight: 500, color: C.accent }}>{selTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div><div style={{ fontSize: 11, color: C.muted, textDecoration: "line-through" }}>{allTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>
-                : <div style={{ fontSize: 26, fontWeight: 500, color: C.accent }}>{allTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+                ? <div><div style={{ fontSize: 26, fontWeight: 500, color: C.accent }}>{fmtAmt(selTotal)}</div><div style={{ fontSize: 11, color: C.muted, textDecoration: "line-through" }}>{fmtAmt(allTotal)}</div></div>
+                : <div style={{ fontSize: 26, fontWeight: 500, color: C.accent }}>{fmtAmt(allTotal)}</div>
               }
             </div>
           </div>
@@ -2643,7 +2512,7 @@ function BNBatchCreateView({ onBack, products, setProducts, sizes }) {
               </div>
               <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 10, padding: "14px 20px" }}>
                 <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>ยอดรวม</div>
-                <div style={{ fontSize: 26, fontWeight: 500, color: C.accent }}>{allAmount.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+                <div style={{ fontSize: 26, fontWeight: 500, color: C.accent }}>{fmtAmt(allAmount)}</div>
               </div>
             </div>
 
@@ -2668,7 +2537,7 @@ function BNBatchCreateView({ onBack, products, setProducts, sizes }) {
                       </th>
                     )}
                     <th style={{ padding: "8px 16px", textAlign: "left", fontSize: 11, fontWeight: 500, color: C.muted }}>ลูกค้า</th>
-                    <th style={{ padding: "8px 14px", textAlign: "left", fontSize: 11, fontWeight: 500, color: C.muted }}>เลขที่ BN</th>
+                    <th style={{ padding: "8px 14px", textAlign: "left", fontSize: 11, fontWeight: 500, color: C.muted }}>เลขที่ใบวางบิล</th>
                     <th style={{ padding: "8px 14px", textAlign: "center", fontSize: 11, fontWeight: 500, color: C.muted }}>จำนวน DN</th>
                     <th style={{ padding: "8px 16px", textAlign: "right", fontSize: 11, fontWeight: 500, color: C.muted }}>ยอดรวม</th>
                   </tr>
@@ -2689,7 +2558,7 @@ function BNBatchCreateView({ onBack, products, setProducts, sizes }) {
                         <td style={{ padding: "8px 16px", fontWeight: 500 }}>{cust.customer}</td>
                         <td style={{ padding: "8px 14px", color: C.accent }}>{bnNo}</td>
                         <td style={{ padding: "8px 14px", textAlign: "center", color: C.muted }}>{dnCount}</td>
-                        <td style={{ padding: "8px 16px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{amount.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                        <td style={{ padding: "8px 16px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtAmt(amount)}</td>
                       </tr>
                     );
                   })}
@@ -2723,7 +2592,7 @@ function BNBatchCreateView({ onBack, products, setProducts, sizes }) {
                     }
                     try { await api.markBillingNotesPrinted(bnNos); } catch (_) {}
                     exitPrintMode();
-                  } catch (err) { alert("พิมพ์ไม่สำเร็จ: " + err.message); }
+                  } catch (err) { setActionError("พิมพ์ไม่สำเร็จ: " + err.message); }
                   finally { setBatchPrinting(false); }
                 }} disabled={batchPrinting || printSel.size === 0}>
                   {batchPrinting ? <Loader size={13}/> : <Printer size={13}/>} {batchPrinting ? "กำลังสร้าง..." : `พิมพ์ที่เลือก (${printSel.size})`}
@@ -2765,7 +2634,7 @@ function BNBatchCreateView({ onBack, products, setProducts, sizes }) {
                     <ChevronDown size={14} style={{ color: C.muted, flexShrink: 0, transform: isExpanded ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s" }}/>
                     <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 500, textDecoration: excluded ? "line-through" : "none" }}>{cust.customer}</div>
                     <span style={{ fontSize: 12, color: C.muted, whiteSpace: "nowrap" }}>{unbilled.length} ฉบับ</span>
-                    <span style={{ fontSize: 12, fontWeight: 500, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{custTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+                    <span style={{ fontSize: 12, fontWeight: 500, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{fmtAmt(custTotal)}</span>
                   </div>
 
                   {/* DN list (expanded) */}
@@ -2809,7 +2678,7 @@ function BNBatchCreateView({ onBack, products, setProducts, sizes }) {
                                     {isDnExp && dnItemCount != null && <span style={{ fontSize: 10.5, color: C.muted, fontWeight: 400, marginLeft: 8 }}>{dnItemCount} รายการ ▼</span>}
                                   </td>
                                   <td style={{ padding: "6px 14px", color: C.muted }}>{fmtDateThai(inv.date)}</td>
-                                  <td style={{ padding: "6px 16px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{(parseFloat(inv.total) || 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                                  <td style={{ padding: "6px 16px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtAmt(parseFloat(inv.total) || 0)}</td>
                                 </tr>
                                 {isDnExp && (
                                   <tr>
@@ -2833,15 +2702,15 @@ function BNBatchCreateView({ onBack, products, setProducts, sizes }) {
                                                     <td style={{ padding: "5px 8px" }}>{it.desc}</td>
                                                     <td style={{ padding: "5px 8px", color: C.muted }}>{it.desc2}</td>
                                                     <td style={{ padding: "5px 8px", textAlign: "right" }}>{it.qty}</td>
-                                                    <td style={{ padding: "5px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{Number(it.unitPrice||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-                                                    <td style={{ padding: "5px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{Number(it.amount||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                                                    <td style={{ padding: "5px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtAmt(Number(it.unitPrice||0))}</td>
+                                                    <td style={{ padding: "5px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtAmt(Number(it.amount||0))}</td>
                                                   </tr>
                                                 ))}
                                               </tbody>
                                               <tfoot>
                                                 <tr style={{ background: "#eef2ff", borderTop: `1px solid ${C.border}` }}>
                                                   <td colSpan={5} style={{ padding: "7px 8px", textAlign: "right", fontWeight: 500 }}>ยอดรวม</td>
-                                                  <td style={{ padding: "7px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: C.accent }}>{(dnData.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                                                  <td style={{ padding: "7px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: C.accent }}>{fmtAmt(dnData.total||0)}</td>
                                                 </tr>
                                               </tfoot>
                                             </table>
@@ -2895,7 +2764,7 @@ function BNBatchCreateView({ onBack, products, setProducts, sizes }) {
             <div style={{ fontSize: 13, lineHeight: 1.8, marginBottom: 20 }}>
               <div>ลูกค้า: <strong>{selectedCustomers.length} ราย</strong></div>
               <div>ใบส่งของ: <strong>{totalDNs} ฉบับ</strong></div>
-              <div>ยอดรวม: <strong style={{ color: C.accent }}>{grandTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</strong></div>
+              <div>ยอดรวม: <strong style={{ color: C.accent }}>{fmtAmt(grandTotal)}</strong></div>
               {editMode && selectedCustomers.length < pendingCustomers.length && (
                 <div style={{ marginTop: 8, padding: "8px 12px", background: "#fff8e6", borderRadius: 6, fontSize: 12, color: "#946200" }}>
                   ข้าม {pendingCustomers.length - selectedCustomers.length} ราย: {pendingCustomers.filter(c => !c.checked).map(c => c.customer).join(", ")}
@@ -2958,6 +2827,9 @@ function BNCreateView({ onBack, products, sizes }) {
   const [printing, setPrinting]       = useState(false);
   const [dnPopup, setDnPopup]         = useState(null); // #101 DN popup from done-state list
   const [configCustomers, setConfigCustomers] = useState([]); // #271 — Config_Customers for address/phone
+  const [actionError, setActionError] = useState(null);
+
+  useEffect(() => { if (!actionError) return; const t = setTimeout(() => setActionError(null), 5000); return () => clearTimeout(t); }, [actionError]);
 
   // #271 — fetch Config_Customers once on mount
   useEffect(() => { api.getCustomers().then(list => setConfigCustomers(list || [])).catch(() => {}); }, []);
@@ -3079,7 +2951,7 @@ function BNCreateView({ onBack, products, sizes }) {
         setCustomers(prev => prev.map((c, i) => i === selectedIdx ? { ...c, createdPdfUrl: res.url } : c));
         window.open(res.url, "_blank", "noopener,noreferrer");
       }
-    } catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); }
+    } catch (e) { setActionError("เกิดข้อผิดพลาด: " + e.message); }
     finally { setPtLoading(false); }
   };
 
@@ -3123,6 +2995,12 @@ function BNCreateView({ onBack, products, sizes }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+      {actionError && (
+        <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, color: "#991B1B" }}>
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#991B1B", fontWeight: 600, fontSize: 15 }}>×</button>
+        </div>
+      )}
       {/* top bar */}
       <div style={{ flexShrink: 0, padding: "0 0 10px 0" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
@@ -3170,7 +3048,7 @@ function BNCreateView({ onBack, products, sizes }) {
              </div>
              <div style={{ background: C.cardBg, border: `0.5px solid ${C.border}`, borderRadius: 8, padding: "7px 9px" }}>
                <div style={{ fontSize: 10, color: C.muted }}>รวม</div>
-               <div style={{ fontSize: 15, fontWeight: 500, color: C.accent, fontVariantNumeric: "tabular-nums" }}>{totalAmount.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+               <div style={{ fontSize: 15, fontWeight: 500, color: C.accent, fontVariantNumeric: "tabular-nums" }}>{fmtAmt(totalAmount)}</div>
              </div>
            </div>
            {/* scrollable customer list */}
@@ -3193,7 +3071,7 @@ function BNCreateView({ onBack, products, sizes }) {
                   </div>
                   {cust.generated && cust.createdBnNo
                     ? <div style={{ fontSize: 10, color: C.accent }}>{cust.createdBnNo}</div>
-                    : <div style={{ fontSize: 10, color: C.muted }}>{cust.invoices.length} ฉบับ · {total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>}
+                    : <div style={{ fontSize: 10, color: C.muted }}>{cust.invoices.length} ฉบับ · {fmtAmt(total)}</div>}
                 </div>
               );
             })}
@@ -3236,7 +3114,7 @@ function BNCreateView({ onBack, products, sizes }) {
                   </div>
                   <div>
                     <div style={{ color: C.muted, fontSize: 11, marginBottom: 2 }}>รวมเงิน</div>
-                    <div style={{ fontWeight: 600, color: C.accent }}>{(selectedCust.createdTotal||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+                    <div style={{ fontWeight: 600, color: C.accent }}>{fmtAmt(selectedCust.createdTotal||0)}</div>
                   </div>
                   {/* #134 — always show PDF button; generates on-demand if not cached */}
                   <div style={{ alignSelf: "flex-end" }}>
@@ -3257,7 +3135,7 @@ function BNCreateView({ onBack, products, sizes }) {
                               <span onClick={() => setDnPopup(inv.no)} style={{ color: C.accent, fontWeight: 500, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" }}>{inv.no}</span>
                             </td>
                             <td style={{ padding: "7px 14px", color: C.muted }}>{fmtDateThai(inv.date)}</td>
-                            <td style={{ padding: "7px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(parseFloat(inv.total)||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                            <td style={{ padding: "7px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtAmt(parseFloat(inv.total)||0)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -3309,7 +3187,7 @@ function BNCreateView({ onBack, products, sizes }) {
                       <th style={{ padding: "5px 12px", width: 32, background: "#fafafa", borderBottom: `0.5px solid ${C.border}` }}>
                         <input type="checkbox" checked={printQueue.every(q=>q.checked)} onChange={toggleAllPrint}/>
                       </th>
-                      {["เลขที่ BN","ลูกค้า","ฉบับ","รวมเงิน"].map((h, i) => (
+                      {["เลขที่ใบวางบิล","ลูกค้า","ฉบับ","รวมเงิน"].map((h, i) => (
                         <th key={i} style={{ padding: "5px 12px", textAlign: i===3?"right":"left", color: C.muted, fontWeight: 500, fontSize: 11, background: "#fafafa", borderBottom: `0.5px solid ${C.border}` }}>{h}</th>
                       ))}
                     </tr>
@@ -3325,7 +3203,7 @@ function BNCreateView({ onBack, products, sizes }) {
                         </td>
                         <td style={{ padding: "6px 12px", fontSize: 11 }}>{q.customer}</td>
                         <td style={{ padding: "6px 12px", fontSize: 11 }}>{q.count}</td>
-                        <td style={{ padding: "6px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(q.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                        <td style={{ padding: "6px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtAmt(q.total||0)}</td>
                       </tr>
                     ))}
                   </tbody>

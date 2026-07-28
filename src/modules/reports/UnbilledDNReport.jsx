@@ -10,6 +10,7 @@ import { Loader, Search } from "lucide-react";
 import { api } from "../../shared/api.jsx";
 import { C } from "../../shared/constants.jsx";
 import { Spinner, ErrorBox, inputStyle } from "../../shared/ui.jsx";
+import { fmtAmt } from "../../shared/utils.jsx";
 import { DateRangePicker } from "../invoice/InvoicePage.jsx";
 
 // Parse DN date "dd/MM/yyyy" → Date object (avoids "Invalid Date" trap from new Date(dd/MM/yyyy))
@@ -84,11 +85,11 @@ function UnbilledDNReport({ cache, updateCache }) {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr>
-                <th style={{ padding: "9px 14px", textAlign: "left", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, width: 110, background: "#fafafa", position: "sticky", top: 0, zIndex: 1 }}>เลขที่ DN</th>
-                <th style={{ padding: "9px 14px", textAlign: "left", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, width: 100, background: "#fafafa", position: "sticky", top: 0, zIndex: 1 }}>วันที่</th>
-                <th style={{ padding: "9px 14px", textAlign: "left", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, background: "#fafafa", position: "sticky", top: 0, zIndex: 1 }}>ลูกค้า</th>
-                <th style={{ padding: "9px 14px", textAlign: "right", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, width: 130, background: "#fafafa", position: "sticky", top: 0, zIndex: 1 }}>ยอด ฿</th>
-                <th style={{ padding: "9px 14px", textAlign: "right", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, width: 80, background: "#fafafa", position: "sticky", top: 0, zIndex: 1 }}>อายุ (วัน)</th>
+                <th style={{ padding: "9px 14px", textAlign: "left", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, width: 110, background: "#fafafa", position: "sticky", top: 0, zIndex: 2, boxShadow: "0 1px 0 rgba(0,0,0,0.06)" }}>เลขที่ DN</th>
+                <th style={{ padding: "9px 14px", textAlign: "left", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, width: 100, background: "#fafafa", position: "sticky", top: 0, zIndex: 2, boxShadow: "0 1px 0 rgba(0,0,0,0.06)" }}>วันที่</th>
+                <th style={{ padding: "9px 14px", textAlign: "left", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, background: "#fafafa", position: "sticky", top: 0, zIndex: 2, boxShadow: "0 1px 0 rgba(0,0,0,0.06)" }}>ลูกค้า</th>
+                <th style={{ padding: "9px 14px", textAlign: "right", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, width: 130, background: "#fafafa", position: "sticky", top: 0, zIndex: 2, boxShadow: "0 1px 0 rgba(0,0,0,0.06)" }}>ยอด ฿</th>
+                <th style={{ padding: "9px 14px", textAlign: "right", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, width: 80, background: "#fafafa", position: "sticky", top: 0, zIndex: 2, boxShadow: "0 1px 0 rgba(0,0,0,0.06)" }}>อายุ (วัน)</th>
               </tr>
             </thead>
             <tbody>
@@ -101,7 +102,7 @@ function UnbilledDNReport({ cache, updateCache }) {
                     <td style={{ padding: "9px 14px", color: C.accent, fontWeight: 500 }}>{dn.id}</td>
                     <td style={{ padding: "9px 14px", color: C.muted }}>{dn.date}</td>
                     <td style={{ padding: "9px 14px" }}>{dn.name}</td>
-                    <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{(parseFloat(dn.total) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtAmt(parseFloat(dn.total) || 0)}</td>
                     <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: ageColor, fontWeight: dn.age >= 60 ? 600 : 400 }}>{dn.age}</td>
                   </tr>
                 );
@@ -111,7 +112,7 @@ function UnbilledDNReport({ cache, updateCache }) {
               <tfoot>
                 <tr style={{ background: "#f0f4ff", borderTop: `1px solid ${C.border}` }}>
                   <td colSpan={3} style={{ padding: "10px 14px", fontWeight: 600, fontSize: 12 }}>รวม {rows.length} ใบ</td>
-                  <td style={{ padding: "10px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700, color: C.accent }}>{grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td style={{ padding: "10px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700, color: C.accent }}>{fmtAmt(grandTotal)}</td>
                   <td style={{ padding: "10px 14px", textAlign: "right", color: C.muted, fontSize: 10 }}>≥60 = แดง · ≥30 = เหลือง</td>
                 </tr>
               </tfoot>

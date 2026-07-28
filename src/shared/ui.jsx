@@ -9,7 +9,7 @@ import { C, PAGE_SIZE } from './constants.jsx';
 
 // ── Basic UI primitives ────────────────────────────────────
 
-const Badge = ({ type, success, children }) => {
+function Badge({ type, success, children }) {
   const styles = {
     success: { background: C.successBg, color: C.success },
     warning: { background: C.warningBg, color: C.warning },
@@ -17,43 +17,51 @@ const Badge = ({ type, success, children }) => {
   };
   const s = type ? styles[type] : success ? styles.success : styles.warning;
   return <span style={{ ...s, padding: "2px 9px", borderRadius: 10, fontSize: 10, fontWeight: 500 }}>{children}</span>;
-};
+}
 
-const Btn = ({ onClick, primary, danger, small, disabled, children, style }) => (
-  <button onClick={onClick} disabled={disabled} style={{
-    background: primary ? C.accent : danger ? C.dangerBg : "white",
-    color: primary ? "white" : danger ? C.danger : C.accent,
-    border: primary ? "none" : danger ? `1px solid ${C.danger}` : `1px solid ${C.accent}`,
-    padding: small ? "4px 10px" : "6px 14px", borderRadius: 4,
-    fontSize: small ? 11 : 12, cursor: disabled ? "not-allowed" : "pointer",
-    opacity: disabled ? 0.6 : 1, display: "inline-flex", alignItems: "center", gap: 5,
-    ...style,
-  }}>{children}</button>
-);
+function Btn({ onClick, primary, danger, small, disabled, children, style }) {
+  return (
+    <button onClick={onClick} disabled={disabled} style={{
+      background: primary ? C.accent : danger ? C.dangerBg : "white",
+      color: primary ? "white" : danger ? C.danger : C.accent,
+      border: primary ? "none" : danger ? `1px solid ${C.danger}` : `1px solid ${C.accent}`,
+      padding: small ? "4px 10px" : "6px 14px", borderRadius: 4,
+      fontSize: small ? 11 : 12, cursor: disabled ? "not-allowed" : "pointer",
+      opacity: disabled ? 0.6 : 1, display: "inline-flex", alignItems: "center", gap: 5,
+      ...style,
+    }}>{children}</button>
+  );
+}
 
 const inputStyle = { padding: "6px 10px", border: `0.5px solid rgba(0,0,0,0.2)`, borderRadius: 4, fontSize: 12, outline: "none", boxSizing: "border-box", height: 32, fontFamily: "inherit" };
 
-const SectionTitle = ({ children }) => (
-  <div style={{ fontSize: 11, fontWeight: 500, color: C.accent, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12 }}>{children}</div>
-);
+function SectionTitle({ children }) {
+  return (
+    <div style={{ fontSize: 11, fontWeight: 500, color: C.accent, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12 }}>{children}</div>
+  );
+}
 
 // Spinner / loading state
-const Spinner = ({ text = "กำลังโหลด..." }) => (
-  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 200, flexDirection: "column", gap: 12, color: C.muted }}>
-    <div style={{ width: 28, height: 28, border: `3px solid ${C.border}`, borderTop: `3px solid ${C.accent}`, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-    <style>{`@keyframes spin { to { transform: rotate(360deg); }}`}</style>
-    <div style={{ fontSize: 13 }}>{text}</div>
-  </div>
-);
+function Spinner({ text = "กำลังโหลด..." }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 200, flexDirection: "column", gap: 12, color: C.muted }}>
+      <div style={{ width: 28, height: 28, border: `3px solid ${C.border}`, borderTop: `3px solid ${C.accent}`, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+      <style>{`@keyframes spin { to { transform: rotate(360deg); }}`}</style>
+      <div style={{ fontSize: 13 }}>{text}</div>
+    </div>
+  );
+}
 
-const ErrorBox = ({ msg, onRetry }) => (
-  <div style={{ background: C.dangerBg, color: C.danger, padding: "14px 18px", borderRadius: 8, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-    <span>⚠️ {msg}</span>
-    {onRetry && <Btn small danger onClick={onRetry}>ลองใหม่</Btn>}
-  </div>
-);
+function ErrorBox({ msg, onRetry }) {
+  return (
+    <div style={{ background: C.dangerBg, color: C.danger, padding: "14px 18px", borderRadius: 8, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <span>⚠️ {msg}</span>
+      {onRetry && <Btn small danger onClick={onRetry}>ลองใหม่</Btn>}
+    </div>
+  );
+}
 
-const Paginator = ({ total, page, onChange }) => {
+function Paginator({ total, page, onChange }) {
   const pages = Math.ceil(total / PAGE_SIZE);
   if (pages <= 1) return null;
   const btnS = { background: "white", border: `0.5px solid ${C.border}`, borderRadius: 4, padding: "4px 10px", fontSize: 11, cursor: "pointer", color: C.muted };
@@ -64,7 +72,7 @@ const Paginator = ({ total, page, onChange }) => {
       <button onClick={() => onChange(page + 1)} disabled={page === pages} style={{ ...btnS, opacity: page === pages ? 0.4 : 1, cursor: page === pages ? "default" : "pointer" }}>ถัดไป ›</button>
     </div>
   );
-};
+}
 
 // ── ConfirmModal ────────────────────────────────────────────
 
@@ -109,7 +117,7 @@ const INSTR_STEPS = [
   { label: "เลือก contact → กด Share", sub: "ส่งให้ลูกค้าได้เลย! 🎉", cx: 88, cy: 7 },
 ];
 
-const renderPhoneScreen = (step) => {
+function renderPhoneScreen(step) {
   const abs = { position: "absolute", inset: 0 };
   // Step 0: Home screen
   if (step === 0) return (

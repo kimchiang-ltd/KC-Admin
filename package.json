@@ -3,7 +3,8 @@
   "dependencies": {
     "@react-oauth/google": "^0.13.5",
     "lucide-react": "^1.17.0",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^6.0.2",

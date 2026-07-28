@@ -9,7 +9,7 @@ import QRCode from "qrcode";
 import { Receipt, FileText, Printer, Pencil, Loader, ChevronLeft, ChevronRight, ChevronDown, QrCode, Smartphone, Search, Save, RefreshCw } from "lucide-react";
 import { tiApi, bahtText } from "./tiApi.jsx";
 import { C, ITEMS_COUNT, PAGE_SIZE, DESC_MAX, DETAIL_WARN, DETAIL_MAX } from "../../shared/constants.jsx";
-import { descWidth, toDownloadUrl } from "../../shared/utils.jsx";
+import { descWidth, toDownloadUrl, fmtAmt } from "../../shared/utils.jsx";
 import { useInvoiceForm } from "../../shared/hooks.jsx";
 import { Btn, SectionTitle, Spinner, Paginator, ConfirmModal, CustomerFieldSyncModal, inputStyle, INSTR_STEPS, renderPhoneScreen } from "../../shared/ui.jsx";
 import { CustomerAutocomplete, ProductAutocomplete } from "../../shared/autocomplete.jsx";
@@ -24,6 +24,18 @@ function TaxInvoiceForm({ initial, onSave, onCancel, isEdit, products, setProduc
   const [taxId,      setTaxId]      = useState(initial?.taxId      || "");
   const [phone,      setPhone]      = useState(initial?.phone      || "");
   const [invoiceRef, setInvoiceRef] = useState(initial?.invoiceRef || "");
+  // #402 — branch field (dropdown + optional text)
+  const [branchType, setBranchType] = useState(() => {
+    const b = initial?.branch || "";
+    if (!b || b === "สำนักงานใหญ่") return "hq";
+    return "branch";
+  });
+  const [branchText, setBranchText] = useState(() => {
+    const b = initial?.branch || "";
+    if (!b || b === "สำนักงานใหญ่") return "";
+    return b.replace(/^สาขา\s*/, "");
+  });
+  const branchValue = branchType === "hq" ? "สำนักงานใหญ่" : (branchText ? "สาขา " + branchText : "");
   const {
     items, removedOrigItems, saving, error, pendingDelete, setPendingDelete,
     rowEditMode, setRowEditMode, allCustomers, setAllCustomers,
@@ -38,6 +50,14 @@ function TaxInvoiceForm({ initial, onSave, onCancel, isEdit, products, setProduc
   const sub = items.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0);
   const vat = parseFloat((sub * vatRate).toFixed(2));
   const gt  = parseFloat((sub + vat).toFixed(2));
+
+  // #338 — inline error banner
+  const [actionError, setActionError] = useState(null);
+  useEffect(() => {
+    if (!actionError) return;
+    const t = setTimeout(() => setActionError(null), 5000);
+    return () => clearTimeout(t);
+  }, [actionError]);
 
   // #214 — per-field on-blur customer sync (iii-soft)
   const [syncDecisions, setSyncDecisions] = useState({});
@@ -62,7 +82,7 @@ function TaxInvoiceForm({ initial, onSave, onCancel, isEdit, products, setProduc
 
   const handleSave = () => guardedSave(name, async ({ filled, cleanItems, skipLog }) => {
     const payload = {
-      date, name, address, taxId, phone, invoiceRef, items: cleanItems, subtotal: sub, vatAmt: vat, grandTotal: gt,
+      date, name, address, taxId, phone, invoiceRef, branch: branchValue, items: cleanItems, subtotal: sub, vatAmt: vat, grandTotal: gt,
       ...(isEdit ? { _logAdded: filled.filter(it => !it._orig).length, _logDeleted: removedOrigItems } : { skipAutoLog: skipLog })
     };
     const result = isEdit
@@ -76,7 +96,7 @@ function TaxInvoiceForm({ initial, onSave, onCancel, isEdit, products, setProduc
         const update = { ...record };
         const formValues = { address, phone, taxId };
         for (const f of yesFields) update[f] = formValues[f];
-        tiApi.updateCustomer(name, update).catch(e => alert("บันทึกที่อยู่/เบอร์ลูกค้าลงระบบไม่สำเร็จ — " + e.message)); // #284
+        tiApi.updateCustomer(name, update).catch(e => setActionError("บันทึกที่อยู่/เบอร์ลูกค้าลงระบบไม่สำเร็จ — " + e.message)); // #284
       }
     }
     onSave({ ...payload, id: result.invoiceNo || initial?.id, pdfUrl: result.pdfUrl || initial?.pdfUrl });
@@ -84,6 +104,12 @@ function TaxInvoiceForm({ initial, onSave, onCancel, isEdit, products, setProduc
 
   return (
     <>
+    {actionError && (
+      <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, color: "#991B1B" }}>
+        <span>{actionError}</span>
+        <button onClick={() => setActionError(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#991B1B", fontWeight: 600, fontSize: 15 }}>×</button>
+      </div>
+    )}
     {pendingField && <CustomerFieldSyncModal name={name} field={pendingField.field} oldValue={pendingField.oldValue} newValue={pendingField.newValue} onConfirm={handleFieldConfirm} onCancel={handleFieldSkip} />}
     {pendingDelete !== null && <ConfirmModal message="ยืนยันลบ?" onConfirm={() => { removeRow(pendingDelete); setPendingDelete(null); }} onCancel={() => setPendingDelete(null)} enterConfirm />}
     {custWarning && <ConfirmModal
@@ -145,7 +171,7 @@ function TaxInvoiceForm({ initial, onSave, onCancel, isEdit, products, setProduc
             <CustomerAutocomplete
               value={name}
               onChange={v => { setName(v); nameSelectedFromListRef.current = false; custConfirmedRef.current = false; newCustCheckedRef.current = false; }}
-              onSelect={c => { setName(c.name); setAddress(c.address); setPhone(c.phone); setTaxId(c.taxId); nameSelectedFromListRef.current = true; custConfirmedRef.current = true; }}
+              onSelect={c => { setName(c.name); setAddress(c.address); setPhone(c.phone); setTaxId(c.taxId); if (c.branch) { const cb = c.branch === "00000" ? "hq" : "branch"; setBranchType(cb); setBranchText(cb === "hq" ? "" : c.branch); } else { setBranchType("hq"); setBranchText(""); } nameSelectedFromListRef.current = true; custConfirmedRef.current = true; }}
               onCustomersLoaded={setAllCustomers}
               onBlur={() => { if (!nameSelectedFromListRef.current) checkNameOnBlur(name); }}
               style={{ ...inputStyle, width: "100%" }}
@@ -160,11 +186,23 @@ function TaxInvoiceForm({ initial, onSave, onCancel, isEdit, products, setProduc
             <input value={taxId} onChange={e => setTaxId(e.target.value)} onBlur={() => checkFieldOnBlur('taxId', taxId)} placeholder="0000000000000" maxLength={13}
               style={{ ...inputStyle, fontFamily: "monospace", letterSpacing: "0.06em" }} />
           </div>
-          <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ที่อยู่</div><input value={address} onChange={e => setAddress(e.target.value)} onBlur={() => checkFieldOnBlur('address', address)} placeholder="ที่อยู่" style={{ ...inputStyle, width: "100%" }} /></div>
+          <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ที่อยู่</div><textarea value={address} onChange={e => { const v = e.target.value; if (v.split("\n").length <= 3) setAddress(v); }} onBlur={() => checkFieldOnBlur('address', address)} placeholder="ที่อยู่" rows={2} style={{ ...inputStyle, width: "100%", resize: "vertical" }} /></div>
         </div>
-        <div>
-          <div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>อ้างอิงใบส่งของเลขที่</div>
-          <input value={invoiceRef} onChange={e => setInvoiceRef(e.target.value)} placeholder="26-000165" style={inputStyle} />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+          <div>
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>อ้างอิงใบส่งของเลขที่</div>
+            <input value={invoiceRef} onChange={e => setInvoiceRef(e.target.value)} placeholder="26-000165" style={inputStyle} />
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>สาขา</div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <select value={branchType} onChange={e => { setBranchType(e.target.value); if (e.target.value === "hq") setBranchText(""); }} style={{ ...inputStyle, flex: branchType === "hq" ? 1 : "none", minWidth: 120 }}>
+                <option value="hq">สำนักงานใหญ่</option>
+                <option value="branch">สาขา</option>
+              </select>
+              {branchType === "branch" && <input value={branchText} onChange={e => setBranchText(e.target.value)} placeholder="ชื่อ/เลขสาขา" style={{ ...inputStyle, flex: 1 }} />}
+            </div>
+          </div>
         </div>
       </div>
       <div style={{ padding: 16, borderBottom: `0.5px solid ${C.border}` }}>
@@ -221,7 +259,7 @@ function TaxInvoiceForm({ initial, onSave, onCancel, isEdit, products, setProduc
                       {!atLimit && atWarn && <div style={{ fontSize: 11, color: C.warning, marginTop: 1 }}>ใกล้จะเต็ม — พิจารณากด Enter ขึ้นบรรทัดใหม่</div>}
                     </td>
                     <td style={{ padding: "3px 6px" }}>{!it._cont && cellInput(i, "unitPrice", "right")}</td>
-                    <td style={{ padding: "4px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: b ? C.text : C.muted }}>{!it._cont && (b ? b.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) : "—")}</td>
+                    <td style={{ padding: "4px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: b ? C.text : C.muted }}>{!it._cont && (b ? fmtAmt(b) : "—")}</td>
                     <td style={{ padding: "4px 4px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontSize: 11, color: C.muted }}>{!it._cont && (s > 0 ? String(s).padStart(2, "0") : "")}</td>
                   </tr>
                 );
@@ -242,12 +280,12 @@ function TaxInvoiceForm({ initial, onSave, onCancel, isEdit, products, setProduc
           {[["รวมมูลค่าสินค้า", sub], ["จำนวนภาษีมูลค่าเพิ่ม " + (+(vatRate*100).toFixed(2)) + "%", vat]].map(([l, v]) => (
             <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `0.5px solid ${C.borderLight}`, fontSize: 12 }}>
               <span style={{ color: C.muted }}>{l}</span>
-              <span style={{ fontVariantNumeric: "tabular-nums" }}>{v.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmtAmt(v)}</span>
             </div>
           ))}
           <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", fontSize: 14, fontWeight: 500 }}>
             <span>จำนวนเงินรวมทั้งสิ้น</span>
-            <span style={{ fontVariantNumeric: "tabular-nums", color: C.accent }}>{gt.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <span style={{ fontVariantNumeric: "tabular-nums", color: C.accent }}>{fmtAmt(gt)}</span>
           </div>
         </div>
       </div>
@@ -282,11 +320,17 @@ function TaxInvoiceDetail({ invoice, onBack, onSaved, products, setProducts, siz
   const [qrDataUrl, setQrDataUrl]                 = useState("");
   const [showInstructions, setShowInstructions]   = useState(false);
   const [instrStep, setInstrStep]                 = useState(0);
+  const [actionError, setActionError] = useState(null);
   useEffect(() => {
     if (!showInstructions) { setInstrStep(0); return; }
     const iv = setInterval(() => setInstrStep(s => (s + 1) % INSTR_STEPS.length), 2500);
     return () => clearInterval(iv);
   }, [showInstructions]);
+  useEffect(() => {
+    if (!actionError) return;
+    const t = setTimeout(() => setActionError(null), 5000);
+    return () => clearTimeout(t);
+  }, [actionError]);
 
   const fi  = (data.items || []).filter(it => it.desc || it.desc2 || it.detail || it.qty || it.amount);
   const sub = data.subtotal   ?? fi.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0);
@@ -309,7 +353,7 @@ function TaxInvoiceDetail({ invoice, onBack, onSaved, products, setProducts, siz
         openUrl(r.pdfUrl);
       }
     }
-    catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); }
+    catch (e) { setActionError("เกิดข้อผิดพลาด: " + e.message); }
     finally { setPdfLoading(false); }
   };
 
@@ -317,21 +361,21 @@ function TaxInvoiceDetail({ invoice, onBack, onSaved, products, setProducts, siz
     if (data.pdfUrl) { openUrl(data.pdfUrl); return; }
     setLsPdfLoading(true);
     try { const r = await tiApi.generateTaxInvoiceLandscapePDF(data.id); if (r.pdfUrl) { setData(d => ({ ...d, pdfUrl: r.pdfUrl })); openUrl(r.pdfUrl); } }
-    catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); }
+    catch (e) { setActionError("เกิดข้อผิดพลาด: " + e.message); }
     finally { setLsPdfLoading(false); }
   };
 
   const handleCancelTI = async () => {
     setCancelLoading(true);
     try { await tiApi.cancelTaxInvoice(data.id); onSaved?.(); onBack(); }
-    catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); }
+    catch (e) { setActionError("เกิดข้อผิดพลาด: " + e.message); }
     finally { setCancelLoading(false); setShowCancelConfirm(false); }
   };
 
   const handleRestoreTI = async () => {
     setCancelLoading(true);
     try { await tiApi.restoreTaxInvoice(data.id); onSaved?.(); onBack(); }
-    catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); }
+    catch (e) { setActionError("เกิดข้อผิดพลาด: " + e.message); }
     finally { setCancelLoading(false); }
   };
 
@@ -352,7 +396,7 @@ function TaxInvoiceDetail({ invoice, onBack, onSaved, products, setProducts, siz
         await generate(r.pdfUrl);
       }
     }
-    catch (err) { alert("เกิดข้อผิดพลาด: " + err.message); }
+    catch (err) { setActionError("เกิดข้อผิดพลาด: " + err.message); }
     finally { setQrLoading(false); }
   };
 
@@ -371,6 +415,12 @@ function TaxInvoiceDetail({ invoice, onBack, onSaved, products, setProducts, siz
 
   return (
     <div>
+      {actionError && (
+        <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, color: "#991B1B" }}>
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#991B1B", fontWeight: 600, fontSize: 15 }}>×</button>
+        </div>
+      )}
       {showCancelConfirm && <ConfirmModal message={`ยืนยันยกเลิก ${data.id}?`} confirmLabel="ยืนยันยกเลิก" onConfirm={handleCancelTI} onCancel={() => setShowCancelConfirm(false)} loading={cancelLoading} enterConfirm />}
       {showQr && qrUrl && (
         <>
@@ -451,7 +501,7 @@ function TaxInvoiceDetail({ invoice, onBack, onSaved, products, setProducts, siz
                 )}
               </div>
               <Btn onClick={handleQrTI} disabled={qrLoading}>{qrLoading ? <Loader size={13}/> : <QrCode size={14}/>} QR</Btn>
-              <Btn primary onClick={() => { if (data.billed) { alert(`ใบกำกับภาษีนี้อยู่ใน ${data.bnNo || "ใบวางบิล"} แล้ว\nกรุณายกเลิกใบวางบิลนั้นก่อนแก้ไข`); return; } setEditing(true); }}><Pencil size={14}/> แก้ไข</Btn>
+              <Btn primary onClick={() => { if (data.billed) { setActionError(`ใบกำกับภาษีนี้อยู่ใน ${data.bnNo || "ใบวางบิล"} แล้ว — กรุณายกเลิกใบวางบิลนั้นก่อนแก้ไข`); return; } setEditing(true); }}><Pencil size={14}/> แก้ไข</Btn>
               <Btn danger onClick={() => setShowCancelConfirm(true)} disabled={cancelLoading}>ยกเลิกใบนี้</Btn>
             </>
           )}
@@ -469,6 +519,7 @@ function TaxInvoiceDetail({ invoice, onBack, onSaved, products, setProducts, siz
             {data.address && <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>ที่อยู่</div><div style={{ fontSize: 12 }}>{data.address}</div></div>}
             <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>เลขประจำตัวผู้เสียภาษีอากร</div><div style={{ fontSize: 12, fontVariantNumeric: "tabular-nums", letterSpacing: "0.05em" }}>{data.taxId || "—"}</div></div>
             {data.invoiceRef && <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>อ้างอิงใบส่งของ</div><div style={{ fontSize: 12, color: C.accent }}>{data.invoiceRef}</div></div>}
+            {data.branch && <div><div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>สาขา</div><div style={{ fontSize: 12 }}>{data.branch}</div></div>}
           </div>
         </div>
         <div style={{ padding: 16 }}>
@@ -490,8 +541,8 @@ function TaxInvoiceDetail({ invoice, onBack, onSaved, products, setProducts, siz
                     <td style={{ padding: "8px 10px" }}>{it.desc}</td>
                     <td style={{ padding: "8px 10px", color: C.muted }}>{it.desc2}</td>
                     <td style={{ padding: "8px 10px", color: C.muted }}>{it.detail}</td>
-                    <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{Number(it.unitPrice||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-                    <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{b.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                    <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtAmt(Number(it.unitPrice||0))}</td>
+                    <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmtAmt(b)}</td>
                     <td style={{ padding: "8px 6px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontSize: 11, color: C.muted }}>{s > 0 ? String(s).padStart(2, "0") : ""}</td>
                   </tr>
                 );
@@ -508,12 +559,12 @@ function TaxInvoiceDetail({ invoice, onBack, onSaved, products, setProducts, siz
             {[["รวมมูลค่าสินค้า", sub], ["จำนวนภาษีมูลค่าเพิ่ม " + (+(rate*100).toFixed(2)) + "%", vat]].map(([l, v]) => (
               <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `0.5px solid ${C.borderLight}`, fontSize: 12 }}>
                 <span style={{ color: C.muted }}>{l}</span>
-                <span style={{ fontVariantNumeric: "tabular-nums" }}>{v.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmtAmt(v)}</span>
               </div>
             ))}
             <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", fontSize: 14, fontWeight: 500 }}>
               <span>จำนวนเงินรวมทั้งสิ้น</span>
-              <span style={{ fontVariantNumeric: "tabular-nums", color: C.accent }}>{gt.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              <span style={{ fontVariantNumeric: "tabular-nums", color: C.accent }}>{fmtAmt(gt)}</span>
             </div>
           </div>
         </div>
@@ -573,7 +624,7 @@ function TaxInvoicePage({ vatRate = 0.07, cache, updateCache, onViewChange, goLi
   const loadCancelledTI = useCallback(async () => {
     setCancelLoading(true);
     try { const d = await tiApi.getCancelledTaxInvoices(cancelSearch); setCancelledList(Array.isArray(d) ? d : []); }
-    catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); }
+    catch (e) { setErr("เกิดข้อผิดพลาด: " + e.message); }
     finally { setCancelLoading(false); }
   }, [cancelSearch]);
   useEffect(() => { if (cancelSectionOpen) loadCancelledTI(); }, [cancelSectionOpen]);
@@ -626,7 +677,7 @@ function TaxInvoicePage({ vatRate = 0.07, cache, updateCache, onViewChange, goLi
                 </colgroup>
                 <thead>
                   <tr>{["เลขที่", "วันที่", "ชื่อลูกค้า", "เลขภาษี", "ยอดสุทธิ"].map((h, i) => (
-                    <th key={i} style={{ padding: "8px 10px", textAlign: i === 4 ? "right" : "left", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, background: "#fafafa", position: "sticky", top: 70, zIndex: 1 }}>{h}</th>
+                    <th key={i} style={{ padding: "8px 10px", textAlign: i === 4 ? "right" : "left", color: C.muted, fontWeight: 500, fontSize: 11, borderBottom: `0.5px solid ${C.border}`, background: "#fafafa", position: "sticky", top: 70, zIndex: 2, boxShadow: "0 1px 0 rgba(0,0,0,0.06)" }}>{h}</th>
                   ))}</tr>
                 </thead>
                 <tbody>
@@ -642,10 +693,10 @@ function TaxInvoicePage({ vatRate = 0.07, cache, updateCache, onViewChange, goLi
                         <td style={{ padding: "9px 10px", color: C.muted }}>
                           {inv.date ? new Date(inv.date).toLocaleDateString("th-TH", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
                         </td>
-                        <td style={{ padding: "9px 10px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{inv.name}</td>
+                        <td style={{ padding: "9px 10px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{inv.branch ? `${inv.name} (${inv.branch})` : inv.name}</td>
                         <td style={{ padding: "9px 10px", fontVariantNumeric: "tabular-nums", fontSize: 11, color: C.muted }}>{inv.taxId || "—"}</td>
                         <td style={{ padding: "9px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>
-                          {g ? `${g.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                          {g ? fmtAmt(g) : "—"}
                         </td>
                       </tr>
                     );
@@ -695,7 +746,7 @@ function TaxInvoicePage({ vatRate = 0.07, cache, updateCache, onViewChange, goLi
                             </td>
                             <td style={{ padding: "9px 14px" }}>{inv.name}</td>
                             <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>
-                              {g ? `${g.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                              {g ? fmtAmt(g) : "—"}
                             </td>
                           </tr>
                         );
